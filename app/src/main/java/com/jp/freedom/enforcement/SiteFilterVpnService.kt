@@ -123,7 +123,7 @@ class SiteFilterVpnService : VpnService() {
             val response = if (isAllowedDomain(dnsQuery.domain)) {
                 forwardDns(dnsQuery.payload, upstreamDns)
             } else {
-                blockedDnsResponse(dnsQuery.payload)
+                blockedDnsResponse(dnsQuery.payload, dnsQuery.questionEnd)
             } ?: continue
             val responsePacket = buildDnsResponsePacket(packet, length, response) ?: continue
             runCatching { output.write(responsePacket) }
@@ -165,7 +165,7 @@ class SiteFilterVpnService : VpnService() {
             .apply()
     }
 
-    private data class DnsQuery(val domain: String, val payload: ByteArray)
+    private data class DnsQuery(val domain: String, val payload: ByteArray, val questionEnd: Int)
 
     companion object {
         private const val PREFERENCES_NAME = "site-filter"
@@ -226,10 +226,13 @@ class SiteFilterVpnService : VpnService() {
                 cursor += labelLength
             }
             if (labels.isEmpty() || cursor + 4 > dns.size) return null
-            return DnsQuery(labels.joinToString(".").lowercase(), dns)
+            return DnsQuery(labels.joinToString(".").lowercase(), dns, cursor + 4)
         }
 
-        private fun blockedDnsResponse(query: ByteArray): ByteArray = query.copyOf().apply {
+        internal fun blockedDnsResponse(
+            query: ByteArray,
+            questionEnd: Int,
+        ): ByteArray = query.copyOf(questionEnd).apply {
             val requestFlags = readUnsignedShort(query, 2)
             writeUnsignedShort(this, 2, (requestFlags and 0x0100) or 0x8083)
             writeUnsignedShort(this, 6, 0)
