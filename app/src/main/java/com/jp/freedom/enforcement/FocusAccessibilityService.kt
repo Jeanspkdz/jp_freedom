@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import com.jp.freedom.MainActivity
 import com.jp.freedom.data.FocusRepository
@@ -69,7 +70,6 @@ class FocusAccessibilityService : AccessibilityService() {
         }
 
         val essentialPackages = essentialPackages()
-        val allowedPackages = FocusPolicy.allowedPackages(policy, this.packageName, essentialPackages).toMutableSet()
         val activeBlock = policy.activeBlock
         val chromeDuringBlock = activeBlock != null && packageName == CHROME_PACKAGE
         val siteFilterRunning = chromeDuringBlock && SiteFilterVpnService.isRunning()
@@ -80,7 +80,13 @@ class FocusAccessibilityService : AccessibilityService() {
         } else {
             policyReason
         }
-        if (siteFilterRunning) allowedPackages += CHROME_PACKAGE
+        val allowedPackages = FocusPolicy.allowedPackages(
+            state = policy,
+            ownPackage = this.packageName,
+            essentialPackages = essentialPackages,
+            siteFilterRunning = siteFilterRunning,
+            defaultInputMethodPackage = defaultInputMethodPackage(),
+        )
         if (packageName in allowedPackages || packageName == "com.android.systemui" || packageName == "android") {
             blockScreenIsOpen = false
             return
@@ -97,6 +103,10 @@ class FocusAccessibilityService : AccessibilityService() {
     }
 
     private fun essentialPackages(): Set<String> = essentialPackages(this)
+
+    private fun defaultInputMethodPackage(): String? = ComponentName.unflattenFromString(
+        Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD),
+    )?.packageName
 
     companion object {
         fun essentialPackages(context: Context): Set<String> = buildSet {

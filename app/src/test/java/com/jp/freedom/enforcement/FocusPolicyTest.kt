@@ -72,6 +72,74 @@ class FocusPolicyTest {
         assertTrue("com.google.android.googlequicksearchbox" in FocusPolicy.allowedPackages(withSearch, "jp", essentialPackages))
     }
 
+    @Test
+    fun chromeIsAvailableForAllowedSitesOnlyWhenTheDnsFilterIsRunning() {
+        val essentials = activeState(AccessProfile.ESSENTIALS_ONLY)
+        val withChatGpt = activeState(AccessProfile.ESSENTIALS_WITH_CHATGPT)
+        val withSearch = activeState(AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH)
+        val essentialPackages = setOf("phone", "messages")
+
+        assertFalse(
+            "Chrome must stay blocked when the selected profile allows no websites",
+            "com.android.chrome" in FocusPolicy.allowedPackages(
+                essentials,
+                "jp",
+                essentialPackages,
+                siteFilterRunning = true,
+            ),
+        )
+        assertFalse(
+            "Chrome must stay blocked if allowed domains cannot be enforced",
+            "com.android.chrome" in FocusPolicy.allowedPackages(
+                withChatGpt,
+                "jp",
+                essentialPackages,
+                siteFilterRunning = false,
+            ),
+        )
+        assertTrue(
+            "Chrome must be available when ChatGPT sites can be filtered",
+            "com.android.chrome" in FocusPolicy.allowedPackages(
+                withChatGpt,
+                "jp",
+                essentialPackages,
+                siteFilterRunning = true,
+            ),
+        )
+        assertTrue(
+            "Chrome must be available when ChatGPT and Search sites can be filtered",
+            "com.android.chrome" in FocusPolicy.allowedPackages(
+                withSearch,
+                "jp",
+                essentialPackages,
+                siteFilterRunning = true,
+            ),
+        )
+    }
+
+    @Test
+    fun selectedInputMethodRemainsAvailableForTextEntry() {
+        val essentialPackages = setOf("phone", "messages")
+        val inputMethod = "com.google.android.inputmethod.latin"
+        val profiles = listOf(
+            AccessProfile.ESSENTIALS_ONLY,
+            AccessProfile.ESSENTIALS_WITH_CHATGPT,
+            AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH,
+        )
+
+        profiles.forEach { profile ->
+            assertTrue(
+                "The selected keyboard must work in every focus profile",
+                inputMethod in FocusPolicy.allowedPackages(
+                    activeState(profile),
+                    "jp",
+                    essentialPackages,
+                    defaultInputMethodPackage = inputMethod,
+                ),
+            )
+        }
+    }
+
     private fun evaluate(time: LocalTime, candidate: PlannedBlock = block) =
         FocusPolicy.evaluate(date.atTime(time), listOf(candidate), settings())
 

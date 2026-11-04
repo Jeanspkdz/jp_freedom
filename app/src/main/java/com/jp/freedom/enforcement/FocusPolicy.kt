@@ -41,17 +41,32 @@ object FocusPolicy {
         state: FocusPolicyState,
         ownPackage: String,
         essentialPackages: Set<String>,
+        siteFilterRunning: Boolean = false,
+        defaultInputMethodPackage: String? = null,
     ): Set<String> {
-        val allowed = essentialPackages + ownPackage
+        val allowed = (essentialPackages + ownPackage).toMutableSet()
+        defaultInputMethodPackage?.takeIf(String::isNotBlank)?.let(allowed::add)
         if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return allowed
 
-        return when (state.activeBlock?.accessProfile) {
-            AccessProfile.ESSENTIALS_WITH_CHATGPT -> allowed + CHATGPT_PACKAGE
-            AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> allowed + CHATGPT_PACKAGE + GOOGLE_SEARCH_PACKAGE
-            AccessProfile.ESSENTIALS_ONLY, null -> allowed
+        val profile = state.activeBlock?.accessProfile
+        when (profile) {
+            AccessProfile.ESSENTIALS_WITH_CHATGPT -> allowed += CHATGPT_PACKAGE
+            AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> {
+                allowed += CHATGPT_PACKAGE
+                allowed += GOOGLE_SEARCH_PACKAGE
+            }
+            AccessProfile.ESSENTIALS_ONLY, null -> Unit
         }
+
+        if (profile != null && profile != AccessProfile.ESSENTIALS_ONLY &&
+            state.blockedReason == BlockedReason.FOCUS_BLOCK && siteFilterRunning
+        ) {
+            allowed += CHROME_PACKAGE
+        }
+        return allowed
     }
 
     private const val CHATGPT_PACKAGE = "com.openai.chatgpt"
     private const val GOOGLE_SEARCH_PACKAGE = "com.google.android.googlequicksearchbox"
+    private const val CHROME_PACKAGE = "com.android.chrome"
 }
