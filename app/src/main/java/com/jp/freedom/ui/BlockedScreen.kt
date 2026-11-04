@@ -24,9 +24,11 @@ import androidx.compose.ui.unit.dp
 fun BlockedScreen(
     reason: String?,
     onOpenPlanner: () -> Unit,
+    onOpenSettings: () -> Unit,
     onBackToBlockedApp: () -> Unit,
 ) {
     val isEveningRestriction = reason == "evening_restriction"
+    val isSiteFilterSetup = reason == "site_filter_setup"
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(
             modifier = Modifier
@@ -44,7 +46,11 @@ fun BlockedScreen(
             )
             Spacer(Modifier.height(20.dp))
             Text(
-                text = if (isEveningRestriction) "Restricción nocturna activa" else "App bloqueada durante el enfoque",
+                text = when {
+                    isEveningRestriction -> "Restricción nocturna activa"
+                    isSiteFilterSetup -> "Filtro web pendiente"
+                    else -> "App bloqueada durante el enfoque"
+                },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
@@ -52,10 +58,10 @@ fun BlockedScreen(
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                text = if (isEveningRestriction) {
-                    "Completa los bloques requeridos del próximo día en tu planificador para liberar el teléfono."
-                } else {
-                    "Esta app no forma parte del modo de acceso elegido para el bloque actual."
+                text = when {
+                    isEveningRestriction -> "Completa los bloques requeridos del próximo día en tu planificador para liberar el teléfono."
+                    isSiteFilterSetup -> "Activa el filtro web en configuración para usar ChatGPT o Google Search en Chrome durante este bloque."
+                    else -> "Esta app no forma parte del modo de acceso elegido para el bloque actual."
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
@@ -65,9 +71,15 @@ fun BlockedScreen(
             Button(onClick = onOpenPlanner, modifier = Modifier.height(52.dp)) {
                 Text("Abrir planificador")
             }
+            if (isSiteFilterSetup) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onOpenSettings, modifier = Modifier.height(52.dp)) {
+                    Text("Configurar filtro web")
+                }
+            }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = onBackToBlockedApp, modifier = Modifier.height(52.dp)) {
-                Text("Volver al inicio")
+                Text("Ir al inicio")
             }
         }
     }

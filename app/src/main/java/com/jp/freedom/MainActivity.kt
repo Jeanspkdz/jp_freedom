@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.jp.freedom.data.FocusRepository
+import com.jp.freedom.enforcement.PolicyAlarmScheduler
+import com.jp.freedom.enforcement.SiteFilterVpnService
 import com.jp.freedom.ui.FocusApp
 import com.jp.freedom.ui.FocusTheme
 
@@ -21,6 +23,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         repository = FocusRepository(applicationContext)
+        PolicyAlarmScheduler.scheduleNext(this)
         blockedReason = intent.getStringExtra(EXTRA_BLOCKED_REASON)
         setContent {
             FocusTheme {
@@ -35,6 +38,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        SiteFilterVpnService.startIfAuthorized(this)
         resumeVersion++
     }
 

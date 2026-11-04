@@ -1,0 +1,132 @@
+package com.jp.freedom.enforcement
+
+import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.view.accessibility.AccessibilityEvent
+import com.jp.freedom.MainActivity
+import com.jp.freedom.data.FocusRepository
+import java.time.LocalDateTime
+
+class FocusAccessibilityService : AccessibilityService() {
+    private val repository by lazy { FocusRepository(applicationContext) }
+    private var foregroundPackage: String? = null
+    private var blockScreenIsOpen = false
+
+    private val policyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) = enforceCurrentPolicy()
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        val filter = IntentFilter(PolicyAlarmScheduler.ACTION_POLICY_RECHECK)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(policyReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(policyReceiver, filter)
+        }
+        PolicyAlarmScheduler.scheduleNext(this)
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            event?.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        ) return
+
+        val packageName = event.packageName?.toString() ?: return
+        foregroundPackage = packageName
+        if (packageName == this.packageName) {
+            blockScreenIsOpen = false
+        }
+        enforceCurrentPolicy()
+    }
+
+    override fun onInterrupt() = Unit
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(policyReceiver) }
+        super.onDestroy()
+    }
+
+    private fun enforceCurrentPolicy() {
+        val packageName = foregroundPackage ?: return
+        val policy = FocusPolicy.evaluate(
+            now = LocalDateTime.now(),
+            blocks = repository.allBlocks(),
+            settings = repository.settings(),
+        )
+        var reason = policy.blockedReason
+        if (reason == null) {
+            blockScreenIsOpen = false
+            return
+        }
+
+        val essentialPackages = essentialPackages()
+        val allowedPackages = FocusPolicy.allowedPackages(policy, this.packageName, essentialPackages).toMutableSet()
+        if (policy.activeBlock != null && packageName == CHROME_PACKAGE) {
+            if (SiteFilterVpnService.isRunning(this)) {
+                allowedPackages += CHROME_PACKAGE
+            } else if (policy.activeBlock.accessProfile != com.jp.freedom.domain.AccessProfile.ESSENTIALS_ONLY) {
+                reason = SITE_FILTER_SETUP
+            }
+        }
+        if (packageName in allowedPackages || packageName == "com.android.systemui" || packageName == "android") {
+            blockScreenIsOpen = false
+            return
+        }
+        if (blockScreenIsOpen) return
+
+        blockScreenIsOpen = true
+        startActivity(
+            Intent(this, MainActivity::class.java).apply {
+                putExtra(MainActivity.EXTRA_BLOCKED_REASON, reason)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            },
+        )
+    }
+
+    private fun essentialPackages(): Set<String> = essentialPackages(this)
+
+    companion object {
+        fun essentialPackages(context: Context): Set<String> = buildSet {
+            addAll(resolvePackages(context, Intent(Intent.ACTION_DIAL)))
+            addAll(resolvePackages(context, Intent(Intent.ACTION_VIEW, Uri.parse("tel:911"))))
+            addAll(resolvePackages(context, Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:"))))
+            addAll(resolvePackages(context, Intent("android.intent.action.EMERGENCY_ASSIST")))
+            addAll(resolvePackages(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)))
+            add("com.android.incallui")
+            add("com.android.phone")
+            add("com.android.systemui")
+            add("com.android.settings")
+            add("android")
+        }
+
+        fun isEnabled(context: Context): Boolean {
+            val enabled = android.provider.Settings.Secure.getString(
+                context.contentResolver,
+                android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            ).orEmpty()
+            val serviceName = ComponentName(context, FocusAccessibilityService::class.java)
+            return android.provider.Settings.Secure.getInt(
+                context.contentResolver,
+                android.provider.Settings.Secure.ACCESSIBILITY_ENABLED,
+                0,
+            ) == 1 && enabled.split(':').any { ComponentName.unflattenFromString(it) == serviceName }
+        }
+
+        private fun resolvePackages(context: Context, intent: Intent): Set<String> =
+            context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                .mapNotNull { it.activityInfo?.packageName }
+                .toSet()
+
+        private const val CHROME_PACKAGE = "com.android.chrome"
+        private const val SITE_FILTER_SETUP = "site_filter_setup"
+    }
+}

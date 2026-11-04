@@ -2,7 +2,6 @@ package com.jp.freedom.ui
 
 import android.app.Activity
 import android.app.AlarmManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -24,6 +23,10 @@ import com.jp.freedom.domain.BlockValidation
 import com.jp.freedom.domain.DayPlanPolicy
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
+import com.jp.freedom.enforcement.FocusAccessibilityService
+import com.jp.freedom.enforcement.FocusPolicy
+import com.jp.freedom.enforcement.PolicyAlarmScheduler
+import com.jp.freedom.enforcement.SiteFilterVpnService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -57,7 +60,9 @@ fun FocusApp(
     var allBlocks by remember { mutableStateOf<List<PlannedBlock>>(emptyList()) }
     var focusSettings by remember { mutableStateOf(FocusSettings()) }
     var restrictionActive by remember { mutableStateOf(false) }
+    var currentPolicyBlocked by remember { mutableStateOf(false) }
     var stateLoaded by remember { mutableStateOf(false) }
+    var siteFilterEnabled by remember { mutableStateOf(SiteFilterVpnService.isRunning(context)) }
     val currentDate = LocalDate.now()
     val selectedDate = currentDate.plusDays(dayOffset.toLong())
 
@@ -72,11 +77,13 @@ fun FocusApp(
                     requiredBlockCount = settings.requiredBlockCount,
                     blocks = blocks,
                 )
-                PlannerSnapshot(blocks, settings, restricted)
+                val policyBlocked = FocusPolicy.evaluate(LocalDateTime.now(), blocks, settings).blockedReason != null
+                PlannerSnapshot(blocks, settings, restricted, policyBlocked)
             }
             allBlocks = snapshot.blocks
             focusSettings = snapshot.settings
             restrictionActive = snapshot.restricted
+            currentPolicyBlocked = snapshot.policyBlocked
             stateLoaded = true
             delay(60_000)
         }
@@ -86,8 +93,16 @@ fun FocusApp(
         if (initialBlockedReason != null) page = AppPage.BLOCKED
     }
 
-    LaunchedEffect(page, restrictionActive, stateLoaded) {
-        if (stateLoaded && page == AppPage.BLOCKED && !restrictionActive) page = AppPage.PLANNER
+    LaunchedEffect(activityResumeVersion) {
+        repeat(5) {
+            delay(400)
+            siteFilterEnabled = SiteFilterVpnService.isRunning(context)
+            if (siteFilterEnabled) return@LaunchedEffect
+        }
+    }
+
+    LaunchedEffect(page, currentPolicyBlocked, stateLoaded) {
+        if (stateLoaded && page == AppPage.BLOCKED && !currentPolicyBlocked) page = AppPage.PLANNER
     }
 
     BackHandler(enabled = page != AppPage.PLANNER) {
@@ -137,11 +152,15 @@ fun FocusApp(
             onBack = { page = AppPage.PLANNER },
             onSave = { block ->
                 val result = withContext(Dispatchers.IO) { repository.saveBlock(block) }
-                if (result == BlockValidation.Valid) refreshVersion++
+                if (result == BlockValidation.Valid) {
+                    PolicyAlarmScheduler.scheduleNext(context)
+                    refreshVersion++
+                }
                 result
             },
             onDelete = { id ->
                 withContext(Dispatchers.IO) { repository.deleteBlock(id) }
+                PolicyAlarmScheduler.scheduleNext(context)
                 refreshVersion++
                 page = AppPage.PLANNER
             },
@@ -151,22 +170,30 @@ fun FocusApp(
             settings = focusSettings,
             accessibilityEnabled = accessibilityEnabled,
             exactAlarmsAllowed = exactAlarmsAllowed,
+            siteFilterEnabled = siteFilterEnabled,
             onBack = { page = AppPage.PLANNER },
             onSettingsChange = { updated ->
                 focusSettings = updated
                 scope.launch {
                     withContext(Dispatchers.IO) { repository.saveSettings(updated) }
+                    PolicyAlarmScheduler.scheduleNext(context)
                     refreshVersion++
                 }
             },
             onOpenAccessibilitySettings = { openAccessibilitySettings(context) },
             onRequestExactAlarmAccess = { openExactAlarmSettings(context) },
+            onRequestSiteFilter = { SiteFilterVpnService.requestPermission(context) },
         )
 
         AppPage.BLOCKED -> BlockedScreen(
             reason = initialBlockedReason,
             onOpenPlanner = { page = AppPage.PLANNER },
+            onOpenSettings = { page = AppPage.SETTINGS },
             onBackToBlockedApp = {
+                context.startActivity(
+                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
                 (context as? Activity)?.finish()
             },
         )
@@ -177,23 +204,11 @@ private data class PlannerSnapshot(
     val blocks: List<PlannedBlock>,
     val settings: FocusSettings,
     val restricted: Boolean,
+    val policyBlocked: Boolean,
 )
 
 private fun isAccessibilityServiceEnabled(context: Context): Boolean {
-    val enabled = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-    ).orEmpty()
-    val serviceClass = "${context.packageName}.enforcement.FocusAccessibilityService"
-    return Settings.Secure.getInt(
-        context.contentResolver,
-        Settings.Secure.ACCESSIBILITY_ENABLED,
-        0,
-    ) == 1 && enabled.split(':').any { flattened ->
-        ComponentName.unflattenFromString(flattened)?.let { component ->
-            component.packageName == context.packageName && component.className == serviceClass
-        } == true
-    }
+    return FocusAccessibilityService.isEnabled(context)
 }
 
 private fun canScheduleExactAlarms(context: Context): Boolean {

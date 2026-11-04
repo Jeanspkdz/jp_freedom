@@ -27,6 +27,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,6 +76,9 @@ fun BlockEditorScreen(
     var endTime by remember(block?.id, date) { mutableStateOf(block?.endTime ?: startTime.plusMinutes(60)) }
     var accessProfile by remember(block?.id, date) {
         mutableStateOf(block?.accessProfile ?: AccessProfile.ESSENTIALS_ONLY)
+    }
+    var completionStatus by remember(block?.id, date) {
+        mutableStateOf(block?.completionStatus ?: CompletionStatus.NOT_STARTED)
     }
     var expandedProfile by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
@@ -143,7 +147,7 @@ fun BlockEditorScreen(
                             startTime = startTime,
                             endTime = endTime,
                             accessProfile = accessProfile,
-                            completionStatus = block?.completionStatus ?: CompletionStatus.NOT_STARTED,
+                            completionStatus = completionStatus,
                         )
                         scope.launch {
                             isSaving = true
@@ -270,6 +274,16 @@ fun BlockEditorScreen(
             )
 
             if (block != null) {
+                Text("Progreso", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    CompletionStatus.entries.forEach { status ->
+                        FilterChip(
+                            selected = completionStatus == status,
+                            onClick = { completionStatus = status },
+                            label = { Text(status.label()) },
+                        )
+                    }
+                }
                 Spacer(Modifier.height(4.dp))
                 OutlinedButton(
                     onClick = { showDeleteConfirmation = true },
@@ -352,4 +366,11 @@ private fun accessProfileDescription(profile: AccessProfile): String = when (pro
     AccessProfile.ESSENTIALS_ONLY -> "Llamadas, mensajes, emergencias y el planificador permanecen disponibles."
     AccessProfile.ESSENTIALS_WITH_CHATGPT -> "También se permite la app y el sitio de ChatGPT."
     AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> "También se permiten ChatGPT y Google Search."
+}
+
+private fun CompletionStatus.label(): String = when (this) {
+    CompletionStatus.NOT_STARTED -> "Aún no iniciado"
+    CompletionStatus.FINISHED -> "Finalizado"
+    CompletionStatus.PARTLY_DONE -> "Parcialmente hecho"
+    CompletionStatus.NOT_DONE -> "No realizado"
 }

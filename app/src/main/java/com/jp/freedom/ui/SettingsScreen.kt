@@ -48,10 +48,12 @@ fun SettingsScreen(
     settings: FocusSettings,
     accessibilityEnabled: Boolean,
     exactAlarmsAllowed: Boolean,
+    siteFilterEnabled: Boolean,
     onBack: () -> Unit,
     onSettingsChange: (FocusSettings) -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
     onRequestExactAlarmAccess: () -> Unit,
+    onRequestSiteFilter: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -154,6 +156,19 @@ fun SettingsScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Protección del teléfono", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                PermissionCard(
+                    icon = Icons.Outlined.AppBlocking,
+                    title = "Filtro de sitios en Chrome",
+                    enabled = siteFilterEnabled,
+                    status = if (siteFilterEnabled) "Activo" else "Sin activar",
+                    description = if (siteFilterEnabled) {
+                        "El filtro DNS funciona en este teléfono; solo permite los dominios seleccionados durante los bloques."
+                    } else {
+                        "Filtra dominios de Chrome localmente durante los bloques. Android pedirá permiso para configurar una VPN."
+                    },
+                    actionLabel = if (siteFilterEnabled) "Gestionar en Ajustes" else "Activar filtro web",
+                    onAction = onRequestSiteFilter,
+                )
                 PermissionCard(
                     icon = Icons.Outlined.AppBlocking,
                     title = "Bloqueo de apps",
