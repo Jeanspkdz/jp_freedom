@@ -72,7 +72,7 @@ class FocusAccessibilityService : AccessibilityService() {
         val allowedPackages = FocusPolicy.allowedPackages(policy, this.packageName, essentialPackages).toMutableSet()
         val activeBlock = policy.activeBlock
         val chromeDuringBlock = activeBlock != null && packageName == CHROME_PACKAGE
-        val siteFilterRunning = chromeDuringBlock && SiteFilterVpnService.isRunning(this)
+        val siteFilterRunning = chromeDuringBlock && SiteFilterVpnService.isRunning()
         val reason = if (activeBlock != null && packageName == CHROME_PACKAGE && !siteFilterRunning &&
             activeBlock.accessProfile != com.jp.freedom.domain.AccessProfile.ESSENTIALS_ONLY
         ) {

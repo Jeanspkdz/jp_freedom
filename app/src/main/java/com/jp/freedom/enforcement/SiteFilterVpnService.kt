@@ -7,8 +7,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
-import android.net.LinkProperties
-import android.net.Network
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -43,7 +41,7 @@ class SiteFilterVpnService : VpnService() {
             startAsForeground()
             val upstreamDns = currentUpstreamDns(this)
             val builder = Builder()
-                .setSession("JP Freedom")
+                .setSession(SESSION_NAME)
                 .setMtu(1500)
                 .addAddress(DNS_TUNNEL_ADDRESS, 32)
                 .addDnsServer(DNS_SERVER_ADDRESS)
@@ -59,26 +57,26 @@ class SiteFilterVpnService : VpnService() {
             }
 
             tunnel = builder.establish() ?: error("Android no creó la interfaz del filtro web.")
-            setRunning(this, true)
+            setRunning(true)
             PolicyAlarmScheduler.broadcastRecheck(this)
             worker = thread(name = "jp-freedom-dns") { processTunnel(upstreamDns) }
             Service.START_STICKY
         } catch (exception: Exception) {
             Log.e(TAG, "Failed to establish the local DNS VPN", exception)
-            setRunning(this, false)
+            setRunning(false)
             stopSelf(startId)
             Service.START_NOT_STICKY
         }
     }
 
     override fun onRevoke() {
-        setRunning(this, false)
+        setRunning(false)
         stopSelf()
         super.onRevoke()
     }
 
     override fun onDestroy() {
-        setRunning(this, false)
+        setRunning(false)
         runCatching { tunnel?.close() }
         tunnel = null
         worker = null
@@ -120,7 +118,8 @@ class SiteFilterVpnService : VpnService() {
             val length = runCatching { input.read(packet) }.getOrElse { break }
             if (length <= 0) continue
             val dnsQuery = extractDnsQuery(packet, length) ?: continue
-            val response = if (isAllowedDomain(dnsQuery.domain)) {
+            val allowed = isAllowedDomain(dnsQuery.domain)
+            val response = if (allowed) {
                 forwardDns(dnsQuery.payload, upstreamDns)
             } else {
                 blockedDnsResponse(dnsQuery.payload, dnsQuery.questionEnd)
@@ -158,20 +157,16 @@ class SiteFilterVpnService : VpnService() {
         }
     }
 
-    private fun setRunning(context: Context, running: Boolean) {
-        context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_RUNNING, running)
-            .apply()
+    private fun setRunning(running: Boolean) {
+        runningInThisProcess = running
     }
 
     private data class DnsQuery(val domain: String, val payload: ByteArray, val questionEnd: Int)
 
     companion object {
-        private const val PREFERENCES_NAME = "site-filter"
-        private const val KEY_RUNNING = "running"
         private const val DNS_TUNNEL_ADDRESS = "10.77.0.1"
         private const val DNS_SERVER_ADDRESS = "10.77.0.2"
+        private const val SESSION_NAME = "JP Freedom"
         private const val FALLBACK_DNS = "1.1.1.1"
         private const val DNS_PORT = 53
         private const val DNS_TIMEOUT_MS = 2_000
@@ -181,13 +176,14 @@ class SiteFilterVpnService : VpnService() {
         private const val TAG = "JPFreedomVpn"
         private const val CHATGPT_PACKAGE = "com.openai.chatgpt"
         private const val GOOGLE_SEARCH_PACKAGE = "com.google.android.googlequicksearchbox"
+        // This runtime flag resets on process death instead of surviving as a stale preference.
+        @Volatile
+        private var runningInThisProcess = false
 
-        fun isRunning(context: Context): Boolean = context
-            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_RUNNING, false)
+        fun isRunning(): Boolean = runningInThisProcess
 
         fun startIfAuthorized(context: Context) {
-            if (VpnService.prepare(context) != null || isRunning(context)) return
+            if (VpnService.prepare(context) != null) return
             val intent = Intent(context, SiteFilterVpnService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
             else context.startService(intent)

@@ -66,7 +66,7 @@ fun FocusApp(
     var restrictionActive by remember { mutableStateOf(false) }
     var currentPolicyBlocked by remember { mutableStateOf(false) }
     var stateLoaded by remember { mutableStateOf(false) }
-    var siteFilterEnabled by remember { mutableStateOf(SiteFilterVpnService.isRunning(context)) }
+    var siteFilterEnabled by remember { mutableStateOf(SiteFilterVpnService.isRunning()) }
     val siteFilterPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
@@ -107,7 +107,7 @@ fun FocusApp(
     LaunchedEffect(activityResumeVersion) {
         repeat(5) {
             delay(400)
-            siteFilterEnabled = SiteFilterVpnService.isRunning(context)
+            siteFilterEnabled = SiteFilterVpnService.isRunning()
             if (siteFilterEnabled) return@LaunchedEffect
         }
     }
