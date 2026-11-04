@@ -48,6 +48,7 @@ fun FocusApp(
     repository: FocusRepository,
     activityResumeVersion: Int,
     initialBlockedReason: BlockedReason?,
+    blockedRequestVersion: Int,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -90,7 +91,7 @@ fun FocusApp(
         }
     }
 
-    LaunchedEffect(initialBlockedReason) {
+    LaunchedEffect(blockedRequestVersion, initialBlockedReason) {
         if (initialBlockedReason != null) page = AppPage.BLOCKED
     }
 
