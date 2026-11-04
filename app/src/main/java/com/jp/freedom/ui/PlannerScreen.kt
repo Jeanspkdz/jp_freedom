@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -479,6 +480,7 @@ private fun PlannerBottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp)
             .padding(top = 8.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
