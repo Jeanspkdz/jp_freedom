@@ -2,24 +2,50 @@ package com.jp.freedom
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.jp.freedom.data.FocusRepository
+import com.jp.freedom.ui.FocusApp
+import com.jp.freedom.ui.FocusTheme
 
 class MainActivity : ComponentActivity() {
+    private lateinit var repository: FocusRepository
+    private var resumeVersion by mutableIntStateOf(0)
+    private var blockedReason by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        repository = FocusRepository(applicationContext)
+        blockedReason = intent.getStringExtra(EXTRA_BLOCKED_REASON)
         setContent {
-            MaterialTheme {
-                StarterScreen()
+            FocusTheme {
+                FocusApp(
+                    repository = repository,
+                    activityResumeVersion = resumeVersion,
+                    initialBlockedReason = blockedReason,
+                )
             }
         }
     }
-}
 
-@Composable
-private fun StarterScreen() {
-    Text("JP Freedom")
+    override fun onResume() {
+        super.onResume()
+        resumeVersion++
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        blockedReason = intent.getStringExtra(EXTRA_BLOCKED_REASON)
+    }
+
+    companion object {
+        const val EXTRA_BLOCKED_REASON = "com.jp.freedom.extra.BLOCKED_REASON"
+    }
 }
 
