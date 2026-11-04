@@ -13,6 +13,7 @@ import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.content.pm.ServiceInfo
+import android.util.Log
 import com.jp.freedom.data.FocusRepository
 import com.jp.freedom.domain.AccessProfile
 import java.io.FileInputStream
@@ -32,12 +33,14 @@ class SiteFilterVpnService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (VpnService.prepare(this) != null) {
+            Log.w(TAG, "VPN permission is not prepared; stopping the service")
             stopSelf(startId)
             return Service.START_NOT_STICKY
         }
         if (tunnel != null) return Service.START_STICKY
 
         return try {
+            startAsForeground()
             val upstreamDns = currentUpstreamDns(this)
             val builder = Builder()
                 .setSession("JP Freedom")
@@ -56,12 +59,12 @@ class SiteFilterVpnService : VpnService() {
             }
 
             tunnel = builder.establish() ?: error("Android no creó la interfaz del filtro web.")
-            startAsForeground()
             setRunning(this, true)
             PolicyAlarmScheduler.broadcastRecheck(this)
             worker = thread(name = "jp-freedom-dns") { processTunnel(upstreamDns) }
             Service.START_STICKY
-        } catch (_: Exception) {
+        } catch (exception: Exception) {
+            Log.e(TAG, "Failed to establish the local DNS VPN", exception)
             setRunning(this, false)
             stopSelf(startId)
             Service.START_NOT_STICKY
@@ -133,7 +136,11 @@ class SiteFilterVpnService : VpnService() {
     }
 
     private fun forwardDns(query: ByteArray, upstreamDns: InetAddress): ByteArray? {
-        val socket = DatagramSocket()
+        val socket = try {
+            DatagramSocket()
+        } catch (_: Exception) {
+            return null
+        }
         return try {
             if (!protect(socket)) return null
             socket.soTimeout = DNS_TIMEOUT_MS
@@ -171,6 +178,7 @@ class SiteFilterVpnService : VpnService() {
         private const val MAX_DNS_PACKET_BYTES = 4_096
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "site-filter"
+        private const val TAG = "JPFreedomVpn"
         private const val CHATGPT_PACKAGE = "com.openai.chatgpt"
         private const val GOOGLE_SEARCH_PACKAGE = "com.google.android.googlequicksearchbox"
 
@@ -185,12 +193,12 @@ class SiteFilterVpnService : VpnService() {
             else context.startService(intent)
         }
 
-        fun requestPermission(context: Context) {
+        fun requestPermission(context: Context, launchPermissionRequest: (Intent) -> Unit) {
             val prepareIntent = VpnService.prepare(context)
             if (prepareIntent == null) {
                 startIfAuthorized(context)
             } else {
-                context.startActivity(prepareIntent)
+                launchPermissionRequest(prepareIntent)
             }
         }
 

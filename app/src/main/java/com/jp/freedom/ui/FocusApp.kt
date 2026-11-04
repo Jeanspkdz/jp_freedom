@@ -8,6 +8,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,6 +67,13 @@ fun FocusApp(
     var currentPolicyBlocked by remember { mutableStateOf(false) }
     var stateLoaded by remember { mutableStateOf(false) }
     var siteFilterEnabled by remember { mutableStateOf(SiteFilterVpnService.isRunning(context)) }
+    val siteFilterPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            SiteFilterVpnService.startIfAuthorized(context)
+        }
+    }
     val currentDate = LocalDate.now()
     val selectedDate = currentDate.plusDays(dayOffset.toLong())
 
@@ -184,7 +193,11 @@ fun FocusApp(
             },
             onOpenAccessibilitySettings = { openAccessibilitySettings(context) },
             onRequestExactAlarmAccess = { openExactAlarmSettings(context) },
-            onRequestSiteFilter = { SiteFilterVpnService.requestPermission(context) },
+            onRequestSiteFilter = {
+                SiteFilterVpnService.requestPermission(context) { intent ->
+                    siteFilterPermissionLauncher.launch(intent)
+                }
+            },
         )
 
         AppPage.BLOCKED -> BlockedScreen(

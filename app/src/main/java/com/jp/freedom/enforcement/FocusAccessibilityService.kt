@@ -107,6 +107,7 @@ class FocusAccessibilityService : AccessibilityService() {
             addAll(resolvePackages(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)))
             add("com.android.incallui")
             add("com.android.phone")
+            add("com.android.vpndialogs")
             add("com.android.systemui")
             add("com.android.settings")
             add("android")
