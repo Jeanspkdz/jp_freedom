@@ -365,9 +365,9 @@ private fun BlockSurface(
                 when {
                     isCurrent -> StateLabel("En curso", emphasized = true)
                     isNext -> StateLabel("Siguiente", emphasized = false)
-                    block.completionStatus == CompletionStatus.FINISHED -> StateLabel("Finalizado", emphasized = false)
-                    block.completionStatus == CompletionStatus.PARTLY_DONE -> StateLabel("Parcialmente hecho", emphasized = false)
-                    block.completionStatus == CompletionStatus.NOT_DONE -> StateLabel("No realizado", emphasized = false)
+                    block.completionStatus == CompletionStatus.FINISHED -> StateLabel(block.completionStatus.label(), emphasized = false)
+                    block.completionStatus == CompletionStatus.PARTLY_DONE -> StateLabel(block.completionStatus.label(), emphasized = false)
+                    block.completionStatus == CompletionStatus.NOT_DONE -> StateLabel(block.completionStatus.label(), emphasized = false)
                 }
             }
         }

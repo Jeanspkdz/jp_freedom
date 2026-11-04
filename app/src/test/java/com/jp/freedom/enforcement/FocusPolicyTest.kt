@@ -25,8 +25,8 @@ class FocusPolicyTest {
 
     @Test
     fun blockIsActiveFromItsStartUntilItsEnd() {
-        assertEquals(FocusPolicy.FOCUS_BLOCK, evaluate(LocalTime.of(10, 0)).blockedReason)
-        assertEquals(FocusPolicy.FOCUS_BLOCK, evaluate(LocalTime.of(10, 59)).blockedReason)
+        assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 0)).blockedReason)
+        assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 59)).blockedReason)
         assertNull(evaluate(LocalTime.of(11, 0)).blockedReason)
     }
 
@@ -41,7 +41,7 @@ class FocusPolicyTest {
     @Test
     fun otherCompletionStatusesDoNotEndAnActiveBlockEarly() {
         listOf(CompletionStatus.PARTLY_DONE, CompletionStatus.NOT_DONE).forEach { status ->
-            assertEquals(FocusPolicy.FOCUS_BLOCK, evaluate(LocalTime.of(10, 30), block.copy(completionStatus = status)).blockedReason)
+            assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 30), block.copy(completionStatus = status)).blockedReason)
         }
     }
 
@@ -53,7 +53,7 @@ class FocusPolicyTest {
             blocks = listOf(block.copy(date = nextDay, startTime = LocalTime.NOON, endTime = LocalTime.of(13, 0))),
             settings = settings(requiredCount = 2),
         )
-        assertEquals(FocusPolicy.EVENING_RESTRICTION, state.blockedReason)
+        assertEquals(BlockedReason.EVENING_RESTRICTION, state.blockedReason)
         assertNull(state.activeBlock)
     }
 

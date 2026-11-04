@@ -162,9 +162,9 @@ fun SettingsScreen(
                     enabled = siteFilterEnabled,
                     status = if (siteFilterEnabled) "Activo" else "Sin activar",
                     description = if (siteFilterEnabled) {
-                        "El filtro DNS funciona en este teléfono; solo permite los dominios seleccionados durante los bloques."
+                        "El filtro aplica la lista a consultas DNS enviadas por esta VPN. No se ha verificado que impida todas las conexiones HTTPS a un sitio."
                     } else {
-                        "Filtra dominios de Chrome localmente durante los bloques. Android pedirá permiso para configurar una VPN."
+                        "Filtra consultas DNS mediante una VPN local durante los bloques. No se ha verificado que impida todas las conexiones HTTPS a un sitio. Android pedirá permiso para configurar la VPN."
                     },
                     actionLabel = if (siteFilterEnabled) "Gestionar en Ajustes" else "Activar filtro web",
                     onAction = onRequestSiteFilter,

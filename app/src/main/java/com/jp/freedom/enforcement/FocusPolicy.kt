@@ -7,14 +7,11 @@ import com.jp.freedom.domain.PlannedBlock
 import java.time.LocalDateTime
 
 data class FocusPolicyState(
-    val blockedReason: String?,
+    val blockedReason: BlockedReason?,
     val activeBlock: PlannedBlock?,
 )
 
 object FocusPolicy {
-    const val EVENING_RESTRICTION = "evening_restriction"
-    const val FOCUS_BLOCK = "focus_block"
-
     fun evaluate(
         now: LocalDateTime,
         blocks: List<PlannedBlock>,
@@ -26,7 +23,7 @@ object FocusPolicy {
             requiredBlockCount = settings.requiredBlockCount,
             blocks = blocks,
         )
-        if (eveningRestriction) return FocusPolicyState(EVENING_RESTRICTION, null)
+        if (eveningRestriction) return FocusPolicyState(BlockedReason.EVENING_RESTRICTION, null)
 
         val activeBlock = blocks.firstOrNull { block ->
             block.date == now.toLocalDate() &&
@@ -35,7 +32,7 @@ object FocusPolicy {
                 now.toLocalTime().isBefore(block.endTime)
         }
         return FocusPolicyState(
-            blockedReason = if (activeBlock == null) null else FOCUS_BLOCK,
+            blockedReason = if (activeBlock == null) null else BlockedReason.FOCUS_BLOCK,
             activeBlock = activeBlock,
         )
     }
@@ -46,7 +43,7 @@ object FocusPolicy {
         essentialPackages: Set<String>,
     ): Set<String> {
         val allowed = essentialPackages + ownPackage
-        if (state.blockedReason == EVENING_RESTRICTION) return allowed
+        if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return allowed
 
         return when (state.activeBlock?.accessProfile) {
             AccessProfile.ESSENTIALS_WITH_CHATGPT -> allowed + CHATGPT_PACKAGE

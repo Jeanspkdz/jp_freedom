@@ -19,16 +19,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.jp.freedom.enforcement.BlockedReason
 
 @Composable
 fun BlockedScreen(
-    reason: String?,
+    reason: BlockedReason?,
     onOpenPlanner: () -> Unit,
     onOpenSettings: () -> Unit,
     onBackToBlockedApp: () -> Unit,
 ) {
-    val isEveningRestriction = reason == "evening_restriction"
-    val isSiteFilterSetup = reason == "site_filter_setup"
+    val isEveningRestriction = reason == BlockedReason.EVENING_RESTRICTION
+    val isSiteFilterSetup = reason == BlockedReason.SITE_FILTER_SETUP
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(
             modifier = Modifier

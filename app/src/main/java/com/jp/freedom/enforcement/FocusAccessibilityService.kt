@@ -62,21 +62,25 @@ class FocusAccessibilityService : AccessibilityService() {
             blocks = repository.allBlocks(),
             settings = repository.settings(),
         )
-        var reason = policy.blockedReason
-        if (reason == null) {
+        val policyReason = policy.blockedReason
+        if (policyReason == null) {
             blockScreenIsOpen = false
             return
         }
 
         val essentialPackages = essentialPackages()
         val allowedPackages = FocusPolicy.allowedPackages(policy, this.packageName, essentialPackages).toMutableSet()
-        if (policy.activeBlock != null && packageName == CHROME_PACKAGE) {
-            if (SiteFilterVpnService.isRunning(this)) {
-                allowedPackages += CHROME_PACKAGE
-            } else if (policy.activeBlock.accessProfile != com.jp.freedom.domain.AccessProfile.ESSENTIALS_ONLY) {
-                reason = SITE_FILTER_SETUP
-            }
+        val activeBlock = policy.activeBlock
+        val chromeDuringBlock = activeBlock != null && packageName == CHROME_PACKAGE
+        val siteFilterRunning = chromeDuringBlock && SiteFilterVpnService.isRunning(this)
+        val reason = if (activeBlock != null && packageName == CHROME_PACKAGE && !siteFilterRunning &&
+            activeBlock.accessProfile != com.jp.freedom.domain.AccessProfile.ESSENTIALS_ONLY
+        ) {
+            BlockedReason.SITE_FILTER_SETUP
+        } else {
+            policyReason
         }
+        if (siteFilterRunning) allowedPackages += CHROME_PACKAGE
         if (packageName in allowedPackages || packageName == "com.android.systemui" || packageName == "android") {
             blockScreenIsOpen = false
             return
@@ -86,7 +90,7 @@ class FocusAccessibilityService : AccessibilityService() {
         blockScreenIsOpen = true
         startActivity(
             Intent(this, MainActivity::class.java).apply {
-                putExtra(MainActivity.EXTRA_BLOCKED_REASON, reason)
+                putExtra(MainActivity.EXTRA_BLOCKED_REASON, reason.toIntentId())
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             },
         )
@@ -127,6 +131,5 @@ class FocusAccessibilityService : AccessibilityService() {
                 .toSet()
 
         private const val CHROME_PACKAGE = "com.android.chrome"
-        private const val SITE_FILTER_SETUP = "site_filter_setup"
     }
 }

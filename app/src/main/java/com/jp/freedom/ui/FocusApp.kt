@@ -23,6 +23,7 @@ import com.jp.freedom.domain.BlockValidation
 import com.jp.freedom.domain.DayPlanPolicy
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
+import com.jp.freedom.enforcement.BlockedReason
 import com.jp.freedom.enforcement.FocusAccessibilityService
 import com.jp.freedom.enforcement.FocusPolicy
 import com.jp.freedom.enforcement.PolicyAlarmScheduler
@@ -46,7 +47,7 @@ private enum class AppPage {
 fun FocusApp(
     repository: FocusRepository,
     activityResumeVersion: Int,
-    initialBlockedReason: String?,
+    initialBlockedReason: BlockedReason?,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

@@ -367,10 +367,3 @@ private fun accessProfileDescription(profile: AccessProfile): String = when (pro
     AccessProfile.ESSENTIALS_WITH_CHATGPT -> "También se permite la app y el sitio de ChatGPT."
     AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> "También se permiten ChatGPT y Google Search."
 }
-
-private fun CompletionStatus.label(): String = when (this) {
-    CompletionStatus.NOT_STARTED -> "Aún no iniciado"
-    CompletionStatus.FINISHED -> "Finalizado"
-    CompletionStatus.PARTLY_DONE -> "Parcialmente hecho"
-    CompletionStatus.NOT_DONE -> "No realizado"
-}

@@ -96,8 +96,8 @@ class SiteFilterVpnService : VpnService() {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
         }.setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setContentTitle("Filtro web activo")
-            .setContentText("Los dominios se filtran localmente durante los bloques.")
+            .setContentTitle("Filtro DNS activo")
+            .setContentText("La VPN aplica reglas de filtrado a consultas DNS durante los bloques.")
             .setOngoing(true)
             .build()
 

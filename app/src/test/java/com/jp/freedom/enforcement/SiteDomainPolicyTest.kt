@@ -32,8 +32,13 @@ class SiteDomainPolicyTest {
     fun chatGptModeAllowsChatGptDomainsAndBlocksSearch() {
         val state = activeState(AccessProfile.ESSENTIALS_WITH_CHATGPT)
         assertTrue(SiteDomainPolicy.isAllowed("chatgpt.com", state))
+        assertTrue(SiteDomainPolicy.isAllowed("chat.openai.com", state))
         assertTrue(SiteDomainPolicy.isAllowed("cdn.oaistatic.com", state))
+        assertTrue(SiteDomainPolicy.isAllowed("auth.openai.com", state))
         assertFalse(SiteDomainPolicy.isAllowed("www.google.com", state))
+        assertFalse(SiteDomainPolicy.isAllowed("platform.openai.com", state))
+        assertFalse(SiteDomainPolicy.isAllowed("api.openai.com", state))
+        assertFalse(SiteDomainPolicy.isAllowed("openai.com", state))
         assertFalse(SiteDomainPolicy.isAllowed("example.com", state))
     }
 
@@ -51,11 +56,11 @@ class SiteDomainPolicyTest {
         assertFalse(
             SiteDomainPolicy.isAllowed(
                 "chatgpt.com",
-                FocusPolicyState(FocusPolicy.EVENING_RESTRICTION, activeBlock.copy(accessProfile = AccessProfile.ESSENTIALS_WITH_CHATGPT)),
+                FocusPolicyState(BlockedReason.EVENING_RESTRICTION, activeBlock.copy(accessProfile = AccessProfile.ESSENTIALS_WITH_CHATGPT)),
             ),
         )
     }
 
     private fun activeState(profile: AccessProfile) =
-        FocusPolicyState(FocusPolicy.FOCUS_BLOCK, activeBlock.copy(accessProfile = profile))
+        FocusPolicyState(BlockedReason.FOCUS_BLOCK, activeBlock.copy(accessProfile = profile))
 }
