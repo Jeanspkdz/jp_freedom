@@ -1,0 +1,674 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-04T16:48:00Z",
+  "title": "Design System: JP Freedom",
+  "extensions": {
+    "colorMeta": {
+      "amber-primary": {
+        "role": "primary",
+        "displayName": "Warm amber",
+        "canonical": "#A65608",
+        "tonalRamp": [
+          "#170600",
+          "#3C1B00",
+          "#663200",
+          "#944B00",
+          "#BC6A28",
+          "#E38D4E",
+          "#FFB785",
+          "#FFEADC"
+        ]
+      },
+      "white-on-primary": {
+        "role": "neutral",
+        "displayName": "Primary contrast white",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "amber-container": {
+        "role": "primary",
+        "displayName": "Soft amber",
+        "canonical": "#F9E0B4",
+        "tonalRamp": [
+          "#120A00",
+          "#322200",
+          "#533E15",
+          "#735E36",
+          "#967F56",
+          "#B9A278",
+          "#DEC69B",
+          "#FFECCB"
+        ]
+      },
+      "brown-on-amber-container": {
+        "role": "neutral",
+        "displayName": "Deep amber ink",
+        "canonical": "#603300",
+        "tonalRamp": [
+          "#150700",
+          "#3A1D00",
+          "#623502",
+          "#855529",
+          "#A8764B",
+          "#CD986D",
+          "#F3BD90",
+          "#FFEADA"
+        ]
+      },
+      "slate-secondary": {
+        "role": "secondary",
+        "displayName": "Graphite slate",
+        "canonical": "#50545B",
+        "tonalRamp": [
+          "#080B11",
+          "#22252B",
+          "#3E4249",
+          "#5D6169",
+          "#7E828A",
+          "#A1A5AD",
+          "#C5C9D2",
+          "#EAEFF7"
+        ]
+      },
+      "white-on-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary contrast white",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "silver-secondary-container": {
+        "role": "secondary",
+        "displayName": "Pale silver",
+        "canonical": "#E9E9ED",
+        "tonalRamp": [
+          "#0B0B0D",
+          "#252528",
+          "#424245",
+          "#616164",
+          "#828285",
+          "#A4A4A8",
+          "#C9C9CC",
+          "#EEEEF2"
+        ]
+      },
+      "ink-on-secondary-container": {
+        "role": "neutral",
+        "displayName": "Graphite ink",
+        "canonical": "#22232A",
+        "tonalRamp": [
+          "#0A0B11",
+          "#23242C",
+          "#404149",
+          "#5F6169",
+          "#80828A",
+          "#A3A4AD",
+          "#C7C8D2",
+          "#ECEEF8"
+        ]
+      },
+      "warm-neutral-background": {
+        "role": "neutral",
+        "displayName": "Warm paper",
+        "canonical": "#F7F6F6",
+        "tonalRamp": [
+          "#0C0B0B",
+          "#252525",
+          "#424242",
+          "#626161",
+          "#838282",
+          "#A6A5A5",
+          "#CAC9C9",
+          "#EFEEEE"
+        ]
+      },
+      "ink-on-background": {
+        "role": "neutral",
+        "displayName": "Near-black ink",
+        "canonical": "#0A0A0E",
+        "tonalRamp": [
+          "#0B0B0F",
+          "#242529",
+          "#414146",
+          "#606166",
+          "#828287",
+          "#A4A4AA",
+          "#C8C8CF",
+          "#EEEEF4"
+        ]
+      },
+      "white-surface": {
+        "role": "neutral",
+        "displayName": "Soft white",
+        "canonical": "#FFFEFE",
+        "tonalRamp": [
+          "#0C0B0B",
+          "#252525",
+          "#424242",
+          "#626161",
+          "#838282",
+          "#A6A5A5",
+          "#CAC9C9",
+          "#EFEEEE"
+        ]
+      },
+      "ink-on-surface": {
+        "role": "neutral",
+        "displayName": "Surface ink",
+        "canonical": "#0A0A0E",
+        "tonalRamp": [
+          "#0B0B0F",
+          "#242529",
+          "#414146",
+          "#606166",
+          "#828287",
+          "#A4A4AA",
+          "#C8C8CF",
+          "#EEEEF4"
+        ]
+      },
+      "silver-surface-variant": {
+        "role": "neutral",
+        "displayName": "Silver surface",
+        "canonical": "#EBEBEF",
+        "tonalRamp": [
+          "#0B0B0D",
+          "#252528",
+          "#424245",
+          "#616164",
+          "#828285",
+          "#A4A4A8",
+          "#C9C9CC",
+          "#EEEEF2"
+        ]
+      },
+      "muted-ink": {
+        "role": "neutral",
+        "displayName": "Muted graphite",
+        "canonical": "#36363D",
+        "tonalRamp": [
+          "#0B0A10",
+          "#24242B",
+          "#414148",
+          "#606068",
+          "#81818A",
+          "#A4A4AD",
+          "#C8C8D1",
+          "#EDEDF7"
+        ]
+      },
+      "silver-outline": {
+        "role": "neutral",
+        "displayName": "Soft outline",
+        "canonical": "#D4D4DA",
+        "tonalRamp": [
+          "#0B0B0F",
+          "#252529",
+          "#414146",
+          "#616166",
+          "#828287",
+          "#A4A4AA",
+          "#C8C8CE",
+          "#EEEEF4"
+        ]
+      },
+      "pale-outline": {
+        "role": "neutral",
+        "displayName": "Pale outline",
+        "canonical": "#E3E3E7",
+        "tonalRamp": [
+          "#0B0B0D",
+          "#252528",
+          "#424245",
+          "#616164",
+          "#828285",
+          "#A4A4A8",
+          "#C9C9CC",
+          "#EEEEF2"
+        ]
+      },
+      "error-red": {
+        "role": "error",
+        "displayName": "Focus warning red",
+        "canonical": "#BA1A1A",
+        "tonalRamp": [
+          "#1F0000",
+          "#4D0002",
+          "#810006",
+          "#B51215",
+          "#DE443B",
+          "#FF7366",
+          "#FFB3A9",
+          "#FFE9E5"
+        ]
+      },
+      "white-on-error": {
+        "role": "neutral",
+        "displayName": "Error contrast white",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "night-amber-primary": {
+        "role": "primary",
+        "displayName": "Night amber",
+        "canonical": "#FFB95E",
+        "tonalRamp": [
+          "#130800",
+          "#361F00",
+          "#5C3900",
+          "#865500",
+          "#B27300",
+          "#D99536",
+          "#FFBA60",
+          "#FFEBD4"
+        ]
+      },
+      "night-brown-on-primary": {
+        "role": "neutral",
+        "displayName": "Night amber ink",
+        "canonical": "#522C00",
+        "tonalRamp": [
+          "#150700",
+          "#391D00",
+          "#5E370E",
+          "#805730",
+          "#A47851",
+          "#C89B73",
+          "#EEBF96",
+          "#FFEAD9"
+        ]
+      },
+      "night-amber-container": {
+        "role": "primary",
+        "displayName": "Deep night amber",
+        "canonical": "#6B3A00",
+        "tonalRamp": [
+          "#150700",
+          "#3A1D00",
+          "#623500",
+          "#875423",
+          "#AB7545",
+          "#D09867",
+          "#F6BC8A",
+          "#FFEADA"
+        ]
+      },
+      "light-on-night-amber-container": {
+        "role": "neutral",
+        "displayName": "Light amber ink",
+        "canonical": "#FFE0B4",
+        "tonalRamp": [
+          "#130900",
+          "#342100",
+          "#563D13",
+          "#775C34",
+          "#997D54",
+          "#BDA076",
+          "#E2C499",
+          "#FFEBD0"
+        ]
+      },
+      "night-slate-secondary": {
+        "role": "secondary",
+        "displayName": "Night silver",
+        "canonical": "#BDC2C8",
+        "tonalRamp": [
+          "#080B0F",
+          "#22252A",
+          "#3E4247",
+          "#5D6267",
+          "#7E8388",
+          "#A1A5AB",
+          "#C5CAD0",
+          "#EAEFF5"
+        ]
+      },
+      "night-charcoal-on-secondary": {
+        "role": "neutral",
+        "displayName": "Night charcoal",
+        "canonical": "#2D3136",
+        "tonalRamp": [
+          "#080B10",
+          "#22252A",
+          "#3E4248",
+          "#5D6267",
+          "#7E8389",
+          "#A1A5AC",
+          "#C4CAD0",
+          "#EAEFF6"
+        ]
+      },
+      "night-slate-container": {
+        "role": "secondary",
+        "displayName": "Night slate",
+        "canonical": "#414148",
+        "tonalRamp": [
+          "#0B0A10",
+          "#24242B",
+          "#414148",
+          "#606068",
+          "#818189",
+          "#A4A4AC",
+          "#C8C8D1",
+          "#EDEDF6"
+        ]
+      },
+      "light-on-night-slate-container": {
+        "role": "neutral",
+        "displayName": "Light slate ink",
+        "canonical": "#E2E2E8",
+        "tonalRamp": [
+          "#0B0B0E",
+          "#252529",
+          "#414146",
+          "#616166",
+          "#828287",
+          "#A4A4AA",
+          "#C8C8CE",
+          "#EEEEF4"
+        ]
+      },
+      "night-background": {
+        "role": "neutral",
+        "displayName": "Deep charcoal",
+        "canonical": "#141414",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "night-foreground": {
+        "role": "neutral",
+        "displayName": "Night foreground",
+        "canonical": "#F0EFF1",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#252526",
+          "#424243",
+          "#626162",
+          "#838284",
+          "#A5A4A6",
+          "#C9C9CA",
+          "#EFEEF0"
+        ]
+      },
+      "night-surface": {
+        "role": "neutral",
+        "displayName": "Night surface",
+        "canonical": "#161616",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "night-surface-foreground": {
+        "role": "neutral",
+        "displayName": "Night surface ink",
+        "canonical": "#F0EFF1",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#252526",
+          "#424243",
+          "#626162",
+          "#838284",
+          "#A5A4A6",
+          "#C9C9CA",
+          "#EFEEF0"
+        ]
+      },
+      "night-surface-variant": {
+        "role": "neutral",
+        "displayName": "Night slate surface",
+        "canonical": "#2B2B30",
+        "tonalRamp": [
+          "#0B0B0F",
+          "#242429",
+          "#414147",
+          "#616166",
+          "#828288",
+          "#A4A4AB",
+          "#C8C8CF",
+          "#EEEEF4"
+        ]
+      },
+      "night-muted-foreground": {
+        "role": "neutral",
+        "displayName": "Night muted silver",
+        "canonical": "#C5C5CC",
+        "tonalRamp": [
+          "#0B0B0F",
+          "#24242A",
+          "#414147",
+          "#616067",
+          "#828288",
+          "#A4A4AB",
+          "#C8C8CF",
+          "#EEEEF5"
+        ]
+      },
+      "night-outline": {
+        "role": "neutral",
+        "displayName": "Night outline",
+        "canonical": "#8A8A91",
+        "tonalRamp": [
+          "#0B0B0F",
+          "#24242A",
+          "#414147",
+          "#606067",
+          "#818188",
+          "#A4A4AB",
+          "#C8C8D0",
+          "#EEEEF5"
+        ]
+      },
+      "night-outline-variant": {
+        "role": "neutral",
+        "displayName": "Night outline variant",
+        "canonical": "#414148",
+        "tonalRamp": [
+          "#0B0A10",
+          "#24242B",
+          "#414148",
+          "#606068",
+          "#818189",
+          "#A4A4AC",
+          "#C8C8D1",
+          "#EDEDF6"
+        ]
+      },
+      "night-error": {
+        "role": "error",
+        "displayName": "Night error",
+        "canonical": "#FFB4AB",
+        "tonalRamp": [
+          "#1F0001",
+          "#470C0B",
+          "#692C27",
+          "#8D4C45",
+          "#B26D65",
+          "#D78F87",
+          "#FEB3AA",
+          "#FFE9E6"
+        ]
+      },
+      "night-on-error": {
+        "role": "neutral",
+        "displayName": "Night error ink",
+        "canonical": "#690005",
+        "tonalRamp": [
+          "#1F0000",
+          "#4D0003",
+          "#7A1715",
+          "#9F3C35",
+          "#C65F55",
+          "#ED8276",
+          "#FFB3A9",
+          "#FFE9E5"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Planner screen title; Material 3 headlineSmall role."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Date and planned activity names; Material 3 title roles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Instructions and supporting content; Material 3 body roles."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Time ranges and compact state labels; Material 3 label roles."
+      }
+    }
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Full-width filled action for adding a planned block.",
+      "html": "<button class=\"ds-button-primary\">Añadir bloque</button>",
+      "css": ".ds-button-primary{display:flex;align-items:center;justify-content:center;width:100%;min-height:60px;padding:12px 20px;border:0;border-radius:9999px;background:#A65608;color:#FFFFFF;font:600 22px/1.2 Roboto,Arial,sans-serif;transition:filter .16s ease,opacity .12s ease}.ds-button-primary:hover{filter:brightness(.96)}.ds-button-primary:active{opacity:.88}.ds-button-primary:focus-visible{outline:2px solid #A65608;outline-offset:3px}"
+    },
+    {
+      "name": "Day selector",
+      "kind": "nav",
+      "refersTo": null,
+      "description": "Native two-choice segmented control for Hoy and Mañana.",
+      "html": "<nav class=\"ds-day-selector\" aria-label=\"Día\"><button class=\"ds-day-option ds-selected\" aria-current=\"page\">Hoy</button><button class=\"ds-day-option\">Mañana</button></nav>",
+      "css": ".ds-day-selector{display:flex;width:100%;font:500 16px Roboto,Arial,sans-serif}.ds-day-option{flex:1;min-height:48px;border:1px solid #D4D4DA;background:transparent;color:#0A0A0E;padding:8px 12px}.ds-day-option:first-child{border-radius:16px 0 0 16px}.ds-day-option:last-child{border-radius:0 16px 16px 0}.ds-day-option.ds-selected{background:#E9E9ED;color:#22232A}.ds-day-option:hover{filter:brightness(.97)}.ds-day-option:active{opacity:.88}.ds-day-option:focus-visible{outline:2px solid #A65608;outline-offset:2px;z-index:1}"
+    },
+    {
+      "name": "Agenda row",
+      "kind": "card",
+      "refersTo": "agenda-row",
+      "description": "Neutral tappable row with time kept in a separate rail.",
+      "html": "<article class=\"ds-agenda-row\"><time>09:00–10:00</time><div class=\"ds-agenda-card\"><strong>Bloque de enfoque</strong><span>Siguiente</span></div></article>",
+      "css": ".ds-agenda-row{display:flex;align-items:center;gap:8px;min-height:92px;font:14px Roboto,Arial,sans-serif;color:#0A0A0E}.ds-agenda-row time{width:94px;white-space:nowrap}.ds-agenda-card{display:flex;flex:1;min-height:76px;flex-direction:column;justify-content:center;gap:6px;padding:12px;border:1px solid #E3E3E7;border-radius:16px;background:#FFFEFE}.ds-agenda-card strong{font:600 16px Roboto,Arial,sans-serif}.ds-agenda-card span{font:600 14px Roboto,Arial,sans-serif;color:#36363D}.ds-agenda-card:focus-visible{outline:2px solid #A65608;outline-offset:2px}"
+    },
+    {
+      "name": "Current agenda row",
+      "kind": "card",
+      "refersTo": "agenda-row-current",
+      "description": "Persistent warm highlight for the active planned block.",
+      "html": "<article class=\"ds-agenda-row\"><time>09:00–10:00</time><div class=\"ds-agenda-card ds-current\"><strong>Bloque de enfoque</strong><span>En curso</span></div></article>",
+      "css": ".ds-agenda-row{display:flex;align-items:center;gap:8px;min-height:92px;font:14px Roboto,Arial,sans-serif;color:#0A0A0E}.ds-agenda-row time{width:94px;white-space:nowrap}.ds-agenda-card{display:flex;flex:1;min-height:76px;flex-direction:column;justify-content:center;gap:6px;padding:12px;border:1px solid rgba(166,86,8,.36);border-radius:16px;background:rgba(249,224,180,.64)}.ds-agenda-card strong{font:600 16px Roboto,Arial,sans-serif;color:#0A0A0E}.ds-agenda-card span{font:600 14px Roboto,Arial,sans-serif;color:#FFFFFF;background:#A65608;border-radius:9999px;padding:4px 10px;align-self:flex-start}.ds-agenda-card:hover{filter:brightness(.98)}.ds-agenda-card:active{opacity:.9}.ds-agenda-card:focus-visible{outline:2px solid #A65608;outline-offset:2px}"
+    },
+    {
+      "name": "Completion chip",
+      "kind": "chip",
+      "refersTo": null,
+      "description": "Compact text status; emphasis is paired with a label.",
+      "html": "<span class=\"ds-status-chip\">En curso</span>",
+      "css": ".ds-status-chip{display:inline-flex;align-items:center;border-radius:9999px;background:#A65608;color:#FFFFFF;padding:4px 10px;font:600 14px/20px Roboto,Arial,sans-serif}"
+    },
+    {
+      "name": "Tomorrow summary",
+      "kind": "card",
+      "refersTo": "tomorrow-summary",
+      "description": "Tonal preview that opens tomorrow’s plan.",
+      "html": "<button class=\"ds-tomorrow-summary\"><span class=\"ds-summary-title\">Plan de mañana · 2 de 3 bloques</span><span aria-hidden=\"true\">›</span></button>",
+      "css": ".ds-tomorrow-summary{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;min-height:64px;padding:12px 16px;border:0;border-radius:24px;background:#EBEBEF;color:#0A0A0E;text-align:left;font:600 16px Roboto,Arial,sans-serif;transition:filter .16s ease}.ds-tomorrow-summary:hover{filter:brightness(.97)}.ds-tomorrow-summary:active{opacity:.9}.ds-tomorrow-summary:focus-visible{outline:2px solid #A65608;outline-offset:2px}.ds-summary-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
+    },
+    {
+      "name": "Outlined activity field",
+      "kind": "input",
+      "refersTo": null,
+      "description": "Material outlined field for naming a planned activity.",
+      "html": "<label class=\"ds-input-wrap\"><span>Actividad</span><input class=\"ds-input\" placeholder=\"Ej. Estudiar matemáticas\" /></label>",
+      "css": ".ds-input-wrap{display:flex;flex-direction:column;gap:6px;font:500 12px Roboto,Arial,sans-serif;color:#36363D}.ds-input{min-height:56px;padding:12px 16px;border:1px solid #D4D4DA;border-radius:4px;background:transparent;color:#0A0A0E;font:400 16px Roboto,Arial,sans-serif}.ds-input::placeholder{color:#36363D}.ds-input:focus-visible{border:2px solid #A65608;outline:0}.ds-input:disabled{opacity:.38}"
+    }
+  ],
+  "narrative": {
+    "northStar": "A live timetable board",
+    "overview": "JP Freedom presents the day as a time-ordered board, so the current focus state and the next commitment are easy to scan. Native Material 3 structure keeps planning familiar on Android; a quiet neutral field and a warm amber accent carry the approved direction into planner, editor, and settings screens.",
+    "keyCharacteristics": [
+      "Time gives the agenda its order.",
+      "The current block and its state remain visible in the row.",
+      "Warm amber marks active focus and the primary action.",
+      "Native Android controls and system text scaling keep the interface familiar and readable."
+    ],
+    "rules": [
+      {
+        "name": "The Time-First Rule",
+        "body": "Order planned blocks by start time and keep their time labels easy to scan.",
+        "section": "layout"
+      },
+      {
+        "name": "The Held-State Rule",
+        "body": "Keep the current or completed state visible in the agenda; a transient animation is never the only signal.",
+        "section": "components"
+      },
+      {
+        "name": "The Role-First Rule",
+        "body": "Use semantic Material color roles so surfaces and content stay paired in both system themes.",
+        "section": "colors"
+      },
+      {
+        "name": "The System-Type Rule",
+        "body": "Use Material 3 type roles and scalable Android text units instead of assigning one-off sizes or a brand typeface.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-Board Rule",
+        "body": "Separate agenda rows with tonal surfaces and borders rather than decorative shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the time, activity, and state readable together.",
+      "Do use the semantic light and dark roles from FocusTheme.",
+      "Do pair status color with an explicit text label.",
+      "Do follow system font scaling and native Android touch behavior."
+    ],
+    "donts": [
+      "Don't rely on a transient animation as the only signal of a changed or current block.",
+      "Don't introduce aviation terms or airport imagery; the selected direction uses schedule ordering only.",
+      "Don't add decorative shadows or a competing accent.",
+      "Don't replace the approved amber role with dynamic wallpaper color."
+    ]
+  }
+}
