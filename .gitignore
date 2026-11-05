@@ -5,3 +5,11 @@ local.properties
 *.iml
 *.apk
 
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+.neon/
+

@@ -1,0 +1,20 @@
+{
+  "name": "jp-freedom",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "test": "pnpm test:sync-api",
+    "test:sync-api": "node --test packages/sync-api/test/*.test.js",
+    "start:sync-api": "node --env-file-if-exists=.env.local packages/sync-api/src/local-server.js",
+    "migrate:sync-api": "node --env-file-if-exists=.env.local packages/sync-api/src/migrate.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@neon/config": "^1.1.0"
+  }
+}
