@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.jp.freedom.domain.AccessProfile
@@ -340,17 +341,9 @@ private fun TimeChoice(
     modifier: Modifier = Modifier,
     onChoose: (LocalTime) -> Unit,
 ) {
-    val context = LocalContext.current
+    var showPicker by remember { mutableStateOf(false) }
     OutlinedButton(
-        onClick = {
-            TimePickerDialog(
-                context,
-                { _, hour, minute -> onChoose(LocalTime.of(hour, minute)) },
-                time.hour,
-                time.minute,
-                true,
-            ).show()
-        },
+        onClick = { showPicker = true },
         modifier = modifier.height(56.dp),
         contentPadding = PaddingValues(horizontal = 12.dp),
     ) {
@@ -361,6 +354,92 @@ private fun TimeChoice(
             Text(time.format(DateTimeFormatter.ofPattern("HH:mm")), style = MaterialTheme.typography.titleSmall)
         }
     }
+    if (showPicker) {
+        TimeEntryDialog(
+            title = "Hora de ${title.lowercase()}",
+            time = time,
+            onDismiss = { showPicker = false },
+            onConfirm = {
+                onChoose(it)
+                showPicker = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun TimeEntryDialog(
+    title: String,
+    time: LocalTime,
+    onDismiss: () -> Unit,
+    onConfirm: (LocalTime) -> Unit,
+) {
+    var hour by remember(time) { mutableStateOf(time.hour.toString().padStart(2, '0')) }
+    var minute by remember(time) { mutableStateOf(time.minute.toString().padStart(2, '0')) }
+    var showError by remember { mutableStateOf(false) }
+    val parsedHour = hour.toIntOrNull()
+    val parsedMinute = minute.toIntOrNull()
+    val isValid = parsedHour != null && parsedHour in 0..23 &&
+        parsedMinute != null && parsedMinute in 0..59
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Escribe la hora en formato de 24 horas.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = hour,
+                        onValueChange = { value ->
+                            if (value.length <= 2 && value.all(Char::isDigit)) {
+                                hour = value
+                                showError = false
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Hora") },
+                        placeholder = { Text("00–23") },
+                        singleLine = true,
+                        isError = showError && (parsedHour == null || parsedHour !in 0..23),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                    )
+                    OutlinedTextField(
+                        value = minute,
+                        onValueChange = { value ->
+                            if (value.length <= 2 && value.all(Char::isDigit)) {
+                                minute = value
+                                showError = false
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Minutos") },
+                        placeholder = { Text("00–59") },
+                        singleLine = true,
+                        isError = showError && (parsedMinute == null || parsedMinute !in 0..59),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                    )
+                }
+                if (showError) {
+                    Text(
+                        "Introduce una hora entre 00:00 y 23:59.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (isValid) onConfirm(LocalTime.of(parsedHour, parsedMinute))
+                else showError = true
+            }) { Text("Aceptar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
 }
 
 private fun defaultStartTime(): LocalTime {

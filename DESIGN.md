@@ -156,7 +156,7 @@ Agenda rows use a gently rounded rectangle; the current icon tile is slightly ti
 
 **Tomorrow summary — quiet and actionable.** A tonal surface previews tomorrow's plan and opens it when selected; the primary add action remains a separate control below.
 
-**Inputs and time controls — native Material.** Use outlined fields for the activity and access profile, with Android's native time picker for start and end. Keep supporting and validation text directly with the relevant field.
+**Inputs and time controls — themed Material.** Use outlined fields for the activity and access profile. Start and end open a Compose dialog with separate numeric hour and minute fields in 24-hour format; validate 00:00–23:59 before accepting. Keep supporting and validation text directly with the relevant field.
 
 **Navigation — Android first.** Use a contextual top app bar, Material controls, and the system Back behavior. Keep the planner available from restriction states.
 
