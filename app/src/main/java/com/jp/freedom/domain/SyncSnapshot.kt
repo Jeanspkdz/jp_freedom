@@ -141,6 +141,7 @@ object SyncSnapshotReconciler {
             endTime = field("endTime", remote.endTime, local.endTime),
             accessProfile = field("accessProfile", remote.accessProfile, local.accessProfile),
             completionStatus = field("completionStatus", remote.completionStatus, local.completionStatus),
+            note = field("note", remote.note, local.note),
         )
     }
 }

@@ -33,6 +33,7 @@ object SyncSnapshotCodec {
                         put("endTime", block.endTime.apiTime())
                         put("accessProfile", block.accessProfile.name)
                         put("completionStatus", block.completionStatus.name)
+                        block.note?.let { put("note", it) }
                     },
                 )
             }
@@ -63,6 +64,7 @@ object SyncSnapshotCodec {
                         endTime = LocalTime.parse(block.getString("endTime")),
                         accessProfile = AccessProfile.valueOf(block.getString("accessProfile")),
                         completionStatus = CompletionStatus.valueOf(block.getString("completionStatus")),
+                        note = if (block.has("note") && !block.isNull("note")) block.getString("note") else null,
                     ),
                 )
             }

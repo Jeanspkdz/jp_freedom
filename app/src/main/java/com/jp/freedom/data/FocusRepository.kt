@@ -22,13 +22,26 @@ data class PendingSyncState(
     val revision: Long,
     val generation: Long,
     val pending: Boolean,
-    val status: String,
+    val status: SyncStatus,
     val message: String?,
     val pendingPaths: Set<String>,
 )
 
+enum class SyncStatus {
+    NOT_CONFIGURED,
+    PENDING,
+    SYNCING,
+    UP_TO_DATE,
+    CONFLICT_RESOLVED,
+    ERROR,
+}
+
 data class LocalSyncBundle(val snapshot: SyncSnapshot, val state: PendingSyncState)
 
+/**
+ * Plan data and pending sync paths share SQLite transactions so a merge cannot
+ * persist a server revision for a snapshot that missed a concurrent local edit.
+ */
 class FocusRepository(context: Context) {
     private val appContext = context.applicationContext
     private val database = FocusDatabase(appContext)
@@ -174,11 +187,11 @@ class FocusRepository(context: Context) {
 
     fun syncState(): PendingSyncState = readSyncState(database.readableDatabase)
 
-    fun markSyncing() = updateSyncMetadata(status = "SYNCING", message = null)
+    fun markSyncing() = updateSyncMetadata(status = SyncStatus.SYNCING, message = null)
 
-    fun markSyncError(message: String) = updateSyncMetadata(status = "ERROR", message = message)
+    fun markSyncError(message: String) = updateSyncMetadata(status = SyncStatus.ERROR, message = message)
 
-    fun markNotConfigured() = updateSyncMetadata(status = "NOT_CONFIGURED", message = null)
+    fun markNotConfigured() = updateSyncMetadata(status = SyncStatus.NOT_CONFIGURED, message = null)
 
     fun resetSyncForEndpointChange() {
         val db = database.writableDatabase
@@ -188,7 +201,7 @@ class FocusRepository(context: Context) {
             val values = ContentValues().apply {
                 put(COLUMN_REVISION, -1)
                 put(COLUMN_PENDING, 1)
-                put(COLUMN_STATUS, "PENDING")
+                put(COLUMN_STATUS, SyncStatus.PENDING.name)
                 putNull(COLUMN_MESSAGE)
             }
             db.update(TABLE_SYNC_STATE, values, "$COLUMN_SETTINGS_ID = 1", null)
@@ -201,7 +214,7 @@ class FocusRepository(context: Context) {
 
     fun requestSync() {
         val state = syncState()
-        updateSyncMetadata(status = if (state.pending) "PENDING" else "SYNCING", message = null)
+        updateSyncMetadata(status = if (state.pending) SyncStatus.PENDING else SyncStatus.SYNCING, message = null)
         scheduleSync()
     }
 
@@ -217,9 +230,9 @@ class FocusRepository(context: Context) {
                 put(COLUMN_REVISION, revision)
                 put(COLUMN_PENDING, if (stillPending) 1 else 0)
                 put(COLUMN_STATUS, when {
-                    stillPending -> "PENDING"
-                    conflictResolved -> "CONFLICT_RESOLVED"
-                    else -> "UP_TO_DATE"
+                    stillPending -> SyncStatus.PENDING.name
+                    conflictResolved -> SyncStatus.CONFLICT_RESOLVED.name
+                    else -> SyncStatus.UP_TO_DATE.name
                 })
                 if (stillPending) put(COLUMN_MESSAGE, "Hay cambios nuevos esperando sincronización.") else putNull(COLUMN_MESSAGE)
             }
@@ -246,8 +259,8 @@ class FocusRepository(context: Context) {
             replaceSnapshot(db, snapshot)
             val values = ContentValues().apply {
                 put(COLUMN_REVISION, revision)
-                if (conflictResolved) put(COLUMN_STATUS, "CONFLICT_RESOLVED")
-                else put(COLUMN_STATUS, "SYNCING")
+                if (conflictResolved) put(COLUMN_STATUS, SyncStatus.CONFLICT_RESOLVED.name)
+                else put(COLUMN_STATUS, SyncStatus.SYNCING.name)
                 put(COLUMN_PENDING, if (readSyncState(db).pending) 1 else 0)
                 putNull(COLUMN_MESSAGE)
             }
@@ -318,8 +331,9 @@ class FocusRepository(context: Context) {
             null,
             null,
         ).use { cursor ->
-            if (!cursor.moveToFirst()) "NOT_CONFIGURED" to null
-            else cursor.getString(0) to cursor.nullableString(1)
+            if (!cursor.moveToFirst()) SyncStatus.NOT_CONFIGURED to null
+            else runCatching { SyncStatus.valueOf(cursor.getString(0)) }
+                .getOrDefault(SyncStatus.ERROR) to cursor.nullableString(1)
         }
         val paths = db.query(TABLE_SYNC_CHANGES, arrayOf(COLUMN_PATH), null, null, null, null, null)
             .use { cursor -> buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) } }
@@ -333,9 +347,9 @@ class FocusRepository(context: Context) {
         )
     }
 
-    private fun updateSyncMetadata(status: String, message: String?) {
+    private fun updateSyncMetadata(status: SyncStatus, message: String?) {
         val values = ContentValues().apply {
-            put(COLUMN_STATUS, status)
+            put(COLUMN_STATUS, status.name)
             if (message == null) putNull(COLUMN_MESSAGE) else put(COLUMN_MESSAGE, message)
         }
         database.writableDatabase.update(TABLE_SYNC_STATE, values, "$COLUMN_SETTINGS_ID = 1", null)
@@ -399,6 +413,7 @@ class FocusRepository(context: Context) {
                             endTime = cursor.getInt(4).toLocalTime(),
                             accessProfile = AccessProfile.valueOf(cursor.getString(5)),
                             completionStatus = CompletionStatus.valueOf(cursor.getString(6)),
+                            note = cursor.nullableString(7),
                         ),
                     )
                 }
@@ -413,6 +428,7 @@ class FocusRepository(context: Context) {
             "endTime" to (previous?.endTime != updated.endTime),
             "accessProfile" to (previous?.accessProfile != updated.accessProfile),
             "completionStatus" to (previous?.completionStatus != updated.completionStatus),
+            "note" to (previous?.note != updated.note),
         )
         return values.filter { it.second }.map { "blocks.${updated.id}.${it.first}" }
     }
@@ -425,6 +441,7 @@ class FocusRepository(context: Context) {
         put(COLUMN_END_MINUTE, endTime.toMinuteOfDay())
         put(COLUMN_ACCESS_PROFILE, accessProfile.name)
         put(COLUMN_COMPLETION_STATUS, completionStatus.name)
+        if (note == null) putNull(COLUMN_NOTE) else put(COLUMN_NOTE, note)
     }
 
     private fun Int.toLocalTime() = LocalTime.of(this / 60, this % 60)
@@ -457,6 +474,9 @@ class FocusRepository(context: Context) {
                 }
                 db.execSQL("UPDATE $TABLE_SYNC_STATE SET $COLUMN_GENERATION = 1, $COLUMN_PENDING = 1, $COLUMN_STATUS = 'PENDING' WHERE $COLUMN_SETTINGS_ID = 1")
             }
+            if (oldVersion < 3) {
+                db.execSQL("ALTER TABLE $TABLE_BLOCKS ADD COLUMN $COLUMN_NOTE TEXT")
+            }
         }
 
         private fun createPlanTables(db: SQLiteDatabase) {
@@ -468,7 +488,8 @@ class FocusRepository(context: Context) {
                     $COLUMN_START_MINUTE INTEGER NOT NULL,
                     $COLUMN_END_MINUTE INTEGER NOT NULL,
                     $COLUMN_ACCESS_PROFILE TEXT NOT NULL,
-                    $COLUMN_COMPLETION_STATUS TEXT NOT NULL
+                    $COLUMN_COMPLETION_STATUS TEXT NOT NULL,
+                    $COLUMN_NOTE TEXT
                 )""".trimIndent(),
             )
             db.execSQL("CREATE INDEX IF NOT EXISTS index_planned_blocks_date_start ON $TABLE_BLOCKS($COLUMN_DATE, $COLUMN_START_MINUTE)")
@@ -519,7 +540,7 @@ class FocusRepository(context: Context) {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 2
+            private const val DATABASE_VERSION = 3
         }
     }
 
@@ -536,6 +557,7 @@ class FocusRepository(context: Context) {
         const val COLUMN_END_MINUTE = "end_minute"
         const val COLUMN_ACCESS_PROFILE = "access_profile"
         const val COLUMN_COMPLETION_STATUS = "completion_status"
+        const val COLUMN_NOTE = "note"
         const val COLUMN_SETTINGS_ID = "id"
         const val COLUMN_REQUIRED_COUNT = "required_count"
         const val COLUMN_CUTOFF_MINUTE = "cutoff_minute"
@@ -554,6 +576,7 @@ class FocusRepository(context: Context) {
             COLUMN_END_MINUTE,
             COLUMN_ACCESS_PROFILE,
             COLUMN_COMPLETION_STATUS,
+            COLUMN_NOTE,
         )
     }
 }

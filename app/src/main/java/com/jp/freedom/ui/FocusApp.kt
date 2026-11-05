@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.jp.freedom.data.FocusRepository
 import com.jp.freedom.data.PendingSyncState
+import com.jp.freedom.data.SyncStatus
 import com.jp.freedom.domain.BlockValidation
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
@@ -68,7 +69,7 @@ fun FocusApp(
     var allBlocks by remember { mutableStateOf<List<PlannedBlock>>(emptyList()) }
     var focusSettings by remember { mutableStateOf(FocusSettings()) }
     var desktopBlockedDomains by remember { mutableStateOf(listOf("facebook.com", "instagram.com", "tiktok.com", "x.com", "youtube.com", "reddit.com")) }
-    var syncState by remember { mutableStateOf(PendingSyncState(-1, 0, false, "NOT_CONFIGURED", null, emptySet())) }
+    var syncState by remember { mutableStateOf(PendingSyncState(-1, 0, false, SyncStatus.NOT_CONFIGURED, null, emptySet())) }
     var syncConfiguration by remember { mutableStateOf(syncConfigurationStore.configuration()) }
     var restrictionActive by remember { mutableStateOf(false) }
     var currentPolicyBlocked by remember { mutableStateOf(false) }
@@ -193,6 +194,7 @@ fun FocusApp(
             desktopBlockedDomains = desktopBlockedDomains,
             syncConfiguration = syncConfiguration,
             syncStatus = syncState.status,
+            syncRevision = syncState.revision,
             syncMessage = syncState.message,
             accessibilityEnabled = accessibilityEnabled,
             exactAlarmsAllowed = exactAlarmsAllowed,
@@ -232,7 +234,7 @@ fun FocusApp(
                         refreshVersion++
                     } else {
                         syncState = syncState.copy(
-                            status = "ERROR",
+                            status = SyncStatus.ERROR,
                             message = saved.exceptionOrNull()?.message
                                 ?: "No se pudo guardar la configuración de sincronización.",
                         )
@@ -242,7 +244,7 @@ fun FocusApp(
             onSyncNow = {
                 scope.launch(Dispatchers.IO) {
                     runCatching { repository.requestSync() }.onFailure { error ->
-                        syncState = syncState.copy(status = "ERROR", message = error.message)
+                        syncState = syncState.copy(status = SyncStatus.ERROR, message = error.message)
                     }
                 }
             },

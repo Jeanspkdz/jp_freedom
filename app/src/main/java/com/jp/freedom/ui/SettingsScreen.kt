@@ -51,6 +51,7 @@ import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.SUPPORTED_EVENING_CUTOFFS
 import com.jp.freedom.domain.BlocklistValidation
 import com.jp.freedom.domain.DesktopSiteBlocklist
+import com.jp.freedom.data.SyncStatus
 import com.jp.freedom.sync.EndpointValidation
 import com.jp.freedom.sync.SyncConfiguration
 import com.jp.freedom.sync.SyncEndpoint
@@ -62,7 +63,8 @@ fun SettingsScreen(
     settings: FocusSettings,
     desktopBlockedDomains: List<String>,
     syncConfiguration: SyncConfiguration,
-    syncStatus: String,
+    syncStatus: SyncStatus,
+    syncRevision: Long,
     syncMessage: String?,
     accessibilityEnabled: Boolean,
     exactAlarmsAllowed: Boolean,
@@ -279,9 +281,9 @@ fun SettingsScreen(
                         Text(
                             syncMessage ?: when {
                                 !syncConfiguration.hasWriteToken -> "Los cambios se guardan en el teléfono. Configura la API y el token de escritura para sincronizarlos."
-                                syncStatus == "CONFLICT_RESOLVED" -> "Se combinó una versión del servidor con tus cambios pendientes y se guardó el resultado."
-                                syncStatus == "PENDING" -> "Los cambios locales esperan conexión y se volverán a enviar automáticamente."
-                                syncStatus == "UP_TO_DATE" -> "Los cambios del teléfono y del servidor están sincronizados."
+                                syncStatus == SyncStatus.CONFLICT_RESOLVED -> "Se combinó una versión del servidor con tus cambios pendientes y se guardó el resultado."
+                                syncStatus == SyncStatus.PENDING -> "Los cambios locales esperan conexión y se volverán a enviar automáticamente."
+                                syncStatus == SyncStatus.UP_TO_DATE -> "Los cambios del teléfono y del servidor están sincronizados."
                                 else -> "Los planes y la aplicación de reglas siguen funcionando desde este teléfono sin internet."
                             },
                             style = MaterialTheme.typography.bodyMedium,
@@ -289,11 +291,20 @@ fun SettingsScreen(
                         )
                         OutlinedButton(
                             onClick = onSyncNow,
-                            enabled = syncConfiguration.hasWriteToken && syncStatus != "SYNCING",
+                            enabled = syncConfiguration.hasWriteToken && syncStatus != SyncStatus.SYNCING,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(if (syncStatus == "ERROR") "Reintentar sincronización" else "Sincronizar ahora")
+                            Text(if (syncStatus == SyncStatus.ERROR) "Reintentar sincronización" else "Sincronizar ahora")
                         }
+                        Text(
+                            if (syncRevision >= 0) {
+                                "Revisión guardada en el servidor: $syncRevision. La extensión muestra su última revisión descargada para que puedas compararlas."
+                            } else {
+                                "El teléfono todavía no ha guardado una revisión en el servidor."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
@@ -366,13 +377,13 @@ fun SettingsScreen(
     }
 }
 
-private fun syncStatusLabel(status: String, configured: Boolean): String = when {
+private fun syncStatusLabel(status: SyncStatus, configured: Boolean): String = when {
     !configured -> "Sin configurar"
-    status == "SYNCING" -> "Sincronizando"
-    status == "PENDING" -> "Pendiente"
-    status == "UP_TO_DATE" -> "Al día"
-    status == "CONFLICT_RESOLVED" -> "Conflicto resuelto"
-    status == "ERROR" -> "Necesita atención"
+    status == SyncStatus.SYNCING -> "Sincronizando"
+    status == SyncStatus.PENDING -> "Pendiente"
+    status == SyncStatus.UP_TO_DATE -> "Al día"
+    status == SyncStatus.CONFLICT_RESOLVED -> "Conflicto resuelto"
+    status == SyncStatus.ERROR -> "Necesita atención"
     else -> "Listo para sincronizar"
 }
 

@@ -1,11 +1,11 @@
 import { getDomainPermissionOrigins } from './src/policy.js';
-import { getCurrentBlockMessage } from './src/view-model.js';
+import { getCurrentBlockMessage, getFetchedRevisionMessage } from './src/view-model.js';
 
 const elements = {
   current: document.querySelector('#current-block'),
   nextRow: document.querySelector('#next-row'),
   next: document.querySelector('#next-block'),
-  lastSync: document.querySelector('#last-sync'),
+  revision: document.querySelector('#sync-revision'),
   sitePermissionPanel: document.querySelector('#site-permission-panel'),
   sitePermissionMessage: document.querySelector('#site-permission-message'),
   apiPermissionPanel: document.querySelector('#api-permission-panel'),
@@ -50,9 +50,9 @@ function render(status) {
     elements.next.textContent = formatNextBlock(status.next);
   }
 
-  elements.lastSync.textContent = status?.lastSyncAt
-    ? `Last sync: ${formatLocalDateTime(status.lastSyncAt)}`
-    : 'Last sync: not yet';
+  elements.revision.textContent = `${getFetchedRevisionMessage(status)}${status?.lastSyncAt
+    ? ` Last successful fetch: ${formatLocalDateTime(status.lastSyncAt)}.`
+    : ''}`;
 
   const missingDomains = status?.missingDomains ?? [];
   elements.sitePermissionPanel.hidden = missingDomains.length === 0;

@@ -6,6 +6,7 @@ import java.time.LocalTime
 import java.time.DayOfWeek
 
 const val DEFAULT_REQUIRED_BLOCK_COUNT = 3
+const val MAX_BLOCK_NOTE_LENGTH = 2_000
 val DEFAULT_EVENING_CUTOFF: LocalTime = LocalTime.of(21, 0)
 val SUPPORTED_EVENING_CUTOFFS: List<LocalTime> = listOf(
     LocalTime.of(21, 0),
@@ -46,6 +47,7 @@ data class PlannedBlock(
     val endTime: LocalTime,
     val accessProfile: AccessProfile = AccessProfile.ESSENTIALS_ONLY,
     val completionStatus: CompletionStatus = CompletionStatus.NOT_STARTED,
+    val note: String? = null,
 )
 
 sealed interface BlockValidation {
@@ -54,6 +56,8 @@ sealed interface BlockValidation {
     data class MissingName(val blockId: String) : BlockValidation
 
     data class InvalidTimeRange(val blockId: String) : BlockValidation
+
+    data class NoteTooLong(val blockId: String) : BlockValidation
 
     data class Overlapping(
         val firstBlockName: String,
@@ -97,6 +101,10 @@ object DayPlanPolicy {
 
         candidates.firstOrNull { !it.startTime.isBefore(it.endTime) }?.let {
             return BlockValidation.InvalidTimeRange(it.id)
+        }
+
+        candidates.firstOrNull { (it.note?.length ?: 0) > MAX_BLOCK_NOTE_LENGTH }?.let {
+            return BlockValidation.NoteTooLong(it.id)
         }
 
         candidates

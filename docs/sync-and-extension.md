@@ -52,7 +52,8 @@ profiles (`ESSENTIALS_ONLY`, `ESSENTIALS_WITH_CHATGPT`, or
 `FINISHED`, `PARTLY_DONE`, or `NOT_DONE`). At most 1,000 blocks are accepted;
 each block ID must be 1 to 80 ASCII letters, digits, underscores, or hyphens.
 Names must be nonblank and no longer than 200 characters. Optional notes are
-limited to 2,000 characters. Planned blocks on the same date cannot overlap.
+limited to 2,000 characters and can record what remains after a block. Planned
+blocks on the same date cannot overlap.
 
 ## Authorization
 
@@ -74,6 +75,11 @@ runtime; the extension receives only the read token.
 
 `OPTIONS` requests support browser extension preflight. The public health route
 returns `{ "ok": true }` without exposing configuration.
+
+Android shows the last server revision it has stored, and Chrome shows the last
+server revision it successfully fetched. Comparing those values lets the user
+check whether Chrome has fetched the current server snapshot. The extension
+remains read-only; the API does not record a Chrome acknowledgement.
 
 ## Local development
 

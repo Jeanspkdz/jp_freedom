@@ -7,6 +7,7 @@ const accessProfiles = new Set([
 ]);
 const completionStatuses = new Set(['NOT_STARTED', 'FINISHED', 'PARTLY_DONE', 'NOT_DONE']);
 const supportedCutoffs = new Set(['21:00', '22:00', '23:00']);
+// Server-side validation is the authoritative write trust boundary; keep it self-contained.
 const domainPattern = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const corsHeaders = {
   'access-control-allow-origin': '*',

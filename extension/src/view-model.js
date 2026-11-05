@@ -13,3 +13,8 @@ export function getCurrentBlockMessage(status) {
   }
   return 'No active focus block. Your configured sites are available.';
 }
+
+export function getFetchedRevisionMessage(status) {
+  if (status?.revision == null) return 'Chrome has not fetched a server revision yet.';
+  return `Chrome last fetched server revision ${status.revision}.`;
+}

@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.BlockValidation
 import com.jp.freedom.domain.CompletionStatus
+import com.jp.freedom.domain.MAX_BLOCK_NOTE_LENGTH
 import com.jp.freedom.domain.PlannedBlock
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -81,6 +82,7 @@ fun BlockEditorScreen(
     var completionStatus by remember(block?.id, date) {
         mutableStateOf(block?.completionStatus ?: CompletionStatus.NOT_STARTED)
     }
+    var note by remember(block?.id, date) { mutableStateOf(block?.note.orEmpty()) }
     var expandedProfile by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
@@ -150,6 +152,7 @@ fun BlockEditorScreen(
                             endTime = endTime,
                             accessProfile = accessProfile,
                             completionStatus = completionStatus,
+                            note = note.trim().takeIf(String::isNotEmpty),
                         )
                         scope.launch {
                             isSaving = true
@@ -286,6 +289,16 @@ fun BlockEditorScreen(
                         )
                     }
                 }
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { if (it.length <= MAX_BLOCK_NOTE_LENGTH) note = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Nota sobre lo que queda") },
+                    placeholder = { Text("Opcional") },
+                    minLines = 2,
+                    maxLines = 5,
+                    supportingText = { Text("${note.length}/$MAX_BLOCK_NOTE_LENGTH caracteres") },
+                )
                 Spacer(Modifier.height(4.dp))
                 OutlinedButton(
                     onClick = { showDeleteConfirmation = true },
@@ -361,6 +374,7 @@ private fun validationMessage(validation: BlockValidation): String? = when (vali
     BlockValidation.Valid -> null
     is BlockValidation.MissingName -> "Escribe una actividad para guardar el bloque."
     is BlockValidation.InvalidTimeRange -> "La hora de fin debe ser posterior a la hora de inicio."
+    is BlockValidation.NoteTooLong -> "La nota admite hasta $MAX_BLOCK_NOTE_LENGTH caracteres."
     is BlockValidation.Overlapping -> "Este bloque se superpone con “${validation.firstBlockName}” o “${validation.secondBlockName}”. Cambia el horario."
 }
 

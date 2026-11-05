@@ -19,6 +19,16 @@ class DayPlanPolicyTest {
     }
 
     @Test
+    fun blockNotesAreOptionalAndRespectTheDocumentedLengthLimit() {
+        val day = LocalDate.of(2026, 11, 3)
+        val block = plannedBlock("noted", day, "Estudiar", 9, 0, 10, 0)
+
+        assertEquals(BlockValidation.Valid, DayPlanPolicy.validateBlocks(listOf(block)))
+        assertEquals(BlockValidation.Valid, DayPlanPolicy.validateBlocks(listOf(block.copy(note = "x".repeat(MAX_BLOCK_NOTE_LENGTH)))))
+        assertEquals(BlockValidation.NoteTooLong(block.id), DayPlanPolicy.validateBlocks(listOf(block.copy(note = "x".repeat(MAX_BLOCK_NOTE_LENGTH + 1)))))
+    }
+
+    @Test
     fun overlappingBlocksAreRejectedWithBothActivitiesIdentified() {
         val day = LocalDate.of(2026, 11, 3)
         val first = PlannedBlock(

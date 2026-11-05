@@ -88,6 +88,35 @@ class SyncSnapshotTest {
     }
 
     @Test
+    fun staleRevisionMergePreservesPendingLocalNoteAndImportsRemoteNote() {
+        val date = LocalDate.of(2026, 11, 5)
+        val base = PlannedBlock(
+            id = "same-block",
+            date = date,
+            name = "Study",
+            startTime = LocalTime.of(9, 0),
+            endTime = LocalTime.of(10, 0),
+        )
+        val remote = base.copy(note = "Remote note")
+        val local = base.copy(note = "Phone note")
+
+        val pendingNote = SyncSnapshotReconciler.merge(
+            remote = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, listOf(remote)),
+            local = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, listOf(local)),
+            pendingPaths = setOf("blocks.same-block.note"),
+        )
+        val uneditedNote = SyncSnapshotReconciler.merge(
+            remote = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, listOf(remote)),
+            local = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, listOf(base)),
+            pendingPaths = emptySet(),
+        )
+
+        assertEquals("Phone note", pendingNote.snapshot.blocks.single().note)
+        assertEquals(setOf("blocks.same-block.note"), pendingNote.conflictedPaths)
+        assertEquals("Remote note", uneditedNote.snapshot.blocks.single().note)
+    }
+
+    @Test
     fun replacingTheSyncEndpointSeedsThePhoneSnapshotInsteadOfImportingAnotherEndpoint() {
         val local = SyncSnapshot(FocusSettings(requiredBlockCount = 5), listOf("reddit.com"), emptyList())
         val remote = SyncSnapshot(FocusSettings(requiredBlockCount = 2), listOf("facebook.com"), emptyList())

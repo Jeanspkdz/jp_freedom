@@ -117,7 +117,7 @@ test('an incomplete cached plan is checked when the configured cutoff arrives', 
   assert.equal(chrome.notifications.shown.length, 1);
 });
 
-test('a reminder keeps its target plan date across midnight and worker restarts', async () => {
+test('a reminder keeps its target plan date across midnight until the next cutoff', async () => {
   const chrome = createChromeBoundaries();
   let currentTime = new Date(2026, 10, 5, 21, 0);
   let reminderDate = null;
@@ -143,13 +143,24 @@ test('a reminder keeps its target plan date across midnight and worker restarts'
 
   await firstWorker.reconcile();
   assert.equal(reminderDate, '2026-11-06');
+  assert.match(chrome.notifications.shown[0].options.message, /2026-11-06 has 1 of 3/);
 
   currentTime = new Date(2026, 10, 6, 0, 30);
   const restartedWorker = createPlanningReminderScheduler(dependencies);
   await restartedWorker.onAlarm(PLANNING_REMINDER_ALARM);
 
+  assert.equal(reminderDate, '2026-11-06');
   assert.equal(chrome.notifications.shown.length, 2);
   assert.match(chrome.notifications.shown[1].options.message, /2026-11-06 has 1 of 3/);
+
+  currentTime = new Date(2026, 10, 6, 20, 59);
+  await restartedWorker.reconcile();
+  assert.equal(reminderDate, '2026-11-06');
+
+  currentTime = new Date(2026, 10, 6, 21, 0);
+  await restartedWorker.onAlarm(PLANNING_REMINDER_CUTOFF_ALARM);
+  assert.equal(reminderDate, '2026-11-07');
+  assert.deepEqual(chrome.notifications.cleared, [PLANNING_REMINDER_NOTIFICATION]);
 });
 
 test('the Saturday cutoff skips Sunday and the next cutoff checks Monday', async () => {

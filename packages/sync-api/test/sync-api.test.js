@@ -120,6 +120,7 @@ test('an authorized Android write advances the revision and becomes readable', a
       endTime: '10:00',
       accessProfile: 'ESSENTIALS_WITH_CHATGPT',
       completionStatus: 'NOT_STARTED',
+      note: 'Review exercise four',
     }],
   };
   const write = await api(new Request('https://sync.example/v1/snapshot', {
