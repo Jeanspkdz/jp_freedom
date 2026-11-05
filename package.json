@@ -6,8 +6,9 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "test": "pnpm test:sync-api",
+    "test": "pnpm test:sync-api && pnpm test:extension",
     "test:sync-api": "node --test packages/sync-api/test/*.test.js",
+    "test:extension": "node --test extension/test/*.test.js",
     "start:sync-api": "node --env-file-if-exists=.env.local packages/sync-api/src/local-server.js",
     "migrate:sync-api": "node --env-file-if-exists=.env.local packages/sync-api/src/migrate.js"
   },
