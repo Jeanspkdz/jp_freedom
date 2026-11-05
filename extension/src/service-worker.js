@@ -7,12 +7,33 @@ import {
   makeDesktopBlockRules,
 } from './policy.js';
 import { readExtensionState, updateExtensionState } from './state.js';
+import {
+  PLANNING_REMINDER_ALARM,
+  PLANNING_REMINDER_CUTOFF_ALARM,
+  createPlanningReminderScheduler,
+} from './reminder-scheduler.js';
 
 const BOUNDARY_ALARM = 'focus-block-boundary';
 const SYNC_ALARM = 'focus-snapshot-sync';
 const SYNC_PERIOD_MINUTES = 5;
 const RULE_ID_START = 1000;
 const RULE_ID_END = RULE_ID_START + 100;
+
+const planningReminderScheduler = createPlanningReminderScheduler({
+  getSnapshot: async () => (await readExtensionState()).snapshot,
+  getReminderDate: async () => (await readExtensionState()).planningReminderDate,
+  setReminderDate: date => updateExtensionState({ planningReminderDate: date }),
+  alarms: {
+    get: name => chrome.alarms.get(name),
+    create: (name, options) => chrome.alarms.create(name, options),
+    clear: name => chrome.alarms.clear(name),
+  },
+  notifications: {
+    create: (id, options) => chrome.notifications.create(id, options),
+    clear: id => chrome.notifications.clear(id),
+  },
+  iconUrl: chrome.runtime.getURL('images/reminder-128.png'),
+});
 
 let operations = Promise.resolve();
 
@@ -133,6 +154,7 @@ async function syncLatestSnapshot() {
 async function syncAndEvaluate() {
   await syncLatestSnapshot();
   await applyCachedSnapshot();
+  await planningReminderScheduler.reconcile();
 }
 
 async function getUiStatus() {
@@ -174,7 +196,9 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === SYNC_ALARM || alarm.name === BOUNDARY_ALARM) {
+  if (alarm.name === PLANNING_REMINDER_ALARM || alarm.name === PLANNING_REMINDER_CUTOFF_ALARM) {
+    void serialize(() => planningReminderScheduler.onAlarm(alarm.name));
+  } else if (alarm.name === SYNC_ALARM || alarm.name === BOUNDARY_ALARM) {
     void serialize(syncAndEvaluate);
   }
 });

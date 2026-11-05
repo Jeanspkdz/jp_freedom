@@ -8,6 +8,40 @@ function localDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
+export function getRequiredPlanDate(eveningDate) {
+  if (eveningDate.getDay() === 6) return null;
+  return localDateKey(new Date(
+    eveningDate.getFullYear(),
+    eveningDate.getMonth(),
+    eveningDate.getDate() + 1,
+  ));
+}
+
+export function getPlanningReminderStatus(snapshot, now = new Date(), requiredPlanDate = null) {
+  const settings = snapshot?.settings;
+  if (!Array.isArray(snapshot?.blocks)
+    || !Number.isInteger(settings?.requiredBlockCount)
+    || settings.requiredBlockCount < 1
+    || !['21:00', '22:00', '23:00'].includes(settings.eveningCutoff)) return null;
+
+  let planDateKey = requiredPlanDate;
+  if (!planDateKey) {
+    const [cutoffHours, cutoffMinutes] = settings.eveningCutoff.split(':').map(Number);
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    if (nowMinutes < cutoffHours * 60 + cutoffMinutes) return null;
+    planDateKey = getRequiredPlanDate(now);
+  }
+  if (!planDateKey) return null;
+  const plannedCount = snapshot.blocks.filter(block => block.date === planDateKey).length;
+  if (plannedCount >= settings.requiredBlockCount) return null;
+
+  return {
+    planDate: planDateKey,
+    plannedCount,
+    requiredBlockCount: settings.requiredBlockCount,
+  };
+}
+
 function minuteOfDay(value) {
   const [hours, minutes] = value.split(':').map(Number);
   return hours * 60 + minutes;

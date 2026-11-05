@@ -2,11 +2,12 @@
   "manifest_version": 3,
   "name": "JP Freedom Focus Blocklist",
   "version": "1.0.0",
-  "description": "Applies the phone's synced desktop site blocklist during Planned blocks.",
+  "description": "Enforces the phone's synced desktop site blocklist and reminds you when the next day plan is incomplete.",
   "minimum_chrome_version": "120",
   "permissions": [
     "alarms",
     "declarativeNetRequestWithHostAccess",
+    "notifications",
     "storage"
   ],
   "optional_host_permissions": [

@@ -6,6 +6,7 @@ export const EMPTY_STATE = Object.freeze({
   revision: null,
   serverUpdatedAt: null,
   lastSyncAt: null,
+  planningReminderDate: null,
   syncError: null,
   enforcementError: null,
 });

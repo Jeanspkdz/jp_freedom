@@ -22,6 +22,20 @@ statuses, or the desktop site blocklist.
 The phone remains the only place to edit the plan and desktop site blocklist.
 The extension requests permissions for only the endpoint and domains in use.
 
+## Planning reminders
+
+At the configured evening cutoff, Chrome checks the cached phone snapshot for
+the next required day plan. If it has fewer planned blocks than the configured
+minimum, Chrome shows a notification that asks you to finish the plan on your
+phone. It repeats every 30 minutes while that plan is short, stops when the
+cached plan meets the minimum, and starts again if the count falls below the
+minimum. Saturday has no required Sunday plan; Sunday evening checks Monday.
+
+The reminder uses the cached snapshot and keeps working without a network
+connection. A later successful sync updates the plan count. Notifications do
+not block or redirect desktop browsing; the phone remains where plans are
+edited.
+
 ## Chrome UI validation
 
 Run these checks with an unpacked extension and a phone snapshot available.
@@ -47,7 +61,13 @@ Run these checks with an unpacked extension and a phone snapshot available.
 6. In Settings, temporarily enter an invalid token or deny a site permission.
    Confirm the popup shows a recoverable error and offers **Sync now** or
    **Allow site access** without clearing the last cached rules.
+7. With an incomplete next day plan in the cached snapshot, disconnect Chrome
+before the selected cutoff. Confirm Chrome shows a planning reminder at the
+cutoff and repeats it every 30 minutes. Meet the required count in the phone
+plan and sync; confirm the repeat stops. Reduce the count below the minimum
+and sync again; confirm reminders resume. Desktop browsing should remain
+available throughout.
 
-The Node tests cover the policy and read-only API seams. These manual Chrome
-checks require a Chrome profile and a connected phone/API; they are not run by
-the repository test command.
+The Node tests cover the policy, cached reminder scheduler, and read-only API
+seams. These manual Chrome checks require a Chrome profile and a connected
+phone/API; they are not run by the repository test command.
