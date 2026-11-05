@@ -1,0 +1,16 @@
+{
+  "name": "@jp-freedom/sync-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "start": "node --env-file-if-exists=.env.local src/local-server.js",
+    "migrate": "node --env-file-if-exists=.env.local src/migrate.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@neon/config": "^1.1.0"
+  }
+}

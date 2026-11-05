@@ -4,7 +4,7 @@ export default defineConfig({
   functions: {
     jpfreedomsync: {
       name: 'JP Freedom sync API',
-      source: './services/sync-api/src/index.js',
+      source: './src/index.js',
       env: {
         SYNC_API_TOKEN: process.env.SYNC_API_TOKEN,
       },

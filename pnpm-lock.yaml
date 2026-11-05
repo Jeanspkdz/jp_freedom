@@ -6,7 +6,11 @@ settings:
 
 importers:
 
-  .:
+  .: {}
+
+  apps/chrome-extension: {}
+
+  services/sync-api:
     dependencies:
       pg:
         specifier: ^8.16.3
