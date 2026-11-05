@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.jp.freedom.data.FocusRepository
+import com.jp.freedom.data.PendingSyncState
 import com.jp.freedom.domain.BlockValidation
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
@@ -29,6 +30,9 @@ import com.jp.freedom.enforcement.FocusAccessibilityService
 import com.jp.freedom.enforcement.FocusPolicy
 import com.jp.freedom.enforcement.PolicyAlarmScheduler
 import com.jp.freedom.enforcement.SiteFilterVpnService
+import com.jp.freedom.domain.BlocklistValidation
+import com.jp.freedom.sync.SyncConfiguration
+import com.jp.freedom.sync.SyncConfigurationStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -53,6 +57,7 @@ fun FocusApp(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val syncConfigurationStore = remember(context) { SyncConfigurationStore(context) }
     var page by rememberSaveable {
         mutableStateOf(if (initialBlockedReason == null) AppPage.PLANNER else AppPage.BLOCKED)
     }
@@ -62,6 +67,9 @@ fun FocusApp(
     var refreshVersion by remember { mutableIntStateOf(0) }
     var allBlocks by remember { mutableStateOf<List<PlannedBlock>>(emptyList()) }
     var focusSettings by remember { mutableStateOf(FocusSettings()) }
+    var desktopBlockedDomains by remember { mutableStateOf(listOf("facebook.com", "instagram.com", "tiktok.com", "x.com", "youtube.com", "reddit.com")) }
+    var syncState by remember { mutableStateOf(PendingSyncState(-1, 0, false, "NOT_CONFIGURED", null, emptySet())) }
+    var syncConfiguration by remember { mutableStateOf(syncConfigurationStore.configuration()) }
     var restrictionActive by remember { mutableStateOf(false) }
     var currentPolicyBlocked by remember { mutableStateOf(false) }
     var stateLoaded by remember { mutableStateOf(false) }
@@ -76,11 +84,13 @@ fun FocusApp(
     val currentDate = LocalDate.now()
     val selectedDate = currentDate.plusDays(dayOffset.toLong())
 
-    LaunchedEffect(dayOffset, activityResumeVersion, refreshVersion) {
+    LaunchedEffect(dayOffset, activityResumeVersion, refreshVersion, page) {
         while (isActive) {
             val snapshot = withContext(Dispatchers.IO) {
                 val blocks = repository.allBlocks()
                 val settings = repository.settings()
+                val domains = repository.desktopBlockedDomains()
+                val sync = repository.syncState()
                 val policy = FocusPolicy.evaluate(
                     now = LocalDateTime.now(),
                     blocks = blocks,
@@ -88,14 +98,16 @@ fun FocusApp(
                 )
                 val restricted = policy.blockedReason == BlockedReason.EVENING_RESTRICTION
                 val policyBlocked = policy.blockedReason != null
-                PlannerSnapshot(blocks, settings, restricted, policyBlocked)
+                PlannerSnapshot(blocks, settings, domains, sync, restricted, policyBlocked)
             }
             allBlocks = snapshot.blocks
             focusSettings = snapshot.settings
+            desktopBlockedDomains = snapshot.desktopBlockedDomains
+            syncState = snapshot.syncState
             restrictionActive = snapshot.restricted
             currentPolicyBlocked = snapshot.policyBlocked
             stateLoaded = true
-            delay(60_000)
+            delay(if (page == AppPage.SETTINGS) 1_500 else 60_000)
         }
     }
 
@@ -178,6 +190,10 @@ fun FocusApp(
 
         AppPage.SETTINGS -> SettingsScreen(
             settings = focusSettings,
+            desktopBlockedDomains = desktopBlockedDomains,
+            syncConfiguration = syncConfiguration,
+            syncStatus = syncState.status,
+            syncMessage = syncState.message,
             accessibilityEnabled = accessibilityEnabled,
             exactAlarmsAllowed = exactAlarmsAllowed,
             siteFilterEnabled = siteFilterEnabled,
@@ -188,6 +204,46 @@ fun FocusApp(
                     withContext(Dispatchers.IO) { repository.saveSettings(updated) }
                     PolicyAlarmScheduler.scheduleNext(context)
                     refreshVersion++
+                }
+            },
+            onDesktopDomainsChange = { updated ->
+                desktopBlockedDomains = updated
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { repository.saveDesktopBlockedDomains(updated) }
+                    if (result == BlocklistValidation.Valid) refreshVersion++
+                }
+            },
+            onConfigureSync = { endpoint, writeToken ->
+                scope.launch {
+                    val saved = runCatching {
+                        withContext(Dispatchers.IO) {
+                            val oldEndpoint = syncConfigurationStore.configuration().endpoint
+                            syncConfigurationStore.saveEndpoint(endpoint)
+                            if (writeToken.isNotBlank()) syncConfigurationStore.saveWriteToken(writeToken)
+                            if (oldEndpoint.isNotBlank() && oldEndpoint != endpoint) {
+                                repository.resetSyncForEndpointChange()
+                            } else {
+                                repository.requestSync()
+                            }
+                        }
+                    }
+                    if (saved.isSuccess) {
+                        syncConfiguration = syncConfigurationStore.configuration()
+                        refreshVersion++
+                    } else {
+                        syncState = syncState.copy(
+                            status = "ERROR",
+                            message = saved.exceptionOrNull()?.message
+                                ?: "No se pudo guardar la configuración de sincronización.",
+                        )
+                    }
+                }
+            },
+            onSyncNow = {
+                scope.launch(Dispatchers.IO) {
+                    runCatching { repository.requestSync() }.onFailure { error ->
+                        syncState = syncState.copy(status = "ERROR", message = error.message)
+                    }
                 }
             },
             onOpenAccessibilitySettings = { openAccessibilitySettings(context) },
@@ -217,6 +273,8 @@ fun FocusApp(
 private data class PlannerSnapshot(
     val blocks: List<PlannedBlock>,
     val settings: FocusSettings,
+    val desktopBlockedDomains: List<String>,
+    val syncState: PendingSyncState,
     val restricted: Boolean,
     val policyBlocked: Boolean,
 )
