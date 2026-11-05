@@ -26,17 +26,17 @@ single-user installation, not an account or multi-user service.
 
 ## Local development
 
-1. Run `pnpm install`.
-2. In `services/sync-api`, create a Neon project and link it with the Neon CLI: `pnpm dlx neon link`.
+1. From `services/sync-api`, run `pnpm install`.
+2. Create a Neon project and link it with the Neon CLI: `pnpm dlx neon link`.
 3. Pull the branch database URL: `pnpm dlx neon env pull`.
-4. Copy `.env.example` to `.env.local` in `services/sync-api` and add a random `SYNC_API_TOKEN` (keep the file private).
-5. From the repository root, apply the schema: `pnpm run migrate:sync-api`.
-6. From `services/sync-api`, deploy the function: `pnpm dlx neon deploy --env .env.local`.
+4. Copy `.env.example` to `.env.local` and add a random `SYNC_API_TOKEN` (keep the file private).
+5. Apply the schema: `pnpm run migrate`.
+6. Deploy the function: `pnpm dlx neon deploy --env .env.local`.
 7. Copy the function URL and token into JP Freedom on Android and the Chrome
    extension's connection settings.
 
-The local API can run from the repository root with `pnpm run start:sync-api`; it listens on port 8787
-and uses `services/sync-api/.env.local`. `pnpm run test:sync-api` exercises the
+The local API can run from `services/sync-api` with `pnpm run start`; it listens on port 8787
+and uses `.env.local`. `pnpm run test` exercises the
 HTTP seam without requiring Neon credentials or a live database.
 
 ## Security and behavior

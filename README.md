@@ -7,5 +7,6 @@
 - `services/sync-api`: sync API package, Neon configuration, and migrations.
 - `docs`: product-wide contracts and decisions.
 
-Run `pnpm install` from the repository root. The root scripts dispatch to the
-workspace packages; each package owns its dependencies and commands.
+Each project owns its build tools and dependencies. Run `pnpm install` from
+`services/sync-api` for the API. Run extension commands from
+`apps/chrome-extension`. The Android Gradle wrapper runs from `apps/android`.

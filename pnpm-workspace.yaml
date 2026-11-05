@@ -1,3 +1,0 @@
-packages:
-  - 'apps/chrome-extension'
-  - 'services/sync-api'
