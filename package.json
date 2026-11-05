@@ -2,15 +2,12 @@
   "name": "jp-freedom",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=20.19.0"
-  },
   "scripts": {
+    "test:sync-api": "node --test services/sync-api/test/*.test.js",
+    "test:extension": "node --test apps/chrome-extension/test/*.test.js",
     "test": "pnpm test:sync-api && pnpm test:extension",
-    "test:sync-api": "node --test packages/sync-api/test/*.test.js",
-    "test:extension": "node --test extension/test/*.test.js",
-    "start:sync-api": "node --env-file-if-exists=.env.local packages/sync-api/src/local-server.js",
-    "migrate:sync-api": "node --env-file-if-exists=.env.local packages/sync-api/src/migrate.js"
+    "start:sync-api": "node --env-file-if-exists=.env.local services/sync-api/src/local-server.js",
+    "migrate:sync-api": "node --env-file-if-exists=.env.local services/sync-api/src/migrate.js"
   },
   "dependencies": {
     "pg": "^8.16.3"

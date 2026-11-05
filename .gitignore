@@ -1,15 +1,9 @@
-.gradle/
-local.properties
-**/build/
-.idea/
-*.iml
-*.apk
-
 node_modules/
+**/build/
+.gradle/
 dist/
 coverage/
 .env
 .env.*
 !.env.example
 .neon/
-

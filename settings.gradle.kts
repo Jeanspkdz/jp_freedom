@@ -16,4 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "JP Freedom"
 include(":app")
+project(":app").projectDir = file("apps/android")
 
