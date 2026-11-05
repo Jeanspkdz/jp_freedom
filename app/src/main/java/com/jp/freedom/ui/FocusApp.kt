@@ -22,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.jp.freedom.data.FocusRepository
 import com.jp.freedom.domain.BlockValidation
-import com.jp.freedom.domain.DayPlanPolicy
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.enforcement.BlockedReason
@@ -82,13 +81,13 @@ fun FocusApp(
             val snapshot = withContext(Dispatchers.IO) {
                 val blocks = repository.allBlocks()
                 val settings = repository.settings()
-                val restricted = DayPlanPolicy.shouldRestrictEvening(
+                val policy = FocusPolicy.evaluate(
                     now = LocalDateTime.now(),
-                    cutoff = settings.eveningCutoff,
-                    requiredBlockCount = settings.requiredBlockCount,
                     blocks = blocks,
+                    settings = settings,
                 )
-                val policyBlocked = FocusPolicy.evaluate(LocalDateTime.now(), blocks, settings).blockedReason != null
+                val restricted = policy.blockedReason == BlockedReason.EVENING_RESTRICTION
+                val policyBlocked = policy.blockedReason != null
                 PlannerSnapshot(blocks, settings, restricted, policyBlocked)
             }
             allBlocks = snapshot.blocks
