@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.EditCalendar
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.outlined.Lock
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
+import com.jp.freedom.data.SyncStatus
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -72,9 +74,12 @@ fun PlannerScreen(
     allBlocks: List<PlannedBlock>,
     settings: FocusSettings,
     restrictionActive: Boolean,
+    hasSyncKey: Boolean,
+    syncStatus: SyncStatus,
     onSelectToday: () -> Unit,
     onSelectTomorrow: () -> Unit,
     onOpenSettings: () -> Unit,
+    onSyncNow: () -> Unit,
     onOpenTomorrowPlan: () -> Unit,
     onAddBlock: () -> Unit,
     onEditBlock: (PlannedBlock) -> Unit,
@@ -162,6 +167,25 @@ fun PlannerScreen(
                 onSelectToday = onSelectToday,
                 onSelectTomorrow = onSelectTomorrow,
             )
+            OutlinedButton(
+                onClick = if (hasSyncKey) onSyncNow else onOpenSettings,
+                enabled = syncStatus != SyncStatus.SYNCING,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+            ) {
+                Icon(Icons.Outlined.CloudSync, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    when {
+                        !hasSyncKey -> "Set up sync"
+                        syncStatus == SyncStatus.SYNCING -> "Syncing…"
+                        syncStatus == SyncStatus.ERROR -> "Retry sync"
+                        syncStatus == SyncStatus.PENDING -> "Sync changes"
+                        else -> "Sync changes"
+                    },
+                )
+            }
 
             if (blocks.isNotEmpty()) {
                 FocusHoursSummary(

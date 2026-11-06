@@ -143,6 +143,21 @@ fun FocusApp(
         canScheduleExactAlarms(context)
     }
 
+    val syncNow: () -> Unit = {
+        scope.launch {
+            syncState = syncState.copy(status = SyncStatus.SYNCING, message = null)
+            val result = withContext(Dispatchers.IO) {
+                runCatching { AndroidSyncJobService.syncNow(context) }
+            }
+            if (result.isFailure) {
+                val error = result.exceptionOrNull()
+                withContext(Dispatchers.IO) {
+                    repository.markSyncError(error?.message ?: "Couldn't sync. Try again.")
+                }
+            }
+            refreshVersion++
+        }
+    }
     when (page) {
         AppPage.PLANNER -> PlannerScreen(
             date = selectedDate,
@@ -151,9 +166,12 @@ fun FocusApp(
             allBlocks = allBlocks,
             settings = focusSettings,
             restrictionActive = restrictionActive,
+            hasSyncKey = syncConfiguration.hasWriteToken,
+            syncStatus = syncState.status,
             onSelectToday = { dayOffset = 0 },
             onSelectTomorrow = { dayOffset = 1 },
             onOpenSettings = { page = AppPage.SETTINGS },
+            onSyncNow = syncNow,
             onOpenTomorrowPlan = {
                 dayOffset = 1
                 page = AppPage.PLANNER
@@ -249,21 +267,7 @@ fun FocusApp(
                     }
                 }
             },
-            onSyncNow = {
-                scope.launch {
-                    syncState = syncState.copy(status = SyncStatus.SYNCING, message = null)
-                    val result = withContext(Dispatchers.IO) {
-                        runCatching { AndroidSyncJobService.syncNow(context) }
-                    }
-                    if (result.isFailure) {
-                        val error = result.exceptionOrNull()
-                        withContext(Dispatchers.IO) {
-                            repository.markSyncError(error?.message ?: "Couldn't sync. Try again.")
-                        }
-                    }
-                    refreshVersion++
-                }
-            },
+            onSyncNow = syncNow,
             onOpenAccessibilitySettings = { openAccessibilitySettings(context) },
             onRequestExactAlarmAccess = { openExactAlarmSettings(context) },
             onRequestSiteFilter = {
