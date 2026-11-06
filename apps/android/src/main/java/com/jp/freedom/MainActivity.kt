@@ -12,6 +12,8 @@ import com.jp.freedom.data.FocusRepository
 import com.jp.freedom.enforcement.BlockedReason
 import com.jp.freedom.enforcement.PolicyAlarmScheduler
 import com.jp.freedom.enforcement.SiteFilterVpnService
+import com.jp.freedom.sync.SyncConfigurationStore
+import com.jp.freedom.sync.SyncScheduler
 import com.jp.freedom.ui.FocusApp
 import com.jp.freedom.ui.FocusTheme
 
@@ -41,6 +43,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (::repository.isInitialized) {
+            val syncConfiguration = SyncConfigurationStore(applicationContext).configuration()
+            if (syncConfiguration.endpoint.isNotBlank() && syncConfiguration.hasWriteToken) {
+                SyncScheduler.schedule(this)
+            }
+        }
         SiteFilterVpnService.startIfAuthorized(this)
         resumeVersion++
     }

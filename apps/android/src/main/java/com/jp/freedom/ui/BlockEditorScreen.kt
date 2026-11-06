@@ -437,6 +437,7 @@ private fun validationMessage(validation: BlockValidation): String? = when (vali
     BlockValidation.Valid -> null
     is BlockValidation.MissingName -> "Escribe una actividad para guardar el bloque."
     is BlockValidation.InvalidTimeRange -> "La hora de fin debe ser posterior a la hora de inicio."
+    is BlockValidation.NoteTooLong -> "La nota es demasiado larga."
     is BlockValidation.Overlapping -> "Este bloque se superpone con “${validation.firstBlockName}” o “${validation.secondBlockName}”. Cambia el horario."
 }
 

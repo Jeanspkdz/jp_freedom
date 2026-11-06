@@ -20,12 +20,16 @@ import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -34,27 +38,52 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.SUPPORTED_EVENING_CUTOFFS
+import com.jp.freedom.domain.BlocklistValidation
+import com.jp.freedom.domain.DesktopSiteBlocklist
+import com.jp.freedom.data.SyncStatus
+import com.jp.freedom.sync.EndpointValidation
+import com.jp.freedom.sync.SyncConfiguration
+import com.jp.freedom.sync.SyncEndpoint
 import java.time.LocalTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     settings: FocusSettings,
+    desktopBlockedDomains: List<String>,
+    activeFocusBlock: Boolean,
+    syncConfiguration: SyncConfiguration,
+    syncStatus: SyncStatus,
+    syncRevision: Long,
+    syncMessage: String?,
     accessibilityEnabled: Boolean,
     exactAlarmsAllowed: Boolean,
     siteFilterEnabled: Boolean,
     onBack: () -> Unit,
     onSettingsChange: (FocusSettings) -> Unit,
+    onDesktopDomainsChange: (List<String>) -> Unit,
+    onConfigureSync: (String, String) -> Unit,
+    onSyncNow: () -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
     onRequestExactAlarmAccess: () -> Unit,
     onRequestSiteFilter: () -> Unit,
 ) {
+    var newDomain by rememberSaveable { mutableStateOf("") }
+    var domainError by remember { mutableStateOf<String?>(null) }
+    var endpoint by rememberSaveable(syncConfiguration.endpoint) { mutableStateOf(syncConfiguration.endpoint) }
+    var writeToken by remember { mutableStateOf("") }
+    var syncConfigError by remember { mutableStateOf<String?>(null) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -155,6 +184,134 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Sitios bloqueados en Chrome", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Esta lista se administra en el teléfono y se comparte con Chrome cuando sincroniza. WhatsApp Web sigue disponible.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                desktopBlockedDomains.forEach { domain ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(domain, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                        IconButton(onClick = {
+                            domainError = null
+                            onDesktopDomainsChange(desktopBlockedDomains - domain)
+                        }, enabled = !activeFocusBlock) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Quitar $domain")
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newDomain,
+                        onValueChange = { newDomain = it; domainError = null },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        label = { Text("Dominio") },
+                        placeholder = { Text("ejemplo.com") },
+                    )
+                    Button(onClick = {
+                        val domain = DesktopSiteBlocklist.normalize(newDomain)
+                        when (val validation = DesktopSiteBlocklist.validate(desktopBlockedDomains + domain)) {
+                            BlocklistValidation.Valid -> {
+                                onDesktopDomainsChange(desktopBlockedDomains + domain)
+                                newDomain = ""
+                            }
+                            BlocklistValidation.ActiveBlockLocked -> domainError = "Los sitios seleccionados no se pueden quitar durante un bloque."
+                            BlocklistValidation.DuplicateDomain -> domainError = "Ese dominio ya está en la lista."
+                            BlocklistValidation.TooManyDomains -> domainError = "La lista admite hasta 100 dominios."
+                            is BlocklistValidation.InvalidDomain -> domainError = "Escribe un dominio válido, como ejemplo.com, sin ruta ni comodines."
+                        }
+                    }) { Text("Añadir") }
+                }
+                domainError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = endpoint,
+                        onValueChange = { endpoint = it; syncConfigError = null },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Dirección de sincronización") },
+                        placeholder = { Text("https://tu-api.example") },
+                    )
+                    OutlinedTextField(
+                        value = writeToken,
+                        onValueChange = { writeToken = it; syncConfigError = null },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        label = { Text("Token de escritura de Android") },
+                        placeholder = { Text(if (syncConfiguration.hasWriteToken) "Guardado de forma segura" else "SYNC_API_WRITE_TOKEN") },
+                    )
+                    Text(
+                        "La clave se guarda cifrada en este teléfono. No uses el token de solo lectura de Chrome.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(onClick = {
+                        when (val validation = SyncEndpoint.validate(endpoint)) {
+                            is EndpointValidation.Invalid -> syncConfigError = validation.explanation
+                            is EndpointValidation.Valid -> when {
+                                writeToken.isBlank() && !syncConfiguration.hasWriteToken ->
+                                    syncConfigError = "Ingresa el token de escritura de Android para configurar la sincronización."
+                                else -> {
+                                    onConfigureSync(validation.endpoint, writeToken.trim())
+                                    endpoint = validation.endpoint
+                                    writeToken = ""
+                                    syncConfigError = null
+                                }
+                            }
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (syncConfiguration.hasWriteToken) "Guardar conexión" else "Configurar sincronización")
+                    }
+                    syncConfigError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Outlined.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text(syncStatusLabel(syncStatus, syncConfiguration.hasWriteToken), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                        Text(
+                            syncMessage ?: when {
+                                !syncConfiguration.hasWriteToken -> "Los cambios se guardan en el teléfono. Configura la API y el token de escritura para sincronizarlos."
+                                syncStatus == SyncStatus.CONFLICT_RESOLVED -> "Se combinó una versión del servidor con tus cambios pendientes y se guardó el resultado."
+                                syncStatus == SyncStatus.PENDING -> "Los cambios locales esperan conexión y se volverán a enviar automáticamente."
+                                syncStatus == SyncStatus.UP_TO_DATE -> "Los cambios del teléfono y del servidor están sincronizados."
+                                else -> "Los planes y la aplicación de reglas siguen funcionando desde este teléfono sin internet."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedButton(
+                            onClick = onSyncNow,
+                            enabled = syncConfiguration.hasWriteToken && syncStatus != SyncStatus.SYNCING,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(if (syncStatus == SyncStatus.ERROR) "Reintentar sincronización" else "Sincronizar ahora")
+                        }
+                        Text(
+                            if (syncRevision >= 0) {
+                                "Revisión guardada en el servidor: $syncRevision. La extensión muestra su última revisión descargada para que puedas compararlas."
+                            } else {
+                                "El teléfono todavía no ha guardado una revisión en el servidor."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Protección del teléfono", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 PermissionCard(
                     icon = Icons.Outlined.AppBlocking,
@@ -220,6 +377,16 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+private fun syncStatusLabel(status: SyncStatus, configured: Boolean): String = when {
+    !configured -> "Sin configurar"
+    status == SyncStatus.SYNCING -> "Sincronizando"
+    status == SyncStatus.PENDING -> "Pendiente"
+    status == SyncStatus.UP_TO_DATE -> "Al día"
+    status == SyncStatus.CONFLICT_RESOLVED -> "Conflicto resuelto"
+    status == SyncStatus.ERROR -> "Necesita atención"
+    else -> "Listo para sincronizar"
 }
 
 @Composable
