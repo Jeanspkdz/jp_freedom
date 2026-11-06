@@ -88,6 +88,16 @@ test('Saturday has no required plan and Sunday evening requires Monday', () => {
 
 test('blocklist rules cover configured hosts and are empty outside a focus block', () => {
   const current = { id: 'focus', date: '2026-11-04', name: 'Study', startTime: '10:00', endTime: '11:00', completionStatus: 'NOT_STARTED' };
-  assert.deepEqual(makeDesktopBlockRules(snapshot, current).map(rule => rule.condition.requestDomains[0]), ['facebook.com', 'youtube.com']);
+  const rules = makeDesktopBlockRules(snapshot, current);
+  assert.deepEqual(rules.map(rule => rule.condition.requestDomains[0]), ['facebook.com', 'youtube.com']);
+  assert.ok(rules.every(rule => rule.condition.resourceTypes.length === 1 && rule.condition.resourceTypes[0] === 'main_frame'));
   assert.deepEqual(makeDesktopBlockRules(snapshot, null), []);
+});
+
+test('evening restriction without an active planned block leaves desktop browsing unblocked', () => {
+  const tomorrow = {
+    ...snapshot,
+    blocks: [{ id: 'tomorrow', date: '2026-11-05', name: 'Study', startTime: '09:00', endTime: '10:00', completionStatus: 'NOT_STARTED' }],
+  };
+  assert.deepEqual(makeDesktopBlockRules(tomorrow, getActiveBlock(tomorrow, new Date('2026-11-04T22:00:00'))), []);
 });
