@@ -13,7 +13,7 @@ class AndroidSyncJobService : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         stopped = false
         runningThread = Thread({
-            val retry = runCatching { SyncEngine(applicationContext).run() }
+            val retry = runCatching { runSync(applicationContext) }
                 .onFailure { error -> FocusRepository(applicationContext).markSyncError(error.userMessage()) }
                 .getOrDefault(true)
             if (!stopped) jobFinished(params, retry)
@@ -30,6 +30,17 @@ class AndroidSyncJobService : JobService() {
     private fun Throwable.userMessage(): String = when (this) {
         is SyncFailure -> message ?: "No se pudo sincronizar. Los cambios siguen guardados en este teléfono."
         else -> "Ocurrió un error al sincronizar. Los cambios siguen guardados en este teléfono; vuelve a intentar."
+    }
+
+    companion object {
+        private val syncLock = Any()
+
+        /** Runs the same sync engine as the background job, without waiting for JobScheduler. */
+        fun syncNow(context: android.content.Context): Boolean = runSync(context.applicationContext)
+
+        private fun runSync(context: android.content.Context): Boolean = synchronized(syncLock) {
+            SyncEngine(context).run()
+        }
     }
 }
 

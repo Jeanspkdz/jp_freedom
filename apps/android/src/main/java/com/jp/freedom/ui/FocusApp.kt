@@ -32,6 +32,7 @@ import com.jp.freedom.enforcement.FocusPolicy
 import com.jp.freedom.enforcement.PolicyAlarmScheduler
 import com.jp.freedom.enforcement.SiteFilterVpnService
 import com.jp.freedom.domain.BlocklistValidation
+import com.jp.freedom.sync.AndroidSyncJobService
 import com.jp.freedom.sync.SyncConfiguration
 import com.jp.freedom.sync.SyncConfigurationStore
 import kotlinx.coroutines.Dispatchers
@@ -249,10 +250,18 @@ fun FocusApp(
                 }
             },
             onSyncNow = {
-                scope.launch(Dispatchers.IO) {
-                    runCatching { repository.requestSync() }.onFailure { error ->
-                        syncState = syncState.copy(status = SyncStatus.ERROR, message = error.message)
+                scope.launch {
+                    syncState = syncState.copy(status = SyncStatus.SYNCING, message = null)
+                    val result = withContext(Dispatchers.IO) {
+                        runCatching { AndroidSyncJobService.syncNow(context) }
                     }
+                    if (result.isFailure) {
+                        val error = result.exceptionOrNull()
+                        withContext(Dispatchers.IO) {
+                            repository.markSyncError(error?.message ?: "Couldn't sync. Try again.")
+                        }
+                    }
+                    refreshVersion++
                 }
             },
             onOpenAccessibilitySettings = { openAccessibilitySettings(context) },
