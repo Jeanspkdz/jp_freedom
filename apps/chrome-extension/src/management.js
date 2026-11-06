@@ -97,6 +97,7 @@ function render(documentRef, state, now) {
   const grantSiteAccess = documentRef.getElementById('grant-site-access');
   const current = snapshot ? getCurrentAndNext(snapshot, now).current : null;
   const active = Boolean(current);
+  documentRef.querySelector?.('.focus-board')?.classList?.toggle('is-active', active);
   const currentBlockId = current?.id ?? null;
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   documentRef.getElementById('today-intro-date').textContent = now.toLocaleDateString(undefined, {
