@@ -234,13 +234,6 @@ export async function initializeManagement({
   for (const view of views) {
     documentRef.getElementById(`tab-${view}`).addEventListener('click', () => showView(view));
   }
-  documentRef.getElementById('show-tomorrow').addEventListener('click', () => {
-    const panel = documentRef.getElementById('tomorrow-plan');
-    panel.hidden = !panel.hidden;
-    documentRef.getElementById('show-tomorrow').setAttribute?.('aria-expanded', String(!panel.hidden));
-    documentRef.querySelector?.('.tomorrow-link-label')?.replaceChildren?.(panel.hidden ? 'View tomorrow’s plan' : 'Hide tomorrow’s plan');
-  });
-
   documentRef.getElementById('api-url').value = state.apiUrl;
   documentRef.getElementById('api-token').value = state.apiToken;
 

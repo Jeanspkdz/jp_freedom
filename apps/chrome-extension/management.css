@@ -223,37 +223,36 @@ fieldset { margin-top: 34px; }
   .domain-input-row button { width: 100%; }
 }
 
-/* The plan follows the same time-first rhythm as the Android agenda. */
-.plan-intro { margin-bottom: 34px; }
+/* A two-day agenda keeps the next day visible without a disclosure step. */
+.plan-intro { margin-bottom: 32px; }
 .plan-intro h1 { letter-spacing: -.03em; }
-.focus-board { position: relative; justify-content: flex-start; min-height: 112px; padding: 22px 28px 22px 52px; }
-.focus-board::before { content: ""; position: absolute; left: 27px; top: 50%; width: 9px; height: 9px; border-radius: 50%; background: var(--amber); transform: translateY(-50%); }
-.focus-main { display: grid; gap: 3px; }
-.focus-main h2 { font-size: .82rem; letter-spacing: .01em; }
-#current-block { margin: 0; font-family: var(--display-font); font-size: clamp(1.45rem, 2.7vw, 1.85rem); line-height: 1.18; }
+.focus-board { min-height: 100px; padding: 22px 28px; }
+.focus-main { display: grid; gap: 4px; }
+.focus-main h2 { font-size: .82rem; }
+#current-block { margin: 0; font-family: var(--display-font); font-size: clamp(1.4rem, 2.7vw, 1.8rem); line-height: 1.2; }
 #planned-end { margin-left: auto; font-variant-numeric: tabular-nums; }
-.day-plans { max-width: 920px; margin-top: 54px; }
-.day-plan-header { align-items: center; margin-bottom: 18px; }
-.day-plan-header h2 { font-size: 1.7rem; }
-.day-plan-header time { padding: 7px 11px; border-radius: 999px; background: var(--surface); font-size: .83rem; font-variant-numeric: tabular-nums; }
-.day-plan-empty { position: relative; min-height: 94px; margin: 0; padding: 34px 22px 25px 52px; border-radius: 14px; background: var(--surface); color: var(--muted); }
-.day-plan-empty::before { content: ""; position: absolute; left: 26px; top: 25px; bottom: 25px; width: 1px; background: var(--line); }
-.day-plan-empty::after { content: ""; position: absolute; left: 22px; top: 39px; width: 9px; height: 9px; border: 2px solid var(--amber); border-radius: 50%; background: var(--surface); }
+.day-plans { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); align-items: stretch; gap: 22px; max-width: none; margin-top: 32px; }
+.day-plan, .day-plan + .day-plan { min-width: 0; min-height: 230px; margin: 0; padding: 24px; border: 0; border-radius: 14px; background: var(--surface); }
+#tomorrow-plan { background: var(--amber-soft); color: var(--on-amber-soft); }
+.day-plan-header { align-items: center; margin-bottom: 24px; }
+.day-plan-header h2 { font-size: 1.55rem; }
+.day-plan-header time { font-size: .86rem; font-variant-numeric: tabular-nums; }
+#tomorrow-plan .day-plan-header time { color: var(--on-amber-soft); }
+.day-plan-empty { margin: 0; color: var(--muted); font-size: 1rem; }
+#tomorrow-plan .day-plan-empty { color: var(--on-amber-soft); }
 .day-plan-list:not(:empty) { border-top: 1px solid var(--line-soft); }
-.day-plan-row { border-radius: 0; }
+.day-plan-row { grid-template-columns: minmax(105px, auto) minmax(0, 1fr) auto; gap: 12px; padding: 10px 0; border-radius: 0; }
 .day-plan-row:first-child { border-top: 0; }
-.tomorrow-link { display: flex; justify-content: space-between; width: 100%; min-height: 68px; margin-top: 28px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--amber); font-family: "JP Roboto", Roboto, Arial, sans-serif; font-size: .96rem; font-weight: 700; }
-.tomorrow-link:hover:not(:disabled) { background: var(--amber-soft); text-decoration: none; }
-.tomorrow-link-icon { display: inline-block; width: 18px; height: 18px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg) scale(.65); transition: transform 180ms ease-out; }
-.tomorrow-link[aria-expanded="true"] .tomorrow-link-icon { transform: rotate(45deg) scale(.65); }
-.tomorrow-link + .day-plan { margin-top: 26px; padding-top: 0; border-top: 0; }
+#tomorrow-plan .day-plan-row { border-bottom-color: rgb(96 51 0 / .18); }
+#tomorrow-plan .day-plan-status { color: var(--on-amber-soft); }
 
+@media (max-width: 850px) {
+  .day-plans { grid-template-columns: 1fr; }
+  .day-plan, .day-plan + .day-plan { min-height: 0; }
+}
 @media (max-width: 700px) {
-  .focus-board { align-items: flex-start; padding: 22px 20px 22px 44px; }
-  .focus-board::before { left: 20px; top: 33px; }
+  .focus-board { align-items: flex-start; padding: 22px; }
   #planned-end { margin-left: 0; }
-  .day-plans { margin-top: 42px; }
-  .day-plan-empty { padding-left: 46px; }
-  .day-plan-empty::before { left: 23px; }
-  .day-plan-empty::after { left: 19px; }
+  .day-plan, .day-plan + .day-plan { padding: 20px; }
+  .day-plan-row { grid-template-columns: minmax(96px, auto) minmax(0, 1fr); }
 }

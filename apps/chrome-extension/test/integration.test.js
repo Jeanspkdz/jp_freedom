@@ -122,10 +122,7 @@ test('management navigation separates the plan, sites, and connection views', as
 
   harness.nodes.get('tab-plan').listeners.get('click')();
   assert.equal(harness.nodes.get('view-plan').hidden, false);
-  const tomorrow = harness.documentRef.getElementById('tomorrow-plan');
-  tomorrow.hidden = true;
-  harness.nodes.get('show-tomorrow').listeners.get('click')();
-  assert.equal(tomorrow.hidden, false);
+  assert.equal(harness.documentRef.getElementById('tomorrow-plan').hidden, false);
 });
 
 test('an unreachable local test API explains how to restore the connection', async () => {
