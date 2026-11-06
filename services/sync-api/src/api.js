@@ -8,7 +8,6 @@ export const DEFAULT_SNAPSHOT = Object.freeze({
     'instagram.com',
     'tiktok.com',
     'x.com',
-    'youtube.com',
     'reddit.com',
   ]),
   blocks: Object.freeze([]),

@@ -11,7 +11,6 @@ const emptySnapshot = {
     'instagram.com',
     'tiktok.com',
     'x.com',
-    'youtube.com',
     'reddit.com',
   ],
   blocks: [],

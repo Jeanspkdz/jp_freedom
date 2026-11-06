@@ -12,7 +12,7 @@ VALUES (
     '{
       "version": 1,
       "settings": {"requiredBlockCount": 3, "eveningCutoff": "21:00"},
-      "desktopBlockedDomains": ["facebook.com", "instagram.com", "tiktok.com", "x.com", "youtube.com", "reddit.com"],
+      "desktopBlockedDomains": ["facebook.com", "instagram.com", "tiktok.com", "x.com", "reddit.com"],
       "blocks": []
     }'::jsonb
 )
