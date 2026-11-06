@@ -29,6 +29,62 @@ function connectionError(apiUrl) {
   return 'Could not reach the sync API. Check your connection and API URL.';
 }
 
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatPlanTime(value) {
+  const [hours, minutes] = value.split(':').map(Number);
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function renderDayPlan(documentRef, snapshot, date, prefix, currentBlockId) {
+  const dateElement = documentRef.getElementById(`${prefix}-plan-date`);
+  const emptyElement = documentRef.getElementById(`${prefix}-plan-empty`);
+  const list = documentRef.getElementById(`${prefix}-plan-list`);
+  dateElement.textContent = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  list.replaceChildren();
+
+  if (!snapshot) {
+    emptyElement.hidden = false;
+    emptyElement.textContent = 'Sync to load the plan from your phone.';
+    return;
+  }
+
+  const dateKey = localDateKey(date);
+  const blocks = snapshot.blocks
+    .filter(block => block.date === dateKey)
+    .sort((first, second) => first.startTime.localeCompare(second.startTime));
+  emptyElement.hidden = blocks.length > 0;
+  emptyElement.textContent = `No blocks planned for ${prefix}.`;
+
+  for (const block of blocks) {
+    const row = documentRef.createElement('li');
+    row.className = `day-plan-row${block.id === currentBlockId ? ' is-current' : ''}`;
+    const time = documentRef.createElement('time');
+    time.className = 'day-plan-time';
+    time.textContent = `${formatPlanTime(block.startTime)}–${formatPlanTime(block.endTime)}`;
+    const name = documentRef.createElement('span');
+    name.className = 'day-plan-name';
+    name.textContent = block.name;
+    const status = documentRef.createElement('span');
+    status.className = 'day-plan-status';
+    status.textContent = block.id === currentBlockId
+      ? 'In progress'
+      : block.completionStatus === 'FINISHED' ? 'Finished'
+        : block.completionStatus === 'PARTLY_DONE' ? 'Partly done'
+          : block.completionStatus === 'NOT_DONE' ? 'Not done' : 'Planned';
+    row.append(time, name, status);
+    list.append(row);
+  }
+}
+
 function render(documentRef, state, now) {
   const { snapshot, lastSuccessfulSync, error, connected } = state;
   const protection = documentRef.getElementById('protection-state');
@@ -39,7 +95,12 @@ function render(documentRef, state, now) {
   const plannedEnd = documentRef.getElementById('planned-end');
   const permissionState = documentRef.getElementById('permission-state');
   const grantSiteAccess = documentRef.getElementById('grant-site-access');
-  const active = Boolean(snapshot && getCurrentAndNext(snapshot, now).current);
+  const current = snapshot ? getCurrentAndNext(snapshot, now).current : null;
+  const active = Boolean(current);
+  const currentBlockId = current?.id ?? null;
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  renderDayPlan(documentRef, snapshot, now, 'today', currentBlockId);
+  renderDayPlan(documentRef, snapshot, tomorrow, 'tomorrow', currentBlockId);
   const displayedDomains = snapshot
     ? (state.newEmptyBlocklist ? [...DEFAULT_DESKTOP_DOMAINS] : [...new Set(snapshot.desktopBlockedDomains)])
     : [...DEFAULT_DESKTOP_DOMAINS];
@@ -90,7 +151,6 @@ function render(documentRef, state, now) {
 
   protection.textContent = 'Protection is active when a focus block is scheduled.';
   sync.textContent = error || !connected ? 'Offline — using cached plan.' : 'Synced — using latest plan.';
-  const { current } = getCurrentAndNext(snapshot, now);
   currentBlock.textContent = current?.name ?? 'No active focus block';
   plannedEnd.textContent = current ? `Planned end: ${current.endTime}` : 'Planned end: —';
 }

@@ -11,6 +11,7 @@ function createNode() {
     hidden: false,
     disabled: false,
     checked: false,
+    className: '',
     dataset: {},
     listeners: new Map(),
     children: [],
@@ -22,6 +23,10 @@ function createNode() {
         if (child && typeof child === 'object') child.parentElement = this;
         this.children.push(child);
       }
+    },
+    replaceChildren(...children) {
+      this.children = [];
+      this.append(...children);
     },
     remove() {
       if (!this.parentElement) return;
@@ -371,6 +376,31 @@ test('a successful sync shows the active block and planned end, saves the snapsh
   assert.match(harness.nodes.get('last-sync').textContent, /Last successful sync: (?!Never)/);
   assert.deepEqual(harness.storage.lastValidSnapshot, snapshot);
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['facebook.com', 'youtube.com']);
+});
+
+test('management shows the full plan for today and tomorrow from the synced snapshot', async () => {
+  const now = new Date(2026, 10, 6, 10, 30);
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['facebook.com'],
+    blocks: [
+      { id: 'current', date: '2026-11-06', name: 'Deep work', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' },
+      { id: 'later', date: '2026-11-06', name: 'Reading', startTime: '13:00', endTime: '14:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' },
+      { id: 'tomorrow', date: '2026-11-07', name: 'Project', startTime: '09:00', endTime: '10:30', accessProfile: 'ESSENTIALS_WITH_CHATGPT', completionStatus: 'NOT_STARTED' },
+    ],
+  };
+  const harness = createHarness({ lastValidSnapshot: snapshot, lastSnapshotRevision: 3 });
+
+  await initializeManagement({ ...harness, now: () => now, fetchImpl: async () => { throw new Error('unexpected request'); } });
+
+  const todayRows = harness.nodes.get('today-plan-list').children;
+  const tomorrowRows = harness.nodes.get('tomorrow-plan-list').children;
+  assert.equal(todayRows.length, 2);
+  assert.deepEqual(todayRows.map(row => row.children[1].textContent), ['Deep work', 'Reading']);
+  assert.equal(todayRows[0].children[2].textContent, 'In progress');
+  assert.equal(tomorrowRows.length, 1);
+  assert.equal(tomorrowRows[0].children[1].textContent, 'Project');
 });
 
 test('saving the connection form stores the API URL and bearer token and starts a sync', async () => {

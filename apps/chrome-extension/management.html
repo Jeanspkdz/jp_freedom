@@ -18,6 +18,18 @@
         <p id="planned-end">Planned end: —</p>
         <div class="permission-line"><p id="permission-state" role="status">Checking Chrome site access…</p><button id="grant-site-access" type="button" hidden>Grant site access</button></div>
       </section>
+      <div class="day-plans">
+        <section class="day-plan" aria-labelledby="today-plan-heading">
+          <div class="day-plan-header"><h2 id="today-plan-heading">Today’s plan</h2><time id="today-plan-date"></time></div>
+          <p id="today-plan-empty" class="day-plan-empty" role="status">Loading plan…</p>
+          <ol id="today-plan-list" class="day-plan-list"></ol>
+        </section>
+        <section class="day-plan" aria-labelledby="tomorrow-plan-heading">
+          <div class="day-plan-header"><h2 id="tomorrow-plan-heading">Tomorrow’s plan</h2><time id="tomorrow-plan-date"></time></div>
+          <p id="tomorrow-plan-empty" class="day-plan-empty" role="status">Loading plan…</p>
+          <ol id="tomorrow-plan-list" class="day-plan-list"></ol>
+        </section>
+      </div>
       <div class="work-area">
         <section class="blocklist" aria-labelledby="blocklist-heading">
           <h2 id="blocklist-heading">Desktop site blocklist</h2>

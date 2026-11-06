@@ -50,6 +50,18 @@ h2 { font-size: 1.13rem; line-height: 1.25; font-weight: 700; letter-spacing: -.
 #permission-state { font-size: .84rem; }
 .permission-line button { min-height: 36px; padding: 6px 14px; }
 
+.day-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
+.day-plan { min-width: 0; padding: 20px 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.day-plan-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.day-plan-header time { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+.day-plan-empty { margin-top: 13px; color: var(--muted); font-size: .9rem; }
+.day-plan-list { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+.day-plan-row { display: grid; grid-template-columns: minmax(100px, auto) minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 44px; padding: 8px 10px; border-radius: 9px; background: color-mix(in srgb, var(--amber-soft) 35%, var(--surface)); }
+.day-plan-row.is-current { background: var(--amber-soft); color: var(--on-amber-soft); }
+.day-plan-time { font-variant-numeric: tabular-nums; font-size: .86rem; white-space: nowrap; }
+.day-plan-name { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.day-plan-status { color: var(--muted); font-size: .75rem; white-space: nowrap; }
+
 .work-area { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 310px); gap: 44px; margin-top: 38px; align-items: start; }
 .blocklist h2 { font-size: 1.5rem; }
 .section-description { max-width: 66ch; margin-top: 7px; color: var(--muted); font-size: .92rem; }
@@ -110,7 +122,9 @@ button:disabled { opacity: .55; }
   #protection-state { text-align: left; }
   .focus-board { grid-template-columns: 1fr; padding: 22px; }
   #planned-end { white-space: normal; }
-  #common-sites, #custom-sites, .connection-rail { grid-template-columns: 1fr; }
+  .day-plans, #common-sites, #custom-sites, .connection-rail { grid-template-columns: 1fr; }
+  .day-plan-row { grid-template-columns: minmax(90px, auto) minmax(0, 1fr); }
+  .day-plan-status { grid-column: 2; }
   .domain-input-row { flex-direction: column; }
   .domain-input-row button { width: 100%; }
 }
