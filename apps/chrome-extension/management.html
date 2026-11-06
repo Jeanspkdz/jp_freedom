@@ -3,63 +3,62 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>JP Freedom</title>
+    <title>JP Freedom · Focus plan</title>
     <link rel="stylesheet" href="management.css">
   </head>
   <body>
-    <main>
-      <header>
-        <p class="eyebrow">JP Freedom · Desktop</p>
+    <main class="app-shell">
+      <header class="page-header">
+        <div class="brand"><img src="icons/app-48.png" alt="" width="40" height="40"><span>JP Freedom</span></div>
         <h1>Focus plan</h1>
         <p id="protection-state" role="status">Checking protection…</p>
       </header>
-      <section class="plan" aria-labelledby="plan-heading">
-        <h2 id="plan-heading">Current focus block</h2>
-        <p id="current-block">Loading plan…</p>
+      <section class="focus-board" aria-labelledby="plan-heading">
+        <div class="focus-main"><h2 id="plan-heading">Current focus block</h2><p id="current-block">Loading plan…</p></div>
         <p id="planned-end">Planned end: —</p>
-        <p id="permission-state" role="status">Checking Chrome site access…</p>
-        <button id="grant-site-access" type="button" hidden>Grant site access</button>
+        <div class="permission-line"><p id="permission-state" role="status">Checking Chrome site access…</p><button id="grant-site-access" type="button" hidden>Grant site access</button></div>
       </section>
-      <section class="sync" aria-labelledby="sync-heading">
-        <h2 id="sync-heading">Sync status</h2>
-        <p id="sync-state" role="status">Checking sync…</p>
-        <p id="last-sync">Last successful sync: Never</p>
-        <p id="sync-error" class="error" role="alert" hidden></p>
-        <button id="sync-now" type="button">Sync now</button>
-      </section>
-      <section aria-labelledby="blocklist-heading">
-        <h2 id="blocklist-heading">Desktop site blocklist</h2>
-        <p>Selected sites are blocked during a focus block. Each domain includes its subdomains.</p>
-        <fieldset id="common-sites">
-          <legend>Common sites</legend>
-          <label><input id="domain-facebook.com" type="checkbox" data-domain="facebook.com"> Facebook</label>
-          <label><input id="domain-instagram.com" type="checkbox" data-domain="instagram.com"> Instagram</label>
-          <label><input id="domain-tiktok.com" type="checkbox" data-domain="tiktok.com"> TikTok</label>
-          <label><input id="domain-x.com" type="checkbox" data-domain="x.com"> X</label>
-          <label><input id="domain-reddit.com" type="checkbox" data-domain="reddit.com"> Reddit</label>
-          <label><input id="domain-youtube.com" type="checkbox" data-domain="youtube.com"> YouTube</label>
-          <label><input id="domain-web.whatsapp.com" type="checkbox" data-domain="web.whatsapp.com"> WhatsApp Web</label>
-        </fieldset>
-        <div id="custom-sites" aria-label="Custom sites"></div>
-        <form id="add-domain-form">
-          <label for="custom-domain">Add a domain</label>
-          <input id="custom-domain" name="custom-domain" type="text" autocomplete="off" placeholder="example.com" aria-describedby="domain-help">
-          <p id="domain-help">Enter a bare domain such as example.com. URLs and paths are not accepted.</p>
-          <button id="add-domain" type="submit">Add site</button>
-        </form>
-        <p id="blocklist-status" role="status"></p>
-      </section>
-      <section aria-labelledby="settings-heading">
-        <h2 id="settings-heading">Connection</h2>
-        <p>Enter the deployed sync API URL and bearer token from the phone's sync settings. Neon database credentials are not used here.</p>
-        <form id="settings-form">
-          <label for="api-url">Sync API URL</label>
-          <input id="api-url" name="api-url" type="url" autocomplete="url" placeholder="https://your-sync-api.example" required>
-          <label for="api-token">Bearer token</label>
-          <input id="api-token" name="api-token" type="password" autocomplete="off" required>
-          <button type="submit">Save and sync</button>
-        </form>
-      </section>
+      <div class="work-area">
+        <section class="blocklist" aria-labelledby="blocklist-heading">
+          <h2 id="blocklist-heading">Desktop site blocklist</h2>
+          <p class="section-description">Selected sites are blocked during a focus block. Each domain includes its subdomains. Selected sites stay locked until the block ends.</p>
+          <fieldset id="common-sites">
+            <legend>Common sites</legend>
+            <label class="site-row"><input id="domain-facebook.com" type="checkbox" data-domain="facebook.com"><span class="site-name">Facebook</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row"><input id="domain-instagram.com" type="checkbox" data-domain="instagram.com"><span class="site-name">Instagram</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row"><input id="domain-tiktok.com" type="checkbox" data-domain="tiktok.com"><span class="site-name">TikTok</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row"><input id="domain-x.com" type="checkbox" data-domain="x.com"><span class="site-name">X</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row"><input id="domain-reddit.com" type="checkbox" data-domain="reddit.com"><span class="site-name">Reddit</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row"><input id="domain-youtube.com" type="checkbox" data-domain="youtube.com"><span class="site-name">YouTube</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row"><input id="domain-web.whatsapp.com" type="checkbox" data-domain="web.whatsapp.com"><span class="site-name">WhatsApp Web</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+          </fieldset>
+          <div id="custom-sites" aria-label="Custom sites"></div>
+          <form id="add-domain-form">
+            <label for="custom-domain">Add a domain</label>
+            <div class="domain-input-row"><input id="custom-domain" name="custom-domain" type="text" autocomplete="off" placeholder="example.com" aria-describedby="domain-help"><button id="add-domain" type="submit">Add site</button></div>
+            <p id="domain-help" class="field-help">Enter a bare domain such as example.com. URLs and paths are not accepted.</p>
+          </form>
+          <p id="blocklist-status" role="status"></p>
+        </section>
+        <aside class="connection-rail" aria-label="Sync and connection">
+          <section class="sync" aria-labelledby="sync-heading">
+            <h2 id="sync-heading">Sync status</h2>
+            <p id="sync-state" role="status">Checking sync…</p>
+            <p id="last-sync">Last successful sync: Never</p>
+            <p id="sync-error" class="error" role="alert" hidden></p>
+            <button id="sync-now" class="secondary-button" type="button">Sync now</button>
+          </section>
+          <section class="connection" aria-labelledby="settings-heading">
+            <h2 id="settings-heading">Connection</h2>
+            <p>Enter the deployed sync API URL and bearer token from the phone's sync settings. Neon database credentials are not used here.</p>
+            <form id="settings-form">
+              <label for="api-url">Sync API URL</label><input id="api-url" name="api-url" type="url" autocomplete="url" placeholder="https://your-sync-api.example" required>
+              <label for="api-token">Bearer token</label><input id="api-token" name="api-token" type="password" autocomplete="off" required>
+              <button type="submit">Save and sync</button>
+            </form>
+          </section>
+        </aside>
+      </div>
     </main>
     <script type="module" src="src/management.js"></script>
   </body>

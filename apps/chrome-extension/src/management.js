@@ -83,12 +83,26 @@ function render(documentRef, state, now) {
 function ensureCustomCheckbox(documentRef, state, domain) {
   if (state.customCheckboxes?.has(domain)) return state.customCheckboxes.get(domain);
   const wrapper = documentRef.createElement('label');
+  wrapper.className = 'site-row';
   const checkbox = documentRef.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.dataset.domain = domain;
   checkbox.id = `domain-${domain}`;
   checkbox.addEventListener('change', () => state.changeDomain(domain, checkbox.checked));
-  wrapper.append(checkbox, documentRef.createTextNode(` ${domain}`));
+  const name = documentRef.createElement('span');
+  name.className = 'site-name';
+  name.textContent = domain;
+  const action = documentRef.createElement('span');
+  action.className = 'site-action';
+  action.setAttribute?.('aria-hidden', 'true');
+  const off = documentRef.createElement('span');
+  off.className = 'when-off';
+  off.textContent = 'Block';
+  const on = documentRef.createElement('span');
+  on.className = 'when-on';
+  on.textContent = 'Blocking';
+  action.append(off, on);
+  wrapper.append(checkbox, name, action);
   documentRef.getElementById('custom-sites').append(wrapper);
   state.customCheckboxes ??= new Map();
   state.customCheckboxes.set(domain, checkbox);
