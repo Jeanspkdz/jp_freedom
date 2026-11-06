@@ -4,6 +4,7 @@ import { readSnapshot, snapshotEndpoint, validSnapshotResponse } from './sync-cl
 import { isValidDomain } from './domain.js';
 
 const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync', 'lastSnapshotRevision'];
+const DEFAULT_SYNC_API_URL = 'https://br-floral-block-bddjl0rs-jpfreedomsync.compute.c-8.us-east-2.aws.neon.tech/';
 const DEFAULT_DESKTOP_DOMAINS = ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com'];
 const COMMON_DOMAINS = [...DEFAULT_DESKTOP_DOMAINS, 'youtube.com', 'web.whatsapp.com'];
 const COMMON_LABELS = new Map([
@@ -133,10 +134,13 @@ export async function initializeManagement({
   const cachedSnapshot = validSnapshotResponse({ revision: saved.lastSnapshotRevision ?? 0, updatedAt: saved.lastSuccessfulSync ?? null, snapshot: saved.lastValidSnapshot })
     ? saved.lastValidSnapshot
     : null;
-  const connected = Boolean(saved.apiUrl && saved.apiToken);
+  const oldTestSetup = saved.apiUrl === 'http://127.0.0.1:18787' && saved.apiToken === 'test-token';
+  const apiUrl = !saved.apiUrl || oldTestSetup ? DEFAULT_SYNC_API_URL : saved.apiUrl;
+  const apiToken = oldTestSetup ? '' : saved.apiToken ?? '';
+  const connected = Boolean(apiUrl && apiToken);
   const state = {
-    apiUrl: saved.apiUrl ?? '',
-    apiToken: saved.apiToken ?? '',
+    apiUrl,
+    apiToken,
     snapshot: cachedSnapshot,
     lastSuccessfulSync: saved.lastSuccessfulSync ?? null,
     error: cachedSnapshot && !connected

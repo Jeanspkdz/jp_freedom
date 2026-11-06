@@ -91,6 +91,7 @@ test('without a valid snapshot, management reports inactive protection and leave
 
   assert.match(harness.nodes.get('protection-state').textContent, /inactive/i);
   assert.match(harness.nodes.get('sync-state').textContent, /not connected|not synced/i);
+  assert.match(harness.nodes.get('api-url').value, /jpfreedomsync\.compute\./);
   assert.deepEqual(
     ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com'].map(domain => harness.nodes.get(`domain-${domain}`).checked),
     [true, true, true, true, true],
@@ -102,7 +103,7 @@ test('without a valid snapshot, management reports inactive protection and leave
 });
 
 test('an unreachable local test API explains how to restore the connection', async () => {
-  const harness = createHarness({ apiUrl: 'http://127.0.0.1:18787', apiToken: 'test-token' });
+  const harness = createHarness({ apiUrl: 'http://127.0.0.1:18787', apiToken: 'local-token' });
 
   await initializeManagement({
     ...harness,
@@ -112,6 +113,16 @@ test('an unreachable local test API explains how to restore the connection', asy
   assert.equal(harness.nodes.get('sync-state').textContent, 'Offline — no plan has synced yet.');
   assert.match(harness.nodes.get('sync-error').textContent, /local sync API at 127\.0\.0\.1:18787.*start the local test server/i);
   assert.match(harness.nodes.get('sync-error').textContent, /deployed Sync API URL from Android settings/i);
+});
+
+test('the obsolete sample connection is cleared for the deployed Neon API', async () => {
+  const harness = createHarness({ apiUrl: 'http://127.0.0.1:18787', apiToken: 'test-token' });
+
+  await initializeManagement({ ...harness, fetchImpl: async () => { throw new Error('unexpected request'); } });
+
+  assert.match(harness.nodes.get('api-url').value, /jpfreedomsync\.compute\./);
+  assert.equal(harness.nodes.get('api-token').value, '');
+  assert.match(harness.nodes.get('sync-state').textContent, /not connected/i);
 });
 
 test('management initializes from browser globals when called without explicit arguments', async () => {

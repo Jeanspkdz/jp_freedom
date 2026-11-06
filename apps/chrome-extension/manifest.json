@@ -10,7 +10,7 @@
     "128": "icons/app-128.png"
   },
   "permissions": ["storage", "alarms", "notifications", "declarativeNetRequest"],
-  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*", "https://br-floral-block-bddjl0rs-jpfreedomsync.compute.c-8.us-east-2.aws.neon.tech/*"],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": { "service_worker": "src/service-worker.js", "type": "module" },
   "action": {
