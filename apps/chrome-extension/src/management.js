@@ -99,6 +99,9 @@ function render(documentRef, state, now) {
   const active = Boolean(current);
   const currentBlockId = current?.id ?? null;
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  documentRef.getElementById('today-intro-date').textContent = now.toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric',
+  });
   renderDayPlan(documentRef, snapshot, now, 'today', currentBlockId);
   renderDayPlan(documentRef, snapshot, tomorrow, 'tomorrow', currentBlockId);
   const displayedDomains = snapshot
@@ -215,6 +218,25 @@ export async function initializeManagement({
   };
   const permissionState = documentRef.getElementById('permission-state');
   const grantSiteAccess = documentRef.getElementById('grant-site-access');
+  const views = ['plan', 'sites', 'connection'];
+  const showView = selected => {
+    for (const view of views) {
+      const active = view === selected;
+      const tab = documentRef.getElementById(`tab-${view}`);
+      documentRef.getElementById(`view-${view}`).hidden = !active;
+      tab.classList?.toggle('is-selected', active);
+      if (active) tab.setAttribute?.('aria-current', 'page');
+      else tab.removeAttribute?.('aria-current');
+    }
+  };
+  for (const view of views) {
+    documentRef.getElementById(`tab-${view}`).addEventListener('click', () => showView(view));
+  }
+  documentRef.getElementById('show-tomorrow').addEventListener('click', () => {
+    const panel = documentRef.getElementById('tomorrow-plan');
+    panel.hidden = !panel.hidden;
+    documentRef.getElementById('show-tomorrow').setAttribute?.('aria-expanded', String(!panel.hidden));
+  });
 
   documentRef.getElementById('api-url').value = state.apiUrl;
   documentRef.getElementById('api-token').value = state.apiToken;
@@ -413,7 +435,10 @@ export async function initializeManagement({
     await chromeApi.storage.local.set({ apiUrl: state.apiUrl, apiToken: state.apiToken });
     await sync();
   });
-  documentRef.getElementById('sync-now').addEventListener('click', sync);
+  documentRef.getElementById('sync-now').addEventListener('click', async () => {
+    await sync();
+    if (!state.connected || state.error) showView('connection');
+  });
 
   await updateRules();
   if (state.connected) await sync();

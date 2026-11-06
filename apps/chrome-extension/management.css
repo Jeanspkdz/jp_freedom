@@ -134,3 +134,91 @@ button:disabled { opacity: .55; }
   .domain-input-row { flex-direction: column; }
   .domain-input-row button { width: 100%; }
 }
+
+/* Management views share the app palette, but give each task its own space. */
+:root {
+  background: #f7f6f6;
+  color: #0a0a0e;
+  --surface: #fffefe;
+  --muted: #36363d;
+  --line: #d4d4da;
+  --line-soft: #e3e3e7;
+  --amber: #a65608;
+  --amber-soft: #f9e0b4;
+  --on-amber-soft: #603300;
+}
+
+.app-shell { display: block; width: min(1100px, calc(100% - 64px)); padding: 0 0 80px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; gap: 24px; min-height: 96px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.brand { display: flex; gap: 14px; align-items: center; font-family: var(--display-font); font-size: 1.55rem; font-weight: 700; }
+.brand img { width: 44px; height: 44px; border-radius: 12px; }
+.header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 20px; }
+#sync-state { max-width: 280px; color: var(--muted); font-size: .88rem; text-align: right; }
+#sync-now { min-height: 42px; padding: 8px 20px; }
+.view-nav { display: flex; gap: 36px; margin-top: 20px; border-bottom: 1px solid var(--line); }
+.view-tab { min-height: 50px; padding: 0 4px 12px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-family: "JP Roboto", Roboto, Arial, sans-serif; font-size: 1rem; font-weight: 600; }
+.view-tab:hover:not(:disabled) { filter: none; color: var(--amber); }
+.view-tab.is-selected { border-bottom-color: var(--amber); color: var(--amber); }
+.view-panel { max-width: 100%; padding-top: 42px; }
+
+.plan-intro { margin-bottom: 28px; }
+#today-intro-date { margin-bottom: 8px; color: var(--muted); font-size: .95rem; text-transform: capitalize; }
+.plan-intro h1 { font-size: clamp(2.5rem, 4.5vw, 3.5rem); }
+#protection-state { max-width: 70ch; margin-top: 12px; text-align: left; }
+.focus-board { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; min-height: 94px; padding: 18px 24px; border-radius: 14px; }
+.focus-main { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 24px; }
+.focus-main h2 { font-size: .85rem; }
+#current-block { margin: 0; font-family: "JP Roboto", Roboto, Arial, sans-serif; font-size: clamp(1.2rem, 2.5vw, 1.55rem); letter-spacing: -.01em; }
+#planned-end { font-size: .88rem; }
+.day-plans { display: block; max-width: 920px; margin-top: 44px; }
+.day-plan { border-bottom: 0; padding: 0; }
+.day-plan-header { margin-bottom: 10px; }
+.day-plan-header h2 { font-size: 1.55rem; }
+.day-plan-list { display: block; margin-top: 0; }
+.day-plan-row { grid-template-columns: 180px minmax(0, 1fr) 110px; gap: 22px; min-height: 62px; padding: 10px 16px; background: transparent; border-radius: 0; }
+.day-plan-row:first-child { border-top: 1px solid var(--line-soft); }
+.day-plan-row.is-current { border-radius: 10px; border-bottom-color: transparent; }
+.day-plan-time { font-size: .94rem; }
+.day-plan-name { font-weight: 500; }
+.day-plan-status { text-align: right; }
+.tomorrow-link { display: inline-flex; align-items: center; gap: 12px; margin-top: 28px; padding: 8px 0; border-radius: 0; background: transparent; color: var(--amber); font-family: var(--display-font); font-size: 1.2rem; }
+.tomorrow-link:hover:not(:disabled) { filter: none; text-decoration: underline; text-underline-offset: 5px; }
+.tomorrow-link + .day-plan { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
+
+.blocklist { width: min(100%, 760px); margin: 0; padding: 0; border: 0; }
+.blocklist h1 { font-size: clamp(2.35rem, 4vw, 3.2rem); }
+.section-description { margin-top: 12px; }
+.permission-line { margin-top: 24px; padding: 16px 18px; border: 0; border-radius: 12px; background: var(--amber-soft); }
+#permission-state { font-size: .9rem; }
+#common-sites, #custom-sites { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+fieldset { margin-top: 34px; }
+#add-domain-form { max-width: 640px; margin-top: 38px; }
+
+.connection-rail { display: block; width: min(100%, 620px); margin: 0; padding: 0; border: 0; }
+.sync { padding-bottom: 28px; }
+.sync h2, .connection h2 { font-size: 1.55rem; }
+#last-sync { margin-top: 12px; }
+.connection { padding-top: 30px; }
+.connection > p { max-width: 64ch; }
+#settings-form { max-width: 520px; }
+#settings-form button { width: auto; }
+
+@media (max-width: 700px) {
+  .app-shell { width: min(100% - 32px, 560px); }
+  .page-header { min-height: 76px; }
+  .brand { font-size: 1.15rem; }
+  .brand img { width: 36px; height: 36px; }
+  .header-actions { gap: 10px; }
+  #sync-state { max-width: 145px; font-size: .74rem; line-height: 1.3; }
+  #sync-now { min-height: 40px; padding: 7px 12px; font-size: .82rem; }
+  .view-nav { gap: 16px; overflow-x: auto; }
+  .view-tab { flex: none; font-size: .92rem; }
+  .view-panel { padding-top: 30px; }
+  .focus-main { display: block; }
+  #current-block { margin-top: 6px; }
+  .day-plan-row { grid-template-columns: minmax(96px, auto) minmax(0, 1fr); gap: 7px 12px; }
+  .day-plan-status { grid-column: 2; text-align: left; }
+  #common-sites, #custom-sites { grid-template-columns: 1fr; }
+  .domain-input-row { flex-direction: column; }
+  .domain-input-row button { width: 100%; }
+}

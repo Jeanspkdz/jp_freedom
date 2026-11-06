@@ -107,6 +107,27 @@ test('without a valid snapshot, management reports inactive protection and leave
   assert.deepEqual(harness.rules, []);
 });
 
+test('management navigation separates the plan, sites, and connection views', async () => {
+  const harness = createHarness();
+  await initializeManagement({ ...harness, fetchImpl: async () => { throw new Error('unexpected request'); } });
+
+  harness.nodes.get('tab-sites').listeners.get('click')();
+  assert.equal(harness.nodes.get('view-plan').hidden, true);
+  assert.equal(harness.nodes.get('view-sites').hidden, false);
+  assert.equal(harness.nodes.get('view-connection').hidden, true);
+
+  harness.nodes.get('tab-connection').listeners.get('click')();
+  assert.equal(harness.nodes.get('view-sites').hidden, true);
+  assert.equal(harness.nodes.get('view-connection').hidden, false);
+
+  harness.nodes.get('tab-plan').listeners.get('click')();
+  assert.equal(harness.nodes.get('view-plan').hidden, false);
+  const tomorrow = harness.documentRef.getElementById('tomorrow-plan');
+  tomorrow.hidden = true;
+  harness.nodes.get('show-tomorrow').listeners.get('click')();
+  assert.equal(tomorrow.hidden, false);
+});
+
 test('an unreachable local test API explains how to restore the connection', async () => {
   const harness = createHarness({ apiUrl: 'http://127.0.0.1:18787', apiToken: 'local-token' });
 
