@@ -168,6 +168,8 @@ fun FocusApp(
             restrictionActive = restrictionActive,
             hasSyncKey = syncConfiguration.hasWriteToken,
             syncStatus = syncState.status,
+            accessibilityEnabled = accessibilityEnabled,
+            exactAlarmsAllowed = exactAlarmsAllowed,
             onSelectToday = { dayOffset = 0 },
             onSelectTomorrow = { dayOffset = 1 },
             onOpenSettings = { page = AppPage.SETTINGS },

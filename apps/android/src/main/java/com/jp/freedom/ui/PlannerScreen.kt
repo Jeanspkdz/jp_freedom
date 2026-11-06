@@ -76,6 +76,8 @@ fun PlannerScreen(
     restrictionActive: Boolean,
     hasSyncKey: Boolean,
     syncStatus: SyncStatus,
+    accessibilityEnabled: Boolean,
+    exactAlarmsAllowed: Boolean,
     onSelectToday: () -> Unit,
     onSelectTomorrow: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -194,6 +196,33 @@ fun PlannerScreen(
                 )
             }
 
+            if (!accessibilityEnabled || !exactAlarmsAllowed) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            when {
+                                !accessibilityEnabled && !exactAlarmsAllowed -> "App blocking is off, and focus blocks may start late."
+                                !accessibilityEnabled -> "App blocking is off. JP Freedom cannot restrict phone apps yet."
+                                else -> "Exact alarm access is off. Focus blocks may start late."
+                            },
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                        TextButton(onClick = onOpenSettings) { Text("Fix") }
+                    }
+                }
+            }
             if (restrictionActive) {
                 RestrictionBanner(
                     remainingBlocks = (settings.requiredBlockCount - targetCount).coerceAtLeast(0),
