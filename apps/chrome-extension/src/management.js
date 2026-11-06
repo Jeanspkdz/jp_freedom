@@ -143,19 +143,21 @@ function render(documentRef, state, now) {
   grantSiteAccess.hidden = missingDomains.length === 0;
 
   if (!snapshot) {
-    protection.textContent = 'Protection inactive — no valid plan has synced.';
+    protection.textContent = 'Protection inactive. No valid plan has synced.';
     sync.textContent = !connected
-      ? 'Not connected — enter your sync API details.'
-      : error ? 'Offline — no plan has synced yet.' : 'Connected — waiting for first sync.';
+      ? 'Not connected. Enter your sync API details.'
+      : error ? 'Offline. No plan has synced yet.' : 'Connected. Waiting for first sync.';
     currentBlock.textContent = 'No active focus block';
-    plannedEnd.textContent = 'Planned end: —';
+    plannedEnd.hidden = true;
+    plannedEnd.textContent = '';
     return;
   }
 
   protection.textContent = 'Protection is active when a focus block is scheduled.';
-  sync.textContent = error || !connected ? 'Offline — using cached plan.' : 'Synced — using latest plan.';
+  sync.textContent = error || !connected ? 'Offline. Using cached plan.' : 'Synced. Using latest plan.';
   currentBlock.textContent = current?.name ?? 'No active focus block';
-  plannedEnd.textContent = current ? `Planned end: ${current.endTime}` : 'Planned end: —';
+  plannedEnd.hidden = !current;
+  plannedEnd.textContent = current ? `Planned end: ${current.endTime}` : '';
 }
 
 function ensureCustomCheckbox(documentRef, state, domain) {
@@ -236,6 +238,7 @@ export async function initializeManagement({
     const panel = documentRef.getElementById('tomorrow-plan');
     panel.hidden = !panel.hidden;
     documentRef.getElementById('show-tomorrow').setAttribute?.('aria-expanded', String(!panel.hidden));
+    documentRef.querySelector?.('.tomorrow-link-label')?.replaceChildren?.(panel.hidden ? 'View tomorrow’s plan' : 'Hide tomorrow’s plan');
   });
 
   documentRef.getElementById('api-url').value = state.apiUrl;

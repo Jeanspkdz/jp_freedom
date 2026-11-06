@@ -8,7 +8,9 @@ export async function initializeBlockedPage({
   const { lastValidSnapshot } = await chromeApi.storage.local.get(['lastValidSnapshot']);
   const block = getCurrentAndNext(lastValidSnapshot, now()).current;
   documentRef.getElementById('blocked-activity').textContent = block?.name ?? 'No active focus block';
-  documentRef.getElementById('blocked-end').textContent = block ? `Planned end: ${block.endTime}` : 'Planned end: —';
+  const plannedEnd = documentRef.getElementById('blocked-end');
+  plannedEnd.hidden = !block;
+  plannedEnd.textContent = block ? `Planned end: ${block.endTime}` : '';
 }
 
 if (globalThis.document && globalThis.chrome) void initializeBlockedPage();

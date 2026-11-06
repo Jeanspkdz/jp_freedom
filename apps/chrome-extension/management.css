@@ -222,3 +222,38 @@ fieldset { margin-top: 34px; }
   .domain-input-row { flex-direction: column; }
   .domain-input-row button { width: 100%; }
 }
+
+/* The plan follows the same time-first rhythm as the Android agenda. */
+.plan-intro { margin-bottom: 34px; }
+.plan-intro h1 { letter-spacing: -.03em; }
+.focus-board { position: relative; justify-content: flex-start; min-height: 112px; padding: 22px 28px 22px 52px; }
+.focus-board::before { content: ""; position: absolute; left: 27px; top: 50%; width: 9px; height: 9px; border-radius: 50%; background: var(--amber); transform: translateY(-50%); }
+.focus-main { display: grid; gap: 3px; }
+.focus-main h2 { font-size: .82rem; letter-spacing: .01em; }
+#current-block { margin: 0; font-family: var(--display-font); font-size: clamp(1.45rem, 2.7vw, 1.85rem); line-height: 1.18; }
+#planned-end { margin-left: auto; font-variant-numeric: tabular-nums; }
+.day-plans { max-width: 920px; margin-top: 54px; }
+.day-plan-header { align-items: center; margin-bottom: 18px; }
+.day-plan-header h2 { font-size: 1.7rem; }
+.day-plan-header time { padding: 7px 11px; border-radius: 999px; background: var(--surface); font-size: .83rem; font-variant-numeric: tabular-nums; }
+.day-plan-empty { position: relative; min-height: 94px; margin: 0; padding: 34px 22px 25px 52px; border-radius: 14px; background: var(--surface); color: var(--muted); }
+.day-plan-empty::before { content: ""; position: absolute; left: 26px; top: 25px; bottom: 25px; width: 1px; background: var(--line); }
+.day-plan-empty::after { content: ""; position: absolute; left: 22px; top: 39px; width: 9px; height: 9px; border: 2px solid var(--amber); border-radius: 50%; background: var(--surface); }
+.day-plan-list:not(:empty) { border-top: 1px solid var(--line-soft); }
+.day-plan-row { border-radius: 0; }
+.day-plan-row:first-child { border-top: 0; }
+.tomorrow-link { display: flex; justify-content: space-between; width: 100%; min-height: 68px; margin-top: 28px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--amber); font-family: "JP Roboto", Roboto, Arial, sans-serif; font-size: .96rem; font-weight: 700; }
+.tomorrow-link:hover:not(:disabled) { background: var(--amber-soft); text-decoration: none; }
+.tomorrow-link-icon { display: inline-block; width: 18px; height: 18px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg) scale(.65); transition: transform 180ms ease-out; }
+.tomorrow-link[aria-expanded="true"] .tomorrow-link-icon { transform: rotate(45deg) scale(.65); }
+.tomorrow-link + .day-plan { margin-top: 26px; padding-top: 0; border-top: 0; }
+
+@media (max-width: 700px) {
+  .focus-board { align-items: flex-start; padding: 22px 20px 22px 44px; }
+  .focus-board::before { left: 20px; top: 33px; }
+  #planned-end { margin-left: 0; }
+  .day-plans { margin-top: 42px; }
+  .day-plan-empty { padding-left: 46px; }
+  .day-plan-empty::before { left: 23px; }
+  .day-plan-empty::after { left: 19px; }
+}

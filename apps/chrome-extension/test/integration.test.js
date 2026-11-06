@@ -136,7 +136,7 @@ test('an unreachable local test API explains how to restore the connection', asy
     fetchImpl: async () => { throw new TypeError('fetch failed'); },
   });
 
-  assert.equal(harness.nodes.get('sync-state').textContent, 'Offline — no plan has synced yet.');
+  assert.equal(harness.nodes.get('sync-state').textContent, 'Offline. No plan has synced yet.');
   assert.match(harness.nodes.get('sync-error').textContent, /local sync API at 127\.0\.0\.1:18787.*start the local test server/i);
   assert.match(harness.nodes.get('sync-error').textContent, /deployed Sync API URL from Android settings/i);
 });
