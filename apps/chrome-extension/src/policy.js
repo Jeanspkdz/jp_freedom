@@ -50,6 +50,35 @@ export function isEveningPlanIncomplete(snapshot, now = new Date()) {
   return plannedCount < snapshot.settings.requiredBlockCount;
 }
 
+export function getRequiredPlanDate(eveningDate) {
+  if (eveningDate.getDay() === 6) return null;
+  return localDateKey(new Date(
+    eveningDate.getFullYear(),
+    eveningDate.getMonth(),
+    eveningDate.getDate() + 1,
+  ));
+}
+
+export function getPlanningReminderStatus(snapshot, now = new Date(), requiredPlanDate = null) {
+  const settings = snapshot?.settings;
+  if (!Array.isArray(snapshot?.blocks)
+    || !Number.isInteger(settings?.requiredBlockCount)
+    || settings.requiredBlockCount < 1
+    || !['21:00', '22:00', '23:00'].includes(settings.eveningCutoff)) return null;
+
+  let planDate = requiredPlanDate;
+  if (!planDate) {
+    const [hours, minutes] = settings.eveningCutoff.split(':').map(Number);
+    if (now.getHours() * 60 + now.getMinutes() < hours * 60 + minutes) return null;
+    planDate = getRequiredPlanDate(now);
+  }
+  if (!planDate) return null;
+
+  const plannedCount = snapshot.blocks.filter(block => block.date === planDate).length;
+  if (plannedCount >= settings.requiredBlockCount) return null;
+  return { planDate, plannedCount, requiredBlockCount: settings.requiredBlockCount };
+}
+
 export function makeDesktopBlockRules(snapshot, activeBlockId) {
   if (!snapshot || !activeBlockId) return [];
   const domains = [...new Set(snapshot.desktopBlockedDomains ?? [])];

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Sync focus plans and block selected desktop sites during focus blocks.",
   "minimum_chrome_version": "111",
-  "permissions": ["storage", "alarms", "declarativeNetRequest"],
+  "permissions": ["storage", "alarms", "notifications", "declarativeNetRequest"],
   "host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
   "background": { "service_worker": "src/service-worker.js", "type": "module" },
   "action": {},
