@@ -291,12 +291,17 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        Text(
+                            "La sincronización usa la clave privada ya guardada en este teléfono. No tienes que volver a ingresarla.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         OutlinedButton(
                             onClick = onSyncNow,
                             enabled = syncConfiguration.hasWriteToken && syncStatus != SyncStatus.SYNCING,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(if (syncStatus == SyncStatus.ERROR) "Reintentar sincronización" else "Sincronizar ahora")
+                            Text(if (syncStatus == SyncStatus.ERROR) "Reintentar sincronización" else "Sincronizar cambios guardados")
                         }
                         Text(
                             if (syncRevision >= 0) {
