@@ -47,11 +47,13 @@ function formatPlanTime(value) {
 function renderDayPlan(documentRef, snapshot, date, prefix, currentBlockId) {
   const dateElement = documentRef.getElementById(`${prefix}-plan-date`);
   const emptyElement = documentRef.getElementById(`${prefix}-plan-empty`);
+  const art = documentRef.getElementById(`${prefix}-plan-art`);
   const list = documentRef.getElementById(`${prefix}-plan-list`);
   dateElement.textContent = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   list.replaceChildren();
 
   if (!snapshot) {
+    art.hidden = false;
     emptyElement.hidden = false;
     emptyElement.textContent = 'Sync to load the plan from your phone.';
     return;
@@ -62,6 +64,7 @@ function renderDayPlan(documentRef, snapshot, date, prefix, currentBlockId) {
     .filter(block => block.date === dateKey)
     .sort((first, second) => first.startTime.localeCompare(second.startTime));
   emptyElement.hidden = blocks.length > 0;
+  art.hidden = blocks.length > 0;
   emptyElement.textContent = `No blocks planned for ${prefix}.`;
 
   for (const block of blocks) {
@@ -375,6 +378,9 @@ export async function initializeManagement({
       await updateRules();
       return;
     }
+    const syncButton = documentRef.getElementById('sync-now');
+    syncButton.classList?.add('is-syncing');
+    syncButton.setAttribute?.('aria-busy', 'true');
     show();
     try {
       let payload = await readSnapshot(state.apiUrl, state.apiToken, fetchImpl);
@@ -411,8 +417,11 @@ export async function initializeManagement({
         ? connectionError(state.apiUrl)
         : (cause?.message || 'Sync failed. Check the API URL and bearer token.');
       await updateRules();
+    } finally {
+      syncButton.classList?.remove('is-syncing');
+      syncButton.removeAttribute?.('aria-busy');
+      show();
     }
-    show();
   };
 
   documentRef.getElementById('settings-form').addEventListener('submit', async event => {
