@@ -9,7 +9,7 @@ A named choice of apps and websites allowed on the Android phone during a focus 
 _Avoid_: Phone blocklist
 
 **Desktop site blocklist**:
-A phone-editable set of websites that the Chrome extension blocks during a focus session. It initially includes Facebook, Instagram, TikTok, X, YouTube, and Reddit; WhatsApp Web remains available.
+A shared set of websites that can be edited from Android or the Chrome extension and that Chrome blocks during a focus session. Facebook, Instagram, TikTok, X, and Reddit are selected initially; YouTube and WhatsApp Web remain available unless selected by the user. During a focus session, selected sites cannot be removed, but additional sites can be added; outside a session, the list can be edited freely.
 _Avoid_: Access profile
 
 **Focus session**:
@@ -36,7 +36,7 @@ A restriction on most phone use after a chosen start time of 9, 10, or 11 p.m. w
 A Sunday free from scheduled focus sessions unless the user chooses to plan them. Sunday evening still requires planning Monday.
 
 **Offline enforcement**:
-Continued blocking on a disconnected device until the scheduled end of a focus session it has already received. Marking its planned block Finished on the phone releases the phone immediately; the extension receives that change when it reconnects.
+Continued blocking on a disconnected device until the scheduled end of a focus session it has already received. Marking its planned block Finished on the phone releases the phone immediately; Chrome receives that change through background sync when it reconnects, even if the management page is closed.
 
 **Offline planning**:
 Creating or editing a day plan on the phone without internet access. The phone evaluates its own evening restriction from that plan and syncs changes when connectivity returns.

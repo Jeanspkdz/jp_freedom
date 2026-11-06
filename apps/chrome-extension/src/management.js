@@ -1,5 +1,6 @@
 import { applySnapshotRules } from './enforcement.js';
 import { getCurrentAndNext } from './policy.js';
+import { readSnapshot, snapshotEndpoint, validSnapshotResponse } from './sync-client.js';
 
 const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync', 'lastSnapshotRevision'];
 const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
@@ -9,64 +10,6 @@ const COMMON_LABELS = new Map([
   ['facebook.com', 'Facebook'], ['instagram.com', 'Instagram'], ['tiktok.com', 'TikTok'],
   ['x.com', 'X'], ['reddit.com', 'Reddit'], ['youtube.com', 'YouTube'], ['web.whatsapp.com', 'WhatsApp Web'],
 ]);
-const ACCESS_PROFILES = ['ESSENTIALS_ONLY', 'ESSENTIALS_WITH_CHATGPT', 'ESSENTIALS_WITH_CHATGPT_AND_SEARCH'];
-const COMPLETION_STATUSES = ['NOT_STARTED', 'PARTLY_DONE', 'NOT_DONE', 'FINISHED'];
-
-function endpointFor(apiUrl) {
-  let url;
-  try {
-    url = new URL(apiUrl);
-  } catch {
-    throw new Error('Enter a valid sync API URL.');
-  }
-  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Use an HTTP or HTTPS sync API URL.');
-  const localHttp = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-  if (url.protocol !== 'https:' && !localHttp) throw new Error('Use HTTPS for the sync API. HTTP is allowed for localhost development.');
-  if (url.username || url.password || url.search || url.hash) {
-    throw new Error('Remove URL credentials, query parameters, and fragments; enter the bearer token separately.');
-  }
-  const base = url.href.replace(/\/+$/, '');
-  return base.endsWith('/v1/snapshot') ? base : `${base}/v1/snapshot`;
-}
-
-function validDateKey(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value ?? '')) return false;
-  const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-}
-
-function validTime(value) {
-  const match = /^(\d{2}):(\d{2})$/.exec(value ?? '');
-  return Boolean(match && Number(match[1]) < 24 && Number(match[2]) < 60);
-}
-
-function validSnapshot(snapshot) {
-  return snapshot?.version === 1
-    && Number.isInteger(snapshot.settings?.requiredBlockCount)
-    && snapshot.settings.requiredBlockCount > 0
-    && ['21:00', '22:00', '23:00'].includes(snapshot.settings?.eveningCutoff)
-    && Array.isArray(snapshot.desktopBlockedDomains)
-    && snapshot.desktopBlockedDomains.length <= 100
-    && snapshot.desktopBlockedDomains.every(domain => typeof domain === 'string' && DOMAIN_PATTERN.test(domain))
-    && Array.isArray(snapshot.blocks)
-    && snapshot.blocks.length <= 1000
-    && snapshot.blocks.every(block => typeof block.id === 'string'
-      && block.id.length > 0
-      && validDateKey(block.date)
-      && typeof block.name === 'string'
-      && validTime(block.startTime)
-      && validTime(block.endTime)
-      && ACCESS_PROFILES.includes(block.accessProfile)
-      && COMPLETION_STATUSES.includes(block.completionStatus));
-}
-
-function validResponse(payload) {
-  return Number.isInteger(payload?.revision)
-    && payload.revision >= 0
-    && (payload.updatedAt === null || typeof payload.updatedAt === 'string')
-    && validSnapshot(payload.snapshot);
-}
 
 function formatLocalTime(value) {
   if (!value) return 'Never';
@@ -154,7 +97,9 @@ export async function initializeManagement({
   now = () => new Date(),
 }) {
   const saved = await chromeApi.storage.local.get(STORAGE_KEYS);
-  const cachedSnapshot = validSnapshot(saved.lastValidSnapshot) ? saved.lastValidSnapshot : null;
+  const cachedSnapshot = validSnapshotResponse({ revision: saved.lastSnapshotRevision ?? 0, updatedAt: saved.lastSuccessfulSync ?? null, snapshot: saved.lastValidSnapshot })
+    ? saved.lastValidSnapshot
+    : null;
   const connected = Boolean(saved.apiUrl && saved.apiToken);
   const state = {
     apiUrl: saved.apiUrl ?? '',
@@ -192,17 +137,7 @@ export async function initializeManagement({
     await applySnapshotRules(chromeApi, state.snapshot, now());
     show();
   };
-  const readLatest = async endpoint => {
-    const response = await fetchImpl(endpoint, {
-      method: 'GET',
-      headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}` },
-      cache: 'no-store', credentials: 'omit', redirect: 'error',
-    });
-    if (!response.ok) throw new Error(`Sync failed with HTTP ${response.status}. Check the API and try again.`);
-    const payload = await response.json();
-    if (!validResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
-    return payload;
-  };
+  const readLatest = () => readSnapshot(state.apiUrl, state.apiToken, fetchImpl);
   const persistDomainIntent = async (domain, included, initialDomains = state.displayedDomains) => {
     if (!state.connected || !state.online || !state.snapshot || state.saving) return;
     const current = getCurrentAndNext(state.snapshot, now()).current;
@@ -222,7 +157,7 @@ export async function initializeManagement({
     };
     let snapshot = { ...state.snapshot, desktopBlockedDomains: setDomain(initialDomains) };
     try {
-      const endpoint = endpointFor(state.apiUrl);
+      const endpoint = snapshotEndpoint(state.apiUrl);
       let response = await fetchImpl(endpoint, {
         method: 'PUT',
         headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
@@ -230,7 +165,7 @@ export async function initializeManagement({
         cache: 'no-store', credentials: 'omit', redirect: 'error',
       });
       if (response.status === 409) {
-        const latest = await readLatest(endpoint);
+        const latest = await readLatest();
         const latestCurrent = getCurrentAndNext(latest.snapshot, now()).current;
         if (latestCurrent && !included && latest.snapshot.desktopBlockedDomains.includes(domain)) {
           state.snapshot = latest.snapshot;
@@ -253,7 +188,7 @@ export async function initializeManagement({
         ? 'The blocklist changed again. Sync and retry your change.'
         : `Could not save the blocklist (HTTP ${response.status}).`);
       const payload = await response.json();
-      if (!validResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+      if (!validSnapshotResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
       state.snapshot = payload.snapshot;
       state.revision = payload.revision;
       state.newEmptyBlocklist = false;
@@ -326,25 +261,29 @@ export async function initializeManagement({
     }
     show();
     try {
-      const endpoint = endpointFor(state.apiUrl);
-      const response = await fetchImpl(endpoint, {
-        method: 'GET',
-        headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}` },
-        cache: 'no-store',
-        credentials: 'omit',
-        redirect: 'error',
-      });
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) throw new Error('Sync rejected the token. Check the bearer token and try again.');
-        if (response.status === 404) throw new Error('Sync API not found. Check the API base URL.');
-        throw new Error(`Sync failed with HTTP ${response.status}. Check the API and try again.`);
+      let payload = await readSnapshot(state.apiUrl, state.apiToken, fetchImpl);
+      const isNewEmptySnapshot = payload.revision === 0
+        && payload.updatedAt === null
+        && payload.snapshot.desktopBlockedDomains.length === 0;
+      if (isNewEmptySnapshot) {
+        const initializedSnapshot = { ...payload.snapshot, desktopBlockedDomains: [...DEFAULT_DESKTOP_DOMAINS] };
+        const response = await fetchImpl(snapshotEndpoint(state.apiUrl), {
+          method: 'PUT',
+          headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: payload.revision, snapshot: initializedSnapshot }),
+          cache: 'no-store', credentials: 'omit', redirect: 'error',
+        });
+        if (response.status === 409) payload = await readSnapshot(state.apiUrl, state.apiToken, fetchImpl);
+        else {
+          if (!response.ok) throw new Error(`Could not initialize the desktop blocklist (HTTP ${response.status}).`);
+          payload = await response.json();
+          if (!validSnapshotResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+        }
       }
-      const payload = await response.json();
-      if (!validResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
       const syncedAt = now().toISOString();
       state.snapshot = payload.snapshot;
       state.revision = payload.revision;
-      state.newEmptyBlocklist = payload.revision === 0 && payload.updatedAt === null && payload.snapshot.desktopBlockedDomains.length === 0;
+      state.newEmptyBlocklist = false;
       state.online = true;
       state.lastSuccessfulSync = syncedAt;
       await chromeApi.storage.local.set({ lastValidSnapshot: state.snapshot, lastSuccessfulSync: syncedAt, lastSnapshotRevision: payload.revision });

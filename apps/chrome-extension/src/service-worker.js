@@ -1,4 +1,5 @@
 import { applySnapshotRules } from './enforcement.js';
+import { readSnapshot } from './sync-client.js';
 import {
   PLANNING_REMINDER_ALARM,
   PLANNING_REMINDER_CUTOFF_ALARM,
@@ -6,6 +7,9 @@ import {
 } from './reminder-scheduler.js';
 
 const STATE_ALARM = 'focus-state-refresh';
+const SNAPSHOT_SYNC_ALARM = 'snapshot-sync-refresh';
+let remoteRefreshInFlight = null;
+let focusRefreshQueue = Promise.resolve();
 
 export async function refreshPlanningReminders(chromeApi = globalThis.chrome, now = new Date(), alarmName = null) {
   let { lastValidSnapshot, planningReminderDate } = await chromeApi.storage.local.get([
@@ -44,31 +48,67 @@ function nextBoundary(snapshot, now) {
   return boundaries.length ? Math.min(...boundaries) : null;
 }
 
-export async function refreshFocusState(chromeApi = globalThis.chrome, now = new Date()) {
-  const { lastValidSnapshot } = await chromeApi.storage.local.get(['lastValidSnapshot']);
-  const snapshot = lastValidSnapshot?.version === 1 && Array.isArray(lastValidSnapshot.blocks)
-    ? lastValidSnapshot
-    : null;
-  await applySnapshotRules(chromeApi, snapshot, now);
+export function refreshFocusState(chromeApi = globalThis.chrome, now = new Date()) {
+  const refresh = async () => {
+    const { lastValidSnapshot, apiUrl, apiToken } = await chromeApi.storage.local.get(['lastValidSnapshot', 'apiUrl', 'apiToken']);
+    const snapshot = lastValidSnapshot?.version === 1 && Array.isArray(lastValidSnapshot.blocks)
+      ? lastValidSnapshot
+      : null;
+    await applySnapshotRules(chromeApi, snapshot, now);
 
-  await chromeApi.alarms.clear(STATE_ALARM);
-  if (snapshot) {
-    const boundary = nextBoundary(snapshot, now);
-    if (boundary) await chromeApi.alarms.create(STATE_ALARM, { when: boundary });
-    else await chromeApi.alarms.create(STATE_ALARM, { periodInMinutes: 1 });
-  }
-  await refreshPlanningReminders(chromeApi, now);
+    await chromeApi.alarms.clear(STATE_ALARM);
+    if (apiUrl && apiToken) await chromeApi.alarms.create(SNAPSHOT_SYNC_ALARM, { periodInMinutes: 1 });
+    else await chromeApi.alarms.clear(SNAPSHOT_SYNC_ALARM);
+    if (snapshot) {
+      const boundary = nextBoundary(snapshot, now);
+      if (boundary) await chromeApi.alarms.create(STATE_ALARM, { when: boundary });
+      else await chromeApi.alarms.create(STATE_ALARM, { periodInMinutes: 1 });
+    }
+    await refreshPlanningReminders(chromeApi, now);
+  };
+  focusRefreshQueue = focusRefreshQueue.then(refresh, refresh);
+  return focusRefreshQueue;
+}
+
+export async function refreshRemoteSnapshot(chromeApi = globalThis.chrome, fetchImpl = globalThis.fetch, now = new Date()) {
+  if (remoteRefreshInFlight) return remoteRefreshInFlight;
+  remoteRefreshInFlight = (async () => {
+    const { apiUrl, apiToken, lastSnapshotRevision = -1 } = await chromeApi.storage.local.get([
+      'apiUrl', 'apiToken', 'lastSnapshotRevision',
+    ]);
+    if (!apiUrl || !apiToken) return false;
+    try {
+      const payload = await readSnapshot(apiUrl, apiToken, fetchImpl);
+      if (payload.revision < lastSnapshotRevision) return false;
+      const lastSuccessfulSync = now.toISOString();
+      await chromeApi.storage.local.set({
+        lastValidSnapshot: payload.snapshot,
+        lastSnapshotRevision: payload.revision,
+        lastSuccessfulSync,
+      });
+      await refreshFocusState(chromeApi, now);
+      return true;
+    } catch {
+      // Keep enforcing the last valid cached snapshot until the API is reachable.
+      await refreshFocusState(chromeApi, now);
+      return false;
+    }
+  })().finally(() => { remoteRefreshInFlight = null; });
+  return remoteRefreshInFlight;
 }
 
 if (globalThis.chrome) {
   chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
   chrome.runtime.onInstalled.addListener(() => { void refreshFocusState(); });
-  chrome.runtime.onStartup.addListener(() => { void refreshFocusState(); });
+  chrome.runtime.onStartup.addListener(() => {
+    void refreshRemoteSnapshot().then(() => refreshFocusState());
+  });
   chrome.runtime.onMessage.addListener(message => {
     if (message?.type === 'refresh-focus-state') void refreshFocusState();
   });
   chrome.alarms.onAlarm.addListener(alarm => {
     if (alarm.name === STATE_ALARM) void refreshFocusState();
+    else if (alarm.name === SNAPSHOT_SYNC_ALARM) void refreshRemoteSnapshot();
     else if ([PLANNING_REMINDER_ALARM, PLANNING_REMINDER_CUTOFF_ALARM].includes(alarm.name)) {
       void refreshPlanningReminders(chrome, new Date(), alarm.name);
     }

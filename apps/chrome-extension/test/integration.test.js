@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { initializeManagement } from '../src/management.js';
 import { initializeBlockedPage } from '../src/blocked.js';
-import { refreshFocusState, refreshPlanningReminders } from '../src/service-worker.js';
+import { refreshFocusState, refreshPlanningReminders, refreshRemoteSnapshot } from '../src/service-worker.js';
 
 function createNode() {
   return {
@@ -92,12 +92,26 @@ test('without a valid snapshot, management reports inactive protection and leave
 });
 
 test('a new empty server snapshot starts with the common sites selected', async () => {
+  const now = new Date(2026, 10, 5, 10, 30);
   const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
-  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: [], blocks: [] };
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: [],
+    blocks: [{ id: 'focus', date: '2026-11-05', name: 'Study', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+  };
 
+  const writes = [];
   await initializeManagement({
     ...harness,
-    fetchImpl: async () => ({ ok: true, json: async () => ({ revision: 0, updatedAt: null, snapshot }) }),
+    now: () => now,
+    fetchImpl: async (_url, options) => {
+      if (options.method === 'PUT') {
+        writes.push(JSON.parse(options.body));
+        return { ok: true, json: async () => ({ revision: 1, updatedAt: '2026-11-05T10:30:00.000Z', snapshot: writes.at(-1).snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 0, updatedAt: null, snapshot }) };
+    },
   });
 
   assert.deepEqual(
@@ -106,6 +120,26 @@ test('a new empty server snapshot starts with the common sites selected', async 
   );
   assert.equal(harness.nodes.get('domain-youtube.com').checked, false);
   assert.equal(harness.nodes.get('domain-web.whatsapp.com').checked, false);
+  assert.deepEqual(writes[0].snapshot.desktopBlockedDomains, ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com']);
+  assert.deepEqual(harness.storage.lastValidSnapshot.desktopBlockedDomains, writes[0].snapshot.desktopBlockedDomains);
+  assert.equal(writes[0].expectedRevision, 0);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com']);
+});
+
+test('an intentionally empty list at a later revision stays empty', async () => {
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: [], blocks: [] };
+  const writes = [];
+  await initializeManagement({
+    ...harness,
+    fetchImpl: async (_url, options) => {
+      if (options.method === 'PUT') writes.push(JSON.parse(options.body));
+      return { ok: true, json: async () => ({ revision: 4, updatedAt: '2026-11-05T10:30:00.000Z', snapshot }) };
+    },
+  });
+
+  assert.equal(writes.length, 0);
+  assert.deepEqual(harness.rules, []);
 });
 
 test('selected sites cannot be removed during a focus block while new sites save immediately', async () => {
@@ -419,6 +453,52 @@ test('offline enforcement refreshes its dynamic rules at the cached block bounda
   await refreshFocusState(harness.chromeApi, new Date(2026, 10, 5, 10, 0));
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['youtube.com']);
   assert.equal(harness.alarms.get('focus-state-refresh').when, new Date(2026, 10, 5, 11, 0).getTime());
+});
+
+test('the background worker polls for Android completion and releases rules with the management page closed', async () => {
+  const now = new Date(2026, 10, 5, 10, 30);
+  const active = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [{ id: 'focus', date: '2026-11-05', name: 'Study', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+  };
+  const finished = { ...active, blocks: [{ ...active.blocks[0], completionStatus: 'FINISHED' }] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: active, lastSnapshotRevision: 1 });
+  await refreshFocusState(harness.chromeApi, now);
+  assert.equal(harness.alarms.get('snapshot-sync-refresh').periodInMinutes, 1);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+
+  await refreshRemoteSnapshot(harness.chromeApi, async () => ({
+    ok: true,
+    json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: finished }),
+  }), now);
+
+  assert.deepEqual(harness.storage.lastValidSnapshot, finished);
+  assert.equal(harness.storage.lastSnapshotRevision, 2);
+  assert.deepEqual(harness.rules, []);
+});
+
+test('overlapping background refreshes share one request and cannot replace a newer cached revision', async () => {
+  const now = new Date(2026, 10, 5, 10, 30);
+  const cached = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: cached, lastSnapshotRevision: 8 });
+  let requests = 0;
+  let release;
+  const fetchImpl = () => {
+    requests += 1;
+    return new Promise(resolve => { release = () => resolve({ ok: true, json: async () => ({ revision: 7, updatedAt: now.toISOString(), snapshot: { ...cached, desktopBlockedDomains: [] } }) }); });
+  };
+
+  const first = refreshRemoteSnapshot(harness.chromeApi, fetchImpl, now);
+  const second = refreshRemoteSnapshot(harness.chromeApi, fetchImpl, now);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(requests, 1);
+  release();
+  await Promise.all([first, second]);
+
+  assert.equal(harness.storage.lastSnapshotRevision, 8);
+  assert.deepEqual(harness.storage.lastValidSnapshot, cached);
 });
 
 test('the worker reminds from cached plan data offline without installing browsing blocks', async () => {
