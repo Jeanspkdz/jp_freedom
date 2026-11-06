@@ -4,6 +4,8 @@ import {
   getActiveBlock,
   getNextBlock,
   isEveningPlanIncomplete,
+  getPlanningReminderStatus,
+  getRequiredPlanDate,
   makeDesktopBlockRules,
 } from '../src/policy.js';
 
@@ -56,6 +58,32 @@ test('desktop evening reminders target Monday on Sunday and never block browsing
       { id: 'm3', date: '2026-11-09', name: 'Three', startTime: '11:00', endTime: '12:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' },
     ],
   }, sundayAtCutoff), false);
+});
+
+test('planning reminders start at the configured cutoff and follow the required block count', () => {
+  for (const [eveningCutoff, hour] of [['21:00', 21], ['22:00', 22], ['23:00', 23]]) {
+    const configured = { ...snapshot, settings: { requiredBlockCount: 3, eveningCutoff } };
+    assert.equal(getPlanningReminderStatus(configured, new Date(2026, 10, 5, hour - 1, 59)), null);
+    assert.deepEqual(getPlanningReminderStatus(configured, new Date(2026, 10, 5, hour)), {
+      planDate: '2026-11-06', plannedCount: 0, requiredBlockCount: 3,
+    });
+  }
+  const complete = {
+    ...snapshot,
+    blocks: [
+      { date: '2026-11-06' }, { date: '2026-11-06' }, { date: '2026-11-06' },
+    ],
+  };
+  assert.equal(getPlanningReminderStatus(complete, new Date(2026, 10, 5, 21)), null);
+});
+
+test('Saturday has no required plan and Sunday evening requires Monday', () => {
+  assert.equal(getRequiredPlanDate(new Date(2026, 10, 7, 21)), null);
+  assert.deepEqual(getPlanningReminderStatus(snapshot, new Date(2026, 10, 7, 21)), null);
+  assert.equal(getRequiredPlanDate(new Date(2026, 10, 8, 21)), '2026-11-09');
+  assert.deepEqual(getPlanningReminderStatus(snapshot, new Date(2026, 10, 8, 21)), {
+    planDate: '2026-11-09', plannedCount: 0, requiredBlockCount: 3,
+  });
 });
 
 test('blocklist rules cover configured hosts and are empty outside a focus block', () => {

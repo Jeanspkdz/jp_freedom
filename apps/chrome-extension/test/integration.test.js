@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { initializeManagement } from '../src/management.js';
 import { initializeBlockedPage } from '../src/blocked.js';
-import { refreshFocusState } from '../src/service-worker.js';
+import { refreshFocusState, refreshPlanningReminders } from '../src/service-worker.js';
 
 function createNode() {
   return {
@@ -25,6 +25,8 @@ function createHarness(initialStorage = {}) {
   const nodes = new Map();
   const storage = { ...initialStorage };
   const rules = [];
+  const alarms = new Map();
+  const notifications = { shown: [], cleared: [] };
   const chromeApi = {
     storage: {
       local: {
@@ -35,6 +37,18 @@ function createHarness(initialStorage = {}) {
           Object.assign(storage, values);
         },
       },
+    },
+    alarms: {
+      records: alarms,
+      async get(name) { return alarms.get(name); },
+      async create(name, options) { alarms.set(name, { name, ...options }); },
+      async clear(name) { return alarms.delete(name); },
+    },
+    notifications: {
+      shown: notifications.shown,
+      cleared: notifications.cleared,
+      async create(id, options) { notifications.shown.push({ id, options }); return id; },
+      async clear(id) { notifications.cleared.push(id); return true; },
     },
     declarativeNetRequest: {
       async getDynamicRules() {
@@ -57,7 +71,7 @@ function createHarness(initialStorage = {}) {
     createElement() { return createNode(); },
     createTextNode(textContent) { return { textContent }; },
   };
-  return { chromeApi, documentRef, nodes, rules, storage };
+  return { chromeApi, documentRef, nodes, rules, storage, alarms, notifications };
 }
 
 test('without a valid snapshot, management reports inactive protection and leaves browsing unblocked', async () => {
@@ -398,18 +412,46 @@ test('offline enforcement refreshes its dynamic rules at the cached block bounda
     }],
   };
   const harness = createHarness({ lastValidSnapshot: snapshot });
-  let alarm = null;
-  harness.chromeApi.alarms = {
-    async clear() { alarm = null; },
-    async create(name, options) { alarm = { name, options }; },
-  };
-
   await refreshFocusState(harness.chromeApi, now);
   assert.deepEqual(harness.rules, []);
-  assert.equal(alarm.name, 'focus-state-refresh');
-  assert.equal(alarm.options.when, new Date(2026, 10, 5, 10, 0).getTime());
+  assert.equal(harness.alarms.get('focus-state-refresh').when, new Date(2026, 10, 5, 10, 0).getTime());
 
   await refreshFocusState(harness.chromeApi, new Date(2026, 10, 5, 10, 0));
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['youtube.com']);
-  assert.equal(alarm.options.when, new Date(2026, 10, 5, 11, 0).getTime());
+  assert.equal(harness.alarms.get('focus-state-refresh').when, new Date(2026, 10, 5, 11, 0).getTime());
+});
+
+test('the worker reminds from cached plan data offline without installing browsing blocks', async () => {
+  const now = new Date(2026, 10, 5, 21, 0);
+  const cachedSnapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 2, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+  };
+  const harness = createHarness({ lastValidSnapshot: cachedSnapshot });
+
+  await refreshFocusState(harness.chromeApi, now);
+
+  assert.equal(harness.notifications.shown.length, 1);
+  assert.match(harness.notifications.shown[0].options.message, /Open JP Freedom on your phone/);
+  assert.equal(harness.alarms.get('planning-reminder-repeat').periodInMinutes, 30);
+  assert.deepEqual(harness.rules, []);
+});
+
+test('the worker keeps the same plan target when a repeating reminder crosses midnight', async () => {
+  const cachedSnapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 2, eveningCutoff: '21:00' },
+    desktopBlockedDomains: [],
+    blocks: [],
+  };
+  const harness = createHarness({ lastValidSnapshot: cachedSnapshot });
+
+  await refreshFocusState(harness.chromeApi, new Date(2026, 10, 5, 21, 0));
+  await refreshPlanningReminders(harness.chromeApi, new Date(2026, 10, 6, 0, 30), 'planning-reminder-repeat');
+
+  assert.equal(harness.storage.planningReminderDate, '2026-11-06');
+  assert.match(harness.notifications.shown[0].options.message, /2026-11-06 has 0 of 2/);
+  assert.match(harness.notifications.shown[1].options.message, /2026-11-06 has 0 of 2/);
 });
