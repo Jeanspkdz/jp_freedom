@@ -16,6 +16,18 @@ function formatLocalTime(value) {
   return new Date(value).toLocaleString();
 }
 
+function connectionError(apiUrl) {
+  try {
+    const api = new URL(apiUrl);
+    if (['localhost', '127.0.0.1', '[::1]'].includes(api.hostname)) {
+      return `The local sync API at ${api.host} is not responding. Start the local test server, or enter the deployed Sync API URL from Android settings.`;
+    }
+  } catch {
+    // The regular URL validation message is more useful for malformed values.
+  }
+  return 'Could not reach the sync API. Check your connection and API URL.';
+}
+
 function render(documentRef, state, now) {
   const { snapshot, lastSuccessfulSync, error, connected } = state;
   const protection = documentRef.getElementById('protection-state');
@@ -67,7 +79,9 @@ function render(documentRef, state, now) {
 
   if (!snapshot) {
     protection.textContent = 'Protection inactive — no valid plan has synced.';
-    sync.textContent = connected ? 'Connected — waiting for first sync.' : 'Not connected — enter your sync API details.';
+    sync.textContent = !connected
+      ? 'Not connected — enter your sync API details.'
+      : error ? 'Offline — no plan has synced yet.' : 'Connected — waiting for first sync.';
     currentBlock.textContent = 'No active focus block';
     plannedEnd.textContent = 'Planned end: —';
     return;
@@ -221,7 +235,7 @@ export async function initializeManagement({
       const offline = cause instanceof TypeError;
       state.online = !offline;
       state.error = offline
-        ? 'Could not reach the sync API. Check your connection and API URL.'
+        ? connectionError(state.apiUrl)
         : (cause?.message || 'Could not save the blocklist.');
       state.blocklistMessage = offline
         ? 'Connect Chrome to the internet to save blocklist changes.'
@@ -311,7 +325,7 @@ export async function initializeManagement({
     } catch (cause) {
       state.online = false;
       state.error = cause instanceof TypeError
-        ? 'Could not reach the sync API. Check your connection and API URL.'
+        ? connectionError(state.apiUrl)
         : (cause?.message || 'Sync failed. Check the API URL and bearer token.');
       await updateRules();
     }

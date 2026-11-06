@@ -101,6 +101,19 @@ test('without a valid snapshot, management reports inactive protection and leave
   assert.deepEqual(harness.rules, []);
 });
 
+test('an unreachable local test API explains how to restore the connection', async () => {
+  const harness = createHarness({ apiUrl: 'http://127.0.0.1:18787', apiToken: 'test-token' });
+
+  await initializeManagement({
+    ...harness,
+    fetchImpl: async () => { throw new TypeError('fetch failed'); },
+  });
+
+  assert.equal(harness.nodes.get('sync-state').textContent, 'Offline — no plan has synced yet.');
+  assert.match(harness.nodes.get('sync-error').textContent, /local sync API at 127\.0\.0\.1:18787.*start the local test server/i);
+  assert.match(harness.nodes.get('sync-error').textContent, /deployed Sync API URL from Android settings/i);
+});
+
 test('management initializes from browser globals when called without explicit arguments', async () => {
   const harness = createHarness();
   const originalGlobals = {

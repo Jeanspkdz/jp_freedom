@@ -9,19 +9,19 @@
 :root {
   color-scheme: light;
   font: 400 16px/1.5 "JP Roboto", Roboto, Arial, sans-serif;
-  background: #f7f6f6;
-  color: #0a0a0e;
-  --surface: #fffefe;
-  --muted: #36363d;
-  --line: #d4d4da;
-  --line-soft: #e3e3e7;
-  --amber: #a65608;
+  background: #faf6ee;
+  color: #30251e;
+  --surface: #fffdf8;
+  --muted: #6f6257;
+  --line: #c9b9a6;
+  --line-soft: #e5d9c9;
+  --amber: #9b5a20;
   --on-amber: #fff;
-  --amber-soft: #f9e0b4;
+  --amber-soft: #ffe8c5;
   --on-amber-soft: #603300;
-  --focus: #a65608;
+  --focus: #9b5a20;
   --error: #ba1a1a;
-  scrollbar-color: #aeb0b6 #f7f6f6;
+  scrollbar-color: #c9b9a6 #faf6ee;
 }
 
 * { box-sizing: border-box; }
@@ -113,9 +113,4 @@ button:disabled { opacity: .55; }
   #common-sites, #custom-sites, .connection-rail { grid-template-columns: 1fr; }
   .domain-input-row { flex-direction: column; }
   .domain-input-row button { width: 100%; }
-}
-@media (prefers-color-scheme: dark) {
-  :root { color-scheme: dark; background: #141414; color: #f0eff1; --surface: #161616; --muted: #c5c5cc; --line: #8a8a91; --line-soft: #414148; --amber: #ffb95e; --on-amber: #522c00; --amber-soft: #6b3a00; --on-amber-soft: #ffe0b4; --focus: #ffb95e; --error: #ffb4ab; scrollbar-color: #6d6d74 #141414; }
-  .permission-line { border-color: rgb(255 224 180 / .3); }
-  .site-row:hover { background: #24211e; }
 }
