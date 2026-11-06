@@ -1,0 +1,26 @@
+:root {
+  color-scheme: light dark;
+  font: 16px/1.5 system-ui, sans-serif;
+  background: #f7f6f6;
+  color: #22232a;
+}
+
+body { margin: 0; }
+main { width: min(680px, calc(100% - 40px)); margin: 40px auto; }
+header, section { padding: 24px; margin-bottom: 16px; border: 1px solid #d4d4da; border-radius: 16px; background: #fffefe; }
+.eyebrow { color: #50545b; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+h1, h2, p { margin-top: 0; }
+h1 { margin-bottom: 8px; }
+h2 { font-size: 18px; }
+#protection-state { font-weight: 600; }
+.error { color: #ba1a1a; font-weight: 600; }
+label { display: block; margin-top: 16px; font-weight: 600; }
+input { box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #8a8a91; border-radius: 8px; font: inherit; }
+button { margin-top: 16px; min-height: 48px; padding: 10px 20px; border: 0; border-radius: 24px; background: #a65608; color: white; font: inherit; font-weight: 600; cursor: pointer; }
+@media (prefers-color-scheme: dark) {
+  :root { background: #141414; color: #f0eff1; }
+  header, section { background: #161616; border-color: #414148; }
+  .eyebrow { color: #c5c5cc; }
+  input { background: #2b2b30; color: inherit; }
+  .error { color: #ffb4ab; }
+}

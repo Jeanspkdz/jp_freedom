@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>JP Freedom</title>
+    <link rel="stylesheet" href="management.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">JP Freedom · Desktop</p>
+        <h1>Focus plan</h1>
+        <p id="protection-state" role="status">Checking protection…</p>
+      </header>
+      <section class="plan" aria-labelledby="plan-heading">
+        <h2 id="plan-heading">Current focus block</h2>
+        <p id="current-block">Loading plan…</p>
+        <p id="planned-end">Planned end: —</p>
+      </section>
+      <section class="sync" aria-labelledby="sync-heading">
+        <h2 id="sync-heading">Sync status</h2>
+        <p id="sync-state" role="status">Checking sync…</p>
+        <p id="last-sync">Last successful sync: Never</p>
+        <p id="sync-error" class="error" role="alert" hidden></p>
+        <button id="sync-now" type="button">Sync now</button>
+      </section>
+      <section aria-labelledby="settings-heading">
+        <h2 id="settings-heading">Connection</h2>
+        <p>Enter the deployed sync API URL and bearer token from the phone's sync settings. Neon database credentials are not used here.</p>
+        <form id="settings-form">
+          <label for="api-url">Sync API URL</label>
+          <input id="api-url" name="api-url" type="url" autocomplete="url" placeholder="https://your-sync-api.example" required>
+          <label for="api-token">Bearer token</label>
+          <input id="api-token" name="api-token" type="password" autocomplete="off" required>
+          <button type="submit">Save and sync</button>
+        </form>
+      </section>
+    </main>
+    <script type="module" src="src/management.js"></script>
+  </body>
+</html>
