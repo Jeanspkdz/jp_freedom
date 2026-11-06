@@ -100,7 +100,7 @@ export async function initializeManagement({
   documentRef = globalThis.document,
   fetchImpl = globalThis.fetch,
   now = () => new Date(),
-}) {
+} = {}) {
   const saved = await chromeApi.storage.local.get(STORAGE_KEYS);
   const cachedSnapshot = validSnapshotResponse({ revision: saved.lastSnapshotRevision ?? 0, updatedAt: saved.lastSuccessfulSync ?? null, snapshot: saved.lastValidSnapshot })
     ? saved.lastValidSnapshot

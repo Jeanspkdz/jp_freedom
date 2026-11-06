@@ -101,6 +101,28 @@ test('without a valid snapshot, management reports inactive protection and leave
   assert.deepEqual(harness.rules, []);
 });
 
+test('management initializes from browser globals when called without explicit arguments', async () => {
+  const harness = createHarness();
+  const originalGlobals = {
+    chrome: globalThis.chrome,
+    document: globalThis.document,
+    fetch: globalThis.fetch,
+  };
+  globalThis.chrome = harness.chromeApi;
+  globalThis.document = harness.documentRef;
+  globalThis.fetch = async () => { throw new Error('unexpected request'); };
+
+  try {
+    await initializeManagement();
+    assert.match(harness.nodes.get('protection-state').textContent, /inactive/i);
+  } finally {
+    for (const [key, value] of Object.entries(originalGlobals)) {
+      if (value === undefined) delete globalThis[key];
+      else globalThis[key] = value;
+    }
+  }
+});
+
 test('a new empty server snapshot starts with the common sites selected', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
