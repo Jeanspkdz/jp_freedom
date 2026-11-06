@@ -1,4 +1,5 @@
-const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+import { isValidDomain } from './domain.js';
+
 const ACCESS_PROFILES = ['ESSENTIALS_ONLY', 'ESSENTIALS_WITH_CHATGPT', 'ESSENTIALS_WITH_CHATGPT_AND_SEARCH'];
 const COMPLETION_STATUSES = ['NOT_STARTED', 'PARTLY_DONE', 'NOT_DONE', 'FINISHED'];
 
@@ -21,7 +22,7 @@ function validSnapshot(snapshot) {
     && ['21:00', '22:00', '23:00'].includes(snapshot.settings?.eveningCutoff)
     && Array.isArray(snapshot.desktopBlockedDomains)
     && snapshot.desktopBlockedDomains.length <= 100
-    && snapshot.desktopBlockedDomains.every(domain => typeof domain === 'string' && DOMAIN_PATTERN.test(domain))
+    && snapshot.desktopBlockedDomains.every(isValidDomain)
     && Array.isArray(snapshot.blocks)
     && snapshot.blocks.length <= 1000
     && snapshot.blocks.every(block => typeof block.id === 'string'

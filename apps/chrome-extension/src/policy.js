@@ -96,10 +96,6 @@ export function makeDesktopBlockRules(snapshot, activeBlockId) {
 export function getCurrentAndNext(snapshot, now = new Date()) {
   if (!snapshot) return { current: null, next: null };
   const current = activeOnDate(snapshot, now, nowMinute(now));
-  const next = snapshot.blocks
-    .filter(block => block.date === localDateKey(now)
-      && block.completionStatus !== 'FINISHED'
-      && minuteOfDay(block.startTime) > nowMinute(now))
-    .sort((first, second) => minuteOfDay(first.startTime) - minuteOfDay(second.startTime))[0] ?? null;
+  const next = getNextBlock(snapshot, now);
   return { current, next };
 }

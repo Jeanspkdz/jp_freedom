@@ -1,9 +1,9 @@
 import { applySnapshotRules } from './enforcement.js';
 import { getCurrentAndNext } from './policy.js';
 import { readSnapshot, snapshotEndpoint, validSnapshotResponse } from './sync-client.js';
+import { isValidDomain } from './domain.js';
 
 const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync', 'lastSnapshotRevision'];
-const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 const DEFAULT_DESKTOP_DOMAINS = ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com'];
 const COMMON_DOMAINS = [...DEFAULT_DESKTOP_DOMAINS, 'youtube.com', 'web.whatsapp.com'];
 const COMMON_LABELS = new Map([
@@ -41,6 +41,11 @@ function render(documentRef, state, now) {
     ensureCustomCheckbox(documentRef, state, domain);
   }
   for (const [domain, checkbox] of state.customCheckboxes ?? []) {
+    if (!displayedDomains.includes(domain)) {
+      checkbox.parentElement?.remove();
+      state.customCheckboxes.delete(domain);
+      continue;
+    }
     checkbox.checked = displayedDomains.includes(domain);
     checkbox.disabled = !canEdit || (active && checkbox.checked);
   }
@@ -227,7 +232,7 @@ export async function initializeManagement({
     event.preventDefault();
     const field = documentRef.getElementById('custom-domain');
     const domain = field.value.trim().toLowerCase();
-    if (!DOMAIN_PATTERN.test(domain) || domain.includes('://') || domain.includes('/')) {
+    if (!isValidDomain(domain)) {
       state.blocklistMessage = 'Enter a bare domain such as example.com. URLs and paths are not accepted.';
       show();
       return;

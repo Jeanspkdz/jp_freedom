@@ -17,7 +17,17 @@ function createNode() {
     addEventListener(type, listener) {
       this.listeners.set(type, listener);
     },
-    append(...children) { this.children.push(...children); },
+    append(...children) {
+      for (const child of children) {
+        if (child && typeof child === 'object') child.parentElement = this;
+        this.children.push(child);
+      }
+    },
+    remove() {
+      if (!this.parentElement) return;
+      this.parentElement.children = this.parentElement.children.filter(child => child !== this);
+      this.parentElement = null;
+    },
   };
 }
 
@@ -237,6 +247,37 @@ test('custom sites accept bare domains and reject URLs and paths', async () => {
   await submit({ preventDefault() {} });
 
   assert.deepEqual(savedSnapshot.desktopBlockedDomains, ['example.com']);
+});
+
+test('a removed custom site disappears from the management page after sync', async () => {
+  const now = new Date(2026, 10, 5, 10, 30);
+  const snapshotWithCustomSite = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['example.com'],
+    blocks: [],
+  };
+  const snapshotWithoutCustomSite = { ...snapshotWithCustomSite, desktopBlockedDomains: [] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  let syncCount = 0;
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async () => {
+      syncCount += 1;
+      const snapshot = syncCount === 1 ? snapshotWithCustomSite : snapshotWithoutCustomSite;
+      return { ok: true, json: async () => ({ revision: syncCount, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+
+  const customSites = harness.nodes.get('custom-sites');
+  const customCheckbox = customSites.children[0].children[0];
+  assert.equal(customSites.children.length, 1);
+  assert.equal(customCheckbox.checked, true);
+
+  await harness.nodes.get('sync-now').listeners.get('click')();
+
+  assert.equal(customSites.children.length, 0);
 });
 
 test('a cached plan without a configured connection is visibly offline', async () => {

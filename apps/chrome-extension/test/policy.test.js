@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   getActiveBlock,
   getNextBlock,
+  getCurrentAndNext,
   isEveningPlanIncomplete,
   getPlanningReminderStatus,
   getRequiredPlanDate,
@@ -45,6 +46,12 @@ test('Finished releases the desktop block immediately', () => {
 
 test('the popup can identify the next upcoming block', () => {
   assert.equal(getNextBlock(snapshot, new Date('2026-11-04T11:00:00'))?.id, 'later');
+});
+
+test('the policy summary reports the same upcoming block as the standalone lookup', () => {
+  const summary = getCurrentAndNext(snapshot, new Date('2026-11-04T10:30:00'));
+  assert.equal(summary.current.id, 'focus');
+  assert.equal(summary.next.id, 'later');
 });
 
 test('desktop evening reminders target Monday on Sunday and never block browsing', () => {
