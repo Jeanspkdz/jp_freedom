@@ -75,10 +75,17 @@ function render(documentRef, state, now) {
   const errorMessage = documentRef.getElementById('sync-error');
   const currentBlock = documentRef.getElementById('current-block');
   const plannedEnd = documentRef.getElementById('planned-end');
+  const permissionState = documentRef.getElementById('permission-state');
+  const grantSiteAccess = documentRef.getElementById('grant-site-access');
 
   lastSync.textContent = `Last successful sync: ${formatLocalTime(lastSuccessfulSync)}`;
   errorMessage.hidden = !error;
   errorMessage.textContent = error ?? '';
+  const missingDomains = state.missingDomains ?? [];
+  permissionState.textContent = missingDomains.length
+    ? `Chrome site access is needed for ${missingDomains.join(', ')} before these sites can be blocked.`
+    : 'Chrome site access is ready for selected sites.';
+  grantSiteAccess.hidden = missingDomains.length === 0;
 
   if (!snapshot) {
     protection.textContent = 'Protection inactive — no valid plan has synced.';
@@ -114,12 +121,37 @@ export async function initializeManagement({
       : null,
     connected,
   };
+  const permissionState = documentRef.getElementById('permission-state');
+  const grantSiteAccess = documentRef.getElementById('grant-site-access');
 
   documentRef.getElementById('api-url').value = state.apiUrl;
   documentRef.getElementById('api-token').value = state.apiToken;
 
   const show = () => render(documentRef, state, now());
-  const updateRules = async () => applySnapshotRules(chromeApi, state.snapshot, now());
+  const refreshSiteAccess = async () => {
+    state.missingDomains = [];
+    if (state.snapshot && chromeApi.permissions?.contains) {
+      for (const domain of new Set(state.snapshot.desktopBlockedDomains ?? [])) {
+        const origins = [`http://${domain}/*`, `https://${domain}/*`];
+        if (!(await chromeApi.permissions.contains({ origins }))) state.missingDomains.push(domain);
+      }
+    }
+  };
+  const updateRules = async () => {
+    await refreshSiteAccess();
+    await applySnapshotRules(chromeApi, state.snapshot, now());
+    show();
+  };
+  documentRef.getElementById('grant-site-access').addEventListener('click', async () => {
+    if (!chromeApi.permissions?.request) return;
+    const origins = state.missingDomains.flatMap(domain => [`http://${domain}/*`, `https://${domain}/*`]);
+    if (origins.length && await chromeApi.permissions.request({ origins })) {
+      await refreshSiteAccess();
+      await applySnapshotRules(chromeApi, state.snapshot, now());
+      permissionState.textContent = 'Site access granted.';
+      grantSiteAccess.hidden = true;
+    }
+  });
   const sync = async () => {
     state.error = null;
     state.connected = Boolean(state.apiUrl && state.apiToken);
@@ -166,13 +198,21 @@ export async function initializeManagement({
     state.apiUrl = documentRef.getElementById('api-url').value.trim();
     state.apiToken = documentRef.getElementById('api-token').value.trim();
     state.connected = Boolean(state.apiUrl && state.apiToken);
+    if (state.connected && chromeApi.permissions?.request) {
+      try {
+        const api = new URL(state.apiUrl);
+        const localHttp = api.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(api.hostname);
+        if (!localHttp) await chromeApi.permissions.request({ origins: [`${api.origin}/*`] });
+      } catch {
+        // endpointFor reports malformed or insecure URLs in the normal sync flow.
+      }
+    }
     await chromeApi.storage.local.set({ apiUrl: state.apiUrl, apiToken: state.apiToken });
     await sync();
   });
   documentRef.getElementById('sync-now').addEventListener('click', sync);
 
   await updateRules();
-  show();
   if (state.connected) await sync();
   return { sync };
 }

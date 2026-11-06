@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { initializeManagement } from '../src/management.js';
+import { initializeBlockedPage } from '../src/blocked.js';
 import { refreshFocusState } from '../src/service-worker.js';
 
 function createNode() {
@@ -163,6 +164,69 @@ test('a failed sync keeps cached enforcement and explains the offline state', as
   assert.match(harness.nodes.get('last-sync').textContent, /Last successful sync: (?!Never)/);
   assert.deepEqual(harness.storage.lastValidSnapshot, cachedSnapshot);
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+});
+
+test('a Finished block is released when its newer snapshot syncs', async () => {
+  const now = new Date(2026, 10, 5, 10, 30);
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const active = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [{ id: 'focus', date: today, name: 'Study', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+  };
+  const finished = { ...active, blocks: [{ ...active.blocks[0], completionStatus: 'FINISHED' }] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'secret-token', lastValidSnapshot: active });
+
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async () => ({ ok: true, json: async () => ({ revision: 5, updatedAt: now.toISOString(), snapshot: finished }) }),
+  });
+
+  assert.equal(harness.nodes.get('current-block').textContent, 'No active focus block');
+  assert.deepEqual(harness.rules, []);
+});
+
+test('management explains missing site access and requests it from the user gesture', async () => {
+  const now = new Date(2026, 10, 5, 10, 30);
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+  };
+  const harness = createHarness({ lastValidSnapshot: snapshot });
+  let requested;
+  harness.chromeApi.permissions = {
+    async contains() { return false; },
+    async request({ origins }) { requested = origins; return true; },
+  };
+
+  await initializeManagement({ ...harness, now: () => now, fetchImpl: async () => { throw new Error('unexpected request'); } });
+
+  assert.match(harness.nodes.get('permission-state').textContent, /site access.*needed/i);
+  await harness.nodes.get('grant-site-access').listeners.get('click')();
+  assert.deepEqual(requested, ['http://reddit.com/*', 'https://reddit.com/*']);
+  assert.equal(harness.nodes.get('permission-state').textContent, 'Site access granted.');
+});
+
+test('the blocked page shows the active activity and planned end without a bypass control', async () => {
+  const now = new Date(2026, 10, 5, 10, 30);
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [{ id: 'focus', date: today, name: 'Write project proposal', startTime: '10:00', endTime: '11:15', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+  };
+  const harness = createHarness({ lastValidSnapshot: snapshot });
+
+  await initializeBlockedPage({ ...harness, now: () => now });
+
+  assert.equal(harness.nodes.get('blocked-activity').textContent, 'Write project proposal');
+  assert.equal(harness.nodes.get('blocked-end').textContent, 'Planned end: 11:15');
+  assert.equal(harness.nodes.has('bypass'), false);
 });
 
 test('an invalid newer snapshot does not replace the last valid cached plan', async () => {
