@@ -274,3 +274,45 @@ fieldset { margin-top: 34px; }
   .view-panel:not([hidden]) { animation: none; }
   .view-tab, .focus-board, .day-plan-row.is-current, .site-action, .secondary-button { transition-duration: 0ms; }
 }
+
+/* Selected direction: an amber focus area beside a two-day schedule. */
+#view-plan { display: grid; grid-template-columns: minmax(320px, .88fr) minmax(0, 1.35fr); align-items: start; gap: 38px; }
+.plan-hero { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; min-height: 510px; padding: clamp(28px, 3.5vw, 44px); border-radius: 16px; background: var(--amber); color: var(--on-amber); }
+.plan-intro { margin: 0; }
+#today-intro-date, #protection-state { color: var(--on-amber); }
+#today-intro-date { margin-bottom: 20px; font-size: .9rem; }
+.plan-intro h1 { max-width: 8ch; font-size: clamp(2.8rem, 4vw, 4rem); line-height: 1.04; }
+#protection-state { max-width: 34ch; margin-top: 20px; font-size: 1rem; }
+.plan-hero .focus-board { display: block; min-height: 0; margin-top: 44px; padding: 24px; background: var(--amber-soft); color: var(--on-amber-soft); }
+.plan-hero .focus-board.is-active { box-shadow: inset 0 0 0 2px var(--on-amber-soft); }
+.plan-hero .focus-main h2 { color: var(--on-amber-soft); font-size: .82rem; }
+.plan-hero #current-block { margin-top: 8px; font-size: clamp(1.7rem, 2.8vw, 2.4rem); }
+.plan-hero #planned-end { margin: 12px 0 0; }
+.schedule { min-width: 0; padding-top: 4px; }
+.schedule-intro h2 { font-size: clamp(2rem, 3vw, 2.7rem); }
+.schedule-intro p { margin-top: 7px; color: var(--muted); }
+.schedule .day-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
+.schedule .day-plan, .schedule .day-plan + .day-plan { min-height: 402px; padding: 0; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 14px; background: var(--surface); color: var(--on-amber-soft); }
+.schedule .day-plan-header { display: block; margin: 0; padding: 20px 20px 17px; background: var(--amber-soft); }
+.schedule .day-plan-header h2 { font-size: 1.65rem; }
+.schedule .day-plan-header time { display: block; margin-top: 4px; color: var(--on-amber-soft); }
+.schedule .day-plan-empty { padding: 24px 20px; color: var(--muted); }
+.schedule .day-plan-list { padding: 4px 14px 18px; }
+.schedule .day-plan-row { grid-template-columns: minmax(80px, auto) minmax(0, 1fr); align-items: start; gap: 4px 12px; min-height: 64px; padding: 12px 6px; }
+.schedule .day-plan-row.is-current { padding-inline: 10px; border-radius: 8px; }
+.schedule .day-plan-time { font-size: .82rem; }
+.schedule .day-plan-name { font-size: .9rem; }
+.schedule .day-plan-status { grid-column: 2; grid-row: 2; text-align: left; }
+
+@media (max-width: 950px) {
+  #view-plan { grid-template-columns: 1fr; gap: 36px; }
+  .plan-hero { min-height: 0; }
+  .plan-hero .focus-board { margin-top: 28px; }
+  .schedule .day-plan, .schedule .day-plan + .day-plan { min-height: 260px; }
+}
+@media (max-width: 600px) {
+  .plan-hero { padding: 26px; }
+  .plan-intro h1 { max-width: none; }
+  .schedule .day-plans { grid-template-columns: 1fr; }
+  .schedule .day-plan, .schedule .day-plan + .day-plan { min-height: 0; }
+}
