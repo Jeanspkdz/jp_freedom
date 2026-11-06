@@ -92,6 +92,7 @@ function render(documentRef, state, now) {
   const { snapshot, lastSuccessfulSync, error, connected } = state;
   const protection = documentRef.getElementById('protection-state');
   const sync = documentRef.getElementById('sync-state');
+  sync.setAttribute?.('data-state', connected && state.online && !error ? 'synced' : 'offline');
   const lastSync = documentRef.getElementById('last-sync');
   const errorMessage = documentRef.getElementById('sync-error');
   const currentBlock = documentRef.getElementById('current-block');
@@ -138,6 +139,10 @@ function render(documentRef, state, now) {
     ?? (!state.connected || !state.online ? 'Connect Chrome to the internet and sync to save blocklist changes.' : '');
 
   lastSync.textContent = `Last successful sync: ${formatLocalTime(lastSuccessfulSync)}`;
+  documentRef.getElementById('connection-state').textContent = !connected
+    ? 'Not connected' : error || !state.online ? 'Offline' : 'Synced';
+  documentRef.getElementById('connection-revision').textContent = Number.isInteger(state.revision)
+    ? `Revision ${state.revision}` : 'No plan yet';
   errorMessage.hidden = !error;
   errorMessage.textContent = error ?? '';
   const missingDomains = state.missingDomains ?? [];
@@ -168,6 +173,7 @@ function ensureCustomCheckbox(documentRef, state, domain) {
   if (state.customCheckboxes?.has(domain)) return state.customCheckboxes.get(domain);
   const wrapper = documentRef.createElement('label');
   wrapper.className = 'site-row';
+  wrapper.setAttribute?.('data-monogram', domain[0].toUpperCase());
   const checkbox = documentRef.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.dataset.domain = domain;

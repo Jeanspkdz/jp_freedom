@@ -47,29 +47,36 @@
       <div id="view-sites" class="view-panel" hidden>
         <section class="blocklist" aria-labelledby="blocklist-heading">
           <h1 id="blocklist-heading">Blocked sites</h1>
-          <p class="section-description">Selected sites are blocked during a focus block. Each domain includes its subdomains. Selected sites stay locked until the block ends.</p>
+          <p class="section-description">Selected sites are blocked in Chrome during a focus block. Each domain includes its subdomains. Selected sites stay locked until the block ends.</p>
           <div class="permission-line"><p id="permission-state" role="status">Checking Chrome site access…</p><button id="grant-site-access" type="button" hidden>Grant site access</button></div>
-          <fieldset id="common-sites">
-            <legend>Common sites</legend>
-            <label class="site-row"><input id="domain-facebook.com" type="checkbox" data-domain="facebook.com"><span class="site-name">Facebook</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row"><input id="domain-instagram.com" type="checkbox" data-domain="instagram.com"><span class="site-name">Instagram</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row"><input id="domain-tiktok.com" type="checkbox" data-domain="tiktok.com"><span class="site-name">TikTok</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row"><input id="domain-x.com" type="checkbox" data-domain="x.com"><span class="site-name">X</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row"><input id="domain-reddit.com" type="checkbox" data-domain="reddit.com"><span class="site-name">Reddit</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row"><input id="domain-youtube.com" type="checkbox" data-domain="youtube.com"><span class="site-name">YouTube</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row"><input id="domain-web.whatsapp.com" type="checkbox" data-domain="web.whatsapp.com"><span class="site-name">WhatsApp Web</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-          </fieldset>
-          <div id="custom-sites" aria-label="Custom sites"></div>
           <form id="add-domain-form">
             <label for="custom-domain">Add a domain</label>
             <div class="domain-input-row"><input id="custom-domain" name="custom-domain" type="text" autocomplete="off" placeholder="example.com" aria-describedby="domain-help"><button id="add-domain" type="submit">Add site</button></div>
             <p id="domain-help" class="field-help">Enter a bare domain such as example.com. URLs and paths are not accepted.</p>
           </form>
+          <fieldset id="common-sites">
+            <legend>Common sites</legend>
+            <label class="site-row" data-monogram="F"><input id="domain-facebook.com" type="checkbox" data-domain="facebook.com"><span class="site-name">Facebook</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row" data-monogram="I"><input id="domain-instagram.com" type="checkbox" data-domain="instagram.com"><span class="site-name">Instagram</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row" data-monogram="T"><input id="domain-tiktok.com" type="checkbox" data-domain="tiktok.com"><span class="site-name">TikTok</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row" data-monogram="X"><input id="domain-x.com" type="checkbox" data-domain="x.com"><span class="site-name">X</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row" data-monogram="R"><input id="domain-reddit.com" type="checkbox" data-domain="reddit.com"><span class="site-name">Reddit</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row" data-monogram="Y"><input id="domain-youtube.com" type="checkbox" data-domain="youtube.com"><span class="site-name">YouTube</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            <label class="site-row" data-monogram="W"><input id="domain-web.whatsapp.com" type="checkbox" data-domain="web.whatsapp.com"><span class="site-name">WhatsApp Web</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+          </fieldset>
+          <div id="custom-sites" aria-label="Custom sites"></div>
           <p id="blocklist-status" role="status"></p>
         </section>
       </div>
       <div id="view-connection" class="view-panel" hidden>
         <div class="connection-rail">
+          <div class="connection-intro"><h1>Connection</h1><p>Your focus plan travels from your phone to Chrome.</p></div>
+          <div class="connection-path" aria-label="Phone syncs the plan to this computer">
+            <div class="connection-device"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="13" y="5" width="22" height="38" rx="5"/><path d="M21 37h6"/></svg><span>Phone</span></div>
+            <div class="connection-flow" aria-hidden="true"></div>
+            <div class="connection-device"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="7" width="38" height="27" rx="3"/><path d="M17 41h14m-7-7v7"/></svg><span>This PC</span></div>
+          </div>
+          <div class="connection-facts"><div><span>Status</span><strong id="connection-state">Checking…</strong></div><div><span>Plan version</span><strong id="connection-revision">Checking…</strong></div></div>
           <section class="sync" aria-labelledby="sync-heading">
             <h2 id="sync-heading">Sync status</h2>
             <p id="last-sync">Last successful sync: Never</p>
