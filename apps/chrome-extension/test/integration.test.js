@@ -10,10 +10,14 @@ function createNode() {
     value: '',
     hidden: false,
     disabled: false,
+    checked: false,
+    dataset: {},
     listeners: new Map(),
+    children: [],
     addEventListener(type, listener) {
       this.listeners.set(type, listener);
     },
+    append(...children) { this.children.push(...children); },
   };
 }
 
@@ -50,6 +54,8 @@ function createHarness(initialStorage = {}) {
       if (!nodes.has(id)) nodes.set(id, createNode());
       return nodes.get(id);
     },
+    createElement() { return createNode(); },
+    createTextNode(textContent) { return { textContent }; },
   };
   return { chromeApi, documentRef, nodes, rules, storage };
 }
@@ -61,7 +67,128 @@ test('without a valid snapshot, management reports inactive protection and leave
 
   assert.match(harness.nodes.get('protection-state').textContent, /inactive/i);
   assert.match(harness.nodes.get('sync-state').textContent, /not connected|not synced/i);
+  assert.deepEqual(
+    ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com'].map(domain => harness.nodes.get(`domain-${domain}`).checked),
+    [true, true, true, true, true],
+  );
+  assert.equal(harness.nodes.get('domain-youtube.com').checked, false);
+  assert.equal(harness.nodes.get('domain-web.whatsapp.com').checked, false);
+  assert.equal(harness.nodes.get('domain-facebook.com').disabled, true);
   assert.deepEqual(harness.rules, []);
+});
+
+test('a new empty server snapshot starts with the common sites selected', async () => {
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: [], blocks: [] };
+
+  await initializeManagement({
+    ...harness,
+    fetchImpl: async () => ({ ok: true, json: async () => ({ revision: 0, updatedAt: null, snapshot }) }),
+  });
+
+  assert.deepEqual(
+    ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com'].map(domain => harness.nodes.get(`domain-${domain}`).checked),
+    [true, true, true, true, true],
+  );
+  assert.equal(harness.nodes.get('domain-youtube.com').checked, false);
+  assert.equal(harness.nodes.get('domain-web.whatsapp.com').checked, false);
+});
+
+test('selected sites cannot be removed during a focus block while new sites save immediately', async () => {
+  const now = new Date(2026, 10, 5, 10, 30);
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [{ id: 'focus', date: '2026-11-05', name: 'Study', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  const writes = [];
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options) => {
+      if (options.method === 'PUT') {
+        writes.push(JSON.parse(options.body));
+        return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: writes.at(-1).snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+
+  assert.equal(harness.nodes.get('domain-reddit.com').disabled, true);
+  assert.equal(harness.nodes.get('domain-youtube.com').disabled, false);
+  await harness.nodes.get('domain-youtube.com').listeners.get('change')({ target: { checked: true } });
+
+  assert.deepEqual(writes[0].snapshot.desktopBlockedDomains, ['reddit.com', 'youtube.com']);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com', 'youtube.com']);
+});
+
+test('a revision conflict reapplies one domain change to the latest blocklist and preserves the other snapshot fields', async () => {
+  const now = new Date(2026, 10, 5, 10, 30);
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 4, eveningCutoff: '22:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+  };
+  const latest = { ...snapshot, desktopBlockedDomains: ['reddit.com', 'facebook.com'] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  const requests = [];
+  let gets = 0;
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options) => {
+      requests.push(options);
+      if (options.method === 'GET') {
+        gets += 1;
+        const result = gets === 1 ? { revision: 3, snapshot } : { revision: 4, snapshot: latest };
+        return { ok: true, json: async () => ({ ...result, updatedAt: now.toISOString() }) };
+      }
+      if (requests.filter(request => request.method === 'PUT').length === 1) return { ok: false, status: 409 };
+      const write = JSON.parse(options.body);
+      return { ok: true, json: async () => ({ revision: 5, updatedAt: now.toISOString(), snapshot: write.snapshot }) };
+    },
+  });
+
+  await harness.nodes.get('domain-youtube.com').listeners.get('change')({ target: { checked: true } });
+
+  const writes = requests.filter(request => request.method === 'PUT').map(request => JSON.parse(request.body));
+  assert.equal(writes.length, 2);
+  assert.equal(writes[1].expectedRevision, 4);
+  assert.deepEqual(writes[1].snapshot.desktopBlockedDomains, ['reddit.com', 'facebook.com', 'youtube.com']);
+  assert.deepEqual(writes[1].snapshot.settings, snapshot.settings);
+  assert.deepEqual(writes[1].snapshot.blocks, snapshot.blocks);
+});
+
+test('custom sites accept bare domains and reject URLs and paths', async () => {
+  const now = new Date(2026, 10, 5, 10, 30);
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: [], blocks: [] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  let savedSnapshot;
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options) => {
+      if (options.method === 'PUT') {
+        savedSnapshot = JSON.parse(options.body).snapshot;
+        return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: savedSnapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+  const field = harness.nodes.get('custom-domain');
+  const submit = harness.nodes.get('add-domain-form').listeners.get('submit');
+
+  field.value = 'https://example.com/path';
+  await submit({ preventDefault() {} });
+  assert.match(harness.nodes.get('blocklist-status').textContent, /bare domain/i);
+  assert.equal(savedSnapshot, undefined);
+  field.value = ' Example.com ';
+  await submit({ preventDefault() {} });
+
+  assert.deepEqual(savedSnapshot.desktopBlockedDomains, ['example.com']);
 });
 
 test('a cached plan without a configured connection is visibly offline', async () => {
@@ -160,6 +287,8 @@ test('a failed sync keeps cached enforcement and explains the offline state', as
 
   assert.match(harness.nodes.get('sync-state').textContent, /offline.*cached plan/i);
   assert.match(harness.nodes.get('sync-error').textContent, /connection.*API URL/i);
+  assert.equal(harness.nodes.get('domain-reddit.com').disabled, true);
+  assert.match(harness.nodes.get('blocklist-status').textContent, /internet.*save/i);
   assert.equal(harness.nodes.get('current-block').textContent, 'Study');
   assert.match(harness.nodes.get('last-sync').textContent, /Last successful sync: (?!Never)/);
   assert.deepEqual(harness.storage.lastValidSnapshot, cachedSnapshot);

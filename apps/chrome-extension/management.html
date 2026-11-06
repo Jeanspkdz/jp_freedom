@@ -27,6 +27,28 @@
         <p id="sync-error" class="error" role="alert" hidden></p>
         <button id="sync-now" type="button">Sync now</button>
       </section>
+      <section aria-labelledby="blocklist-heading">
+        <h2 id="blocklist-heading">Desktop site blocklist</h2>
+        <p>Selected sites are blocked during a focus block. Each domain includes its subdomains.</p>
+        <fieldset id="common-sites">
+          <legend>Common sites</legend>
+          <label><input id="domain-facebook.com" type="checkbox" data-domain="facebook.com"> Facebook</label>
+          <label><input id="domain-instagram.com" type="checkbox" data-domain="instagram.com"> Instagram</label>
+          <label><input id="domain-tiktok.com" type="checkbox" data-domain="tiktok.com"> TikTok</label>
+          <label><input id="domain-x.com" type="checkbox" data-domain="x.com"> X</label>
+          <label><input id="domain-reddit.com" type="checkbox" data-domain="reddit.com"> Reddit</label>
+          <label><input id="domain-youtube.com" type="checkbox" data-domain="youtube.com"> YouTube</label>
+          <label><input id="domain-web.whatsapp.com" type="checkbox" data-domain="web.whatsapp.com"> WhatsApp Web</label>
+        </fieldset>
+        <div id="custom-sites" aria-label="Custom sites"></div>
+        <form id="add-domain-form">
+          <label for="custom-domain">Add a domain</label>
+          <input id="custom-domain" name="custom-domain" type="text" autocomplete="off" placeholder="example.com" aria-describedby="domain-help">
+          <p id="domain-help">Enter a bare domain such as example.com. URLs and paths are not accepted.</p>
+          <button id="add-domain" type="submit">Add site</button>
+        </form>
+        <p id="blocklist-status" role="status"></p>
+      </section>
       <section aria-labelledby="settings-heading">
         <h2 id="settings-heading">Connection</h2>
         <p>Enter the deployed sync API URL and bearer token from the phone's sync settings. Neon database credentials are not used here.</p>

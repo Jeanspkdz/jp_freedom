@@ -1,8 +1,14 @@
 import { applySnapshotRules } from './enforcement.js';
 import { getCurrentAndNext } from './policy.js';
 
-const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync'];
+const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync', 'lastSnapshotRevision'];
 const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+const DEFAULT_DESKTOP_DOMAINS = ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com'];
+const COMMON_DOMAINS = [...DEFAULT_DESKTOP_DOMAINS, 'youtube.com', 'web.whatsapp.com'];
+const COMMON_LABELS = new Map([
+  ['facebook.com', 'Facebook'], ['instagram.com', 'Instagram'], ['tiktok.com', 'TikTok'],
+  ['x.com', 'X'], ['reddit.com', 'Reddit'], ['youtube.com', 'YouTube'], ['web.whatsapp.com', 'WhatsApp Web'],
+]);
 const ACCESS_PROFILES = ['ESSENTIALS_ONLY', 'ESSENTIALS_WITH_CHATGPT', 'ESSENTIALS_WITH_CHATGPT_AND_SEARCH'];
 const COMPLETION_STATUSES = ['NOT_STARTED', 'PARTLY_DONE', 'NOT_DONE', 'FINISHED'];
 
@@ -77,6 +83,30 @@ function render(documentRef, state, now) {
   const plannedEnd = documentRef.getElementById('planned-end');
   const permissionState = documentRef.getElementById('permission-state');
   const grantSiteAccess = documentRef.getElementById('grant-site-access');
+  const active = Boolean(snapshot && getCurrentAndNext(snapshot, now).current);
+  const displayedDomains = snapshot
+    ? (state.newEmptyBlocklist ? [...DEFAULT_DESKTOP_DOMAINS] : [...new Set(snapshot.desktopBlockedDomains)])
+    : [...DEFAULT_DESKTOP_DOMAINS];
+  state.displayedDomains = displayedDomains;
+  const canEdit = Boolean(state.connected && state.online && snapshot && !state.saving);
+  for (const domain of COMMON_DOMAINS) {
+    const checkbox = documentRef.getElementById(`domain-${domain}`);
+    checkbox.checked = displayedDomains.includes(domain);
+    checkbox.disabled = !canEdit || (active && checkbox.checked);
+  }
+  for (const domain of displayedDomains.filter(value => !COMMON_DOMAINS.includes(value))) {
+    ensureCustomCheckbox(documentRef, state, domain);
+  }
+  for (const [domain, checkbox] of state.customCheckboxes ?? []) {
+    checkbox.checked = displayedDomains.includes(domain);
+    checkbox.disabled = !canEdit || (active && checkbox.checked);
+  }
+  const customDomain = documentRef.getElementById('custom-domain');
+  const addButton = documentRef.getElementById('add-domain');
+  customDomain.disabled = !canEdit;
+  addButton.disabled = !canEdit;
+  documentRef.getElementById('blocklist-status').textContent = state.blocklistMessage
+    ?? (!state.connected || !state.online ? 'Connect Chrome to the internet and sync to save blocklist changes.' : '');
 
   lastSync.textContent = `Last successful sync: ${formatLocalTime(lastSuccessfulSync)}`;
   errorMessage.hidden = !error;
@@ -102,6 +132,21 @@ function render(documentRef, state, now) {
   plannedEnd.textContent = current ? `Planned end: ${current.endTime}` : 'Planned end: —';
 }
 
+function ensureCustomCheckbox(documentRef, state, domain) {
+  if (state.customCheckboxes?.has(domain)) return state.customCheckboxes.get(domain);
+  const wrapper = documentRef.createElement('label');
+  const checkbox = documentRef.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.dataset.domain = domain;
+  checkbox.id = `domain-${domain}`;
+  checkbox.addEventListener('change', () => state.changeDomain(domain, checkbox.checked));
+  wrapper.append(checkbox, documentRef.createTextNode(` ${domain}`));
+  documentRef.getElementById('custom-sites').append(wrapper);
+  state.customCheckboxes ??= new Map();
+  state.customCheckboxes.set(domain, checkbox);
+  return checkbox;
+}
+
 export async function initializeManagement({
   chromeApi = globalThis.chrome,
   documentRef = globalThis.document,
@@ -120,6 +165,11 @@ export async function initializeManagement({
       ? 'Enter the sync API URL and bearer token to refresh this cached plan.'
       : null,
     connected,
+    online: false,
+    revision: Number.isInteger(saved.lastSnapshotRevision) ? saved.lastSnapshotRevision : null,
+    newEmptyBlocklist: Boolean(cachedSnapshot && cachedSnapshot.desktopBlockedDomains.length === 0 && saved.lastSnapshotRevision === 0),
+    saving: false,
+    blocklistMessage: null,
   };
   const permissionState = documentRef.getElementById('permission-state');
   const grantSiteAccess = documentRef.getElementById('grant-site-access');
@@ -142,6 +192,119 @@ export async function initializeManagement({
     await applySnapshotRules(chromeApi, state.snapshot, now());
     show();
   };
+  const readLatest = async endpoint => {
+    const response = await fetchImpl(endpoint, {
+      method: 'GET',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}` },
+      cache: 'no-store', credentials: 'omit', redirect: 'error',
+    });
+    if (!response.ok) throw new Error(`Sync failed with HTTP ${response.status}. Check the API and try again.`);
+    const payload = await response.json();
+    if (!validResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+    return payload;
+  };
+  const persistDomainIntent = async (domain, included, initialDomains = state.displayedDomains) => {
+    if (!state.connected || !state.online || !state.snapshot || state.saving) return;
+    const current = getCurrentAndNext(state.snapshot, now()).current;
+    if (current && !included && (state.snapshot.desktopBlockedDomains ?? []).includes(domain)) {
+      state.blocklistMessage = 'Selected sites cannot be removed during an active focus block.';
+      show();
+      return;
+    }
+    state.saving = true;
+    state.blocklistMessage = null;
+    show();
+    const setDomain = domains => {
+      const next = new Set(domains);
+      if (included) next.add(domain);
+      else next.delete(domain);
+      return [...next];
+    };
+    let snapshot = { ...state.snapshot, desktopBlockedDomains: setDomain(initialDomains) };
+    try {
+      const endpoint = endpointFor(state.apiUrl);
+      let response = await fetchImpl(endpoint, {
+        method: 'PUT',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: state.revision, snapshot }),
+        cache: 'no-store', credentials: 'omit', redirect: 'error',
+      });
+      if (response.status === 409) {
+        const latest = await readLatest(endpoint);
+        const latestCurrent = getCurrentAndNext(latest.snapshot, now()).current;
+        if (latestCurrent && !included && latest.snapshot.desktopBlockedDomains.includes(domain)) {
+          state.snapshot = latest.snapshot;
+          state.revision = latest.revision;
+          state.blocklistMessage = 'Selected sites cannot be removed during an active focus block.';
+          state.newEmptyBlocklist = latest.revision === 0 && latest.updatedAt === null && latest.snapshot.desktopBlockedDomains.length === 0;
+          await chromeApi.storage.local.set({ lastValidSnapshot: latest.snapshot, lastSnapshotRevision: latest.revision });
+          await updateRules();
+          return;
+        }
+        snapshot = { ...latest.snapshot, desktopBlockedDomains: setDomain(latest.snapshot.desktopBlockedDomains) };
+        response = await fetchImpl(endpoint, {
+          method: 'PUT',
+          headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: latest.revision, snapshot }),
+          cache: 'no-store', credentials: 'omit', redirect: 'error',
+        });
+      }
+      if (!response.ok) throw new Error(response.status === 409
+        ? 'The blocklist changed again. Sync and retry your change.'
+        : `Could not save the blocklist (HTTP ${response.status}).`);
+      const payload = await response.json();
+      if (!validResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+      state.snapshot = payload.snapshot;
+      state.revision = payload.revision;
+      state.newEmptyBlocklist = false;
+      state.online = true;
+      state.error = null;
+      state.lastSuccessfulSync = now().toISOString();
+      await chromeApi.storage.local.set({ lastValidSnapshot: payload.snapshot, lastSuccessfulSync: state.lastSuccessfulSync, lastSnapshotRevision: payload.revision });
+      await updateRules();
+      await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
+    } catch (cause) {
+      const offline = cause instanceof TypeError;
+      state.online = !offline;
+      state.error = offline
+        ? 'Could not reach the sync API. Check your connection and API URL.'
+        : (cause?.message || 'Could not save the blocklist.');
+      state.blocklistMessage = offline
+        ? 'Connect Chrome to the internet to save blocklist changes.'
+        : state.error;
+      await updateRules();
+    } finally {
+      state.saving = false;
+      show();
+    }
+  };
+  state.changeDomain = (domain, included) => {
+    const displayed = state.displayedDomains ?? DEFAULT_DESKTOP_DOMAINS;
+    const base = state.newEmptyBlocklist ? displayed : (state.snapshot?.desktopBlockedDomains ?? displayed);
+    return persistDomainIntent(domain, included, base);
+  };
+  for (const domain of COMMON_DOMAINS) {
+    documentRef.getElementById(`domain-${domain}`).addEventListener('change', event => {
+      return state.changeDomain(domain, event.target.checked);
+    });
+  }
+  documentRef.getElementById('add-domain-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const field = documentRef.getElementById('custom-domain');
+    const domain = field.value.trim().toLowerCase();
+    if (!DOMAIN_PATTERN.test(domain) || domain.includes('://') || domain.includes('/')) {
+      state.blocklistMessage = 'Enter a bare domain such as example.com. URLs and paths are not accepted.';
+      show();
+      return;
+    }
+    if (state.displayedDomains.includes(domain)) {
+      state.blocklistMessage = 'That domain is already in the blocklist.';
+      show();
+      return;
+    }
+    await persistDomainIntent(domain, true);
+    if (state.online && state.snapshot.desktopBlockedDomains.includes(domain)) field.value = '';
+  });
   documentRef.getElementById('grant-site-access').addEventListener('click', async () => {
     if (!chromeApi.permissions?.request) return;
     const origins = state.missingDomains.flatMap(domain => [`http://${domain}/*`, `https://${domain}/*`]);
@@ -180,11 +343,15 @@ export async function initializeManagement({
       if (!validResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
       const syncedAt = now().toISOString();
       state.snapshot = payload.snapshot;
+      state.revision = payload.revision;
+      state.newEmptyBlocklist = payload.revision === 0 && payload.updatedAt === null && payload.snapshot.desktopBlockedDomains.length === 0;
+      state.online = true;
       state.lastSuccessfulSync = syncedAt;
-      await chromeApi.storage.local.set({ lastValidSnapshot: state.snapshot, lastSuccessfulSync: syncedAt });
+      await chromeApi.storage.local.set({ lastValidSnapshot: state.snapshot, lastSuccessfulSync: syncedAt, lastSnapshotRevision: payload.revision });
       await updateRules();
       await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
     } catch (cause) {
+      state.online = false;
       state.error = cause instanceof TypeError
         ? 'Could not reach the sync API. Check your connection and API URL.'
         : (cause?.message || 'Sync failed. Check the API URL and bearer token.');
