@@ -460,3 +460,25 @@ button:active:not(:disabled) { transform: scale(.98); }
 .blocklist .permission-line.is-ready::before { background: #1b7d52; }
 .blocklist .permission-line.is-needed { background: var(--amber-soft); color: var(--on-amber-soft); }
 .blocklist #permission-state { flex: 1 1 240px; font-size: .9rem; font-weight: 600; }
+
+/* The app icon anchors a short, hand-drawn wordmark entrance. */
+.page-header { min-height: 106px; }
+.brand { gap: 16px; color: var(--on-amber-soft); }
+.brand-emblem { position: relative; display: grid; place-items: center; flex: none; width: 64px; height: 64px; border-radius: 18px; background: var(--amber-soft); }
+.brand-emblem img { position: relative; width: 45px; height: 45px; border-radius: 12px; }
+.brand-ring { position: absolute; inset: 0; width: 64px; height: 64px; color: var(--amber); animation: brand-ring-arrive 650ms cubic-bezier(.16, 1, .3, 1) both; }
+.brand-wordmark { position: relative; display: inline-block; padding-bottom: 9px; font-size: clamp(1.5rem, 2.2vw, 1.95rem); line-height: 1.1; letter-spacing: -.025em; white-space: nowrap; }
+.brand-wordmark svg { position: absolute; left: 0; bottom: 0; width: 100%; height: 9px; color: var(--amber); }
+.brand-wordmark svg path { stroke-dasharray: 220; stroke-dashoffset: 220; animation: brand-line-draw 640ms 130ms cubic-bezier(.16, 1, .3, 1) forwards; }
+@keyframes brand-ring-arrive { from { opacity: .35; transform: rotate(-28deg) scale(.8); } to { opacity: 1; transform: rotate(0) scale(1); } }
+@keyframes brand-line-draw { to { stroke-dashoffset: 0; } }
+@media (max-width: 700px) {
+  .brand { gap: 10px; }
+  .brand-emblem, .brand-ring { width: 52px; height: 52px; }
+  .brand-emblem img { width: 38px; height: 38px; }
+  .brand-wordmark { font-size: 1.35rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-ring, .brand-wordmark svg path { animation: none; }
+  .brand-wordmark svg path { stroke-dashoffset: 0; }
+}
