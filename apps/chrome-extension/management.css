@@ -452,3 +452,11 @@ button:active:not(:disabled) { transform: scale(.98); }
 @media (max-width: 600px) {
   .connection-rail .connection { padding: 22px; }
 }
+
+/* Site access reads as a clear result, with the action reserved for missing access. */
+.blocklist .permission-line { gap: 10px 16px; min-height: 56px; padding: 13px 18px; background: var(--surface); color: var(--muted); }
+.blocklist .permission-line::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--amber); }
+.blocklist .permission-line.is-ready { background: #e7f1e9; color: #1a573c; }
+.blocklist .permission-line.is-ready::before { background: #1b7d52; }
+.blocklist .permission-line.is-needed { background: var(--amber-soft); color: var(--on-amber-soft); }
+.blocklist #permission-state { flex: 1 1 240px; font-size: .9rem; font-weight: 600; }

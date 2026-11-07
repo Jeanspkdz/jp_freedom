@@ -510,9 +510,10 @@ test('management explains missing site access and requests it from the user gest
   };
   const harness = createHarness({ lastValidSnapshot: snapshot });
   let requested;
+  let granted = false;
   harness.chromeApi.permissions = {
-    async contains() { return false; },
-    async request({ origins }) { requested = origins; return true; },
+    async contains() { return granted; },
+    async request({ origins }) { requested = origins; granted = true; return true; },
   };
 
   await initializeManagement({ ...harness, now: () => now, fetchImpl: async () => { throw new Error('unexpected request'); } });
@@ -520,7 +521,7 @@ test('management explains missing site access and requests it from the user gest
   assert.match(harness.nodes.get('permission-state').textContent, /site access.*needed/i);
   await harness.nodes.get('grant-site-access').listeners.get('click')();
   assert.deepEqual(requested, ['http://reddit.com/*', 'https://reddit.com/*']);
-  assert.equal(harness.nodes.get('permission-state').textContent, 'Site access granted.');
+  assert.equal(harness.nodes.get('permission-state').textContent, 'Chrome can block your selected sites during a focus block.');
 });
 
 test('the blocked page shows the active activity and planned end without a bypass control', async () => {

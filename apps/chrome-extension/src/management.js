@@ -142,9 +142,17 @@ function render(documentRef, state, now) {
   errorMessage.hidden = !error;
   errorMessage.textContent = error ?? '';
   const missingDomains = state.missingDomains ?? [];
-  permissionState.textContent = missingDomains.length
-    ? `Chrome site access is needed for ${missingDomains.join(', ')} before these sites can be blocked.`
-    : 'Chrome site access is ready for selected sites.';
+  const accessState = !snapshot || snapshot.desktopBlockedDomains.length === 0
+    ? 'pending' : missingDomains.length ? 'needed' : 'ready';
+  const permissionLine = documentRef.querySelector?.('.permission-line');
+  for (const value of ['pending', 'needed', 'ready']) {
+    permissionLine?.classList?.toggle(`is-${value}`, accessState === value);
+  }
+  permissionState.textContent = accessState === 'pending'
+    ? 'Sync a plan and select sites to check access.'
+    : accessState === 'needed'
+      ? `Site access needed for ${missingDomains.join(', ')}.`
+      : 'Chrome can block your selected sites during a focus block.';
   grantSiteAccess.hidden = missingDomains.length === 0;
 
   if (!snapshot) {
@@ -367,8 +375,7 @@ export async function initializeManagement({
     if (origins.length && await chromeApi.permissions.request({ origins })) {
       await refreshSiteAccess();
       await applySnapshotRules(chromeApi, state.snapshot, now());
-      permissionState.textContent = 'Site access granted.';
-      grantSiteAccess.hidden = true;
+      show();
     }
   });
   const sync = async () => {
