@@ -139,10 +139,6 @@ function render(documentRef, state, now) {
     ?? (!state.connected || !state.online ? 'Connect Chrome to the internet and sync to save blocklist changes.' : '');
 
   lastSync.textContent = `Last successful sync: ${formatLocalTime(lastSuccessfulSync)}`;
-  documentRef.getElementById('connection-state').textContent = !connected
-    ? 'Not connected' : error || !state.online ? 'Offline' : 'Synced';
-  documentRef.getElementById('connection-revision').textContent = Number.isInteger(state.revision)
-    ? `Revision ${state.revision}` : 'No plan yet';
   errorMessage.hidden = !error;
   errorMessage.textContent = error ?? '';
   const missingDomains = state.missingDomains ?? [];

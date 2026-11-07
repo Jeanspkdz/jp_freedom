@@ -383,10 +383,6 @@ button:active:not(:disabled) { transform: scale(.98); }
 .connection-device svg { width: 44px; height: 44px; }
 .connection-flow { position: relative; height: 2px; border-top: 2px dashed var(--line); }
 .connection-flow::after { content: ""; position: absolute; left: 0; top: -2px; width: 100%; height: 2px; background: var(--amber); clip-path: inset(0 100% 0 0); }
-.connection-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
-.connection-facts > div { padding: 16px 18px; border-radius: 14px; background: var(--amber-soft); color: var(--on-amber-soft); }
-.connection-facts span { display: block; margin-bottom: 4px; font-size: .8rem; }
-.connection-facts strong { font-size: 1.1rem; }
 .connection-rail .sync { margin-top: 26px; }
 
 /* Entrance motion reveals a section once, then leaves every control ready. */
@@ -401,7 +397,6 @@ button:active:not(:disabled) { transform: scale(.98); }
 #common-sites .site-row:nth-of-type(n+6) { animation-delay: 225ms; }
 .view-panel:not([hidden]) .connection-path { animation: section-arrive 430ms cubic-bezier(.16, 1, .3, 1) both; }
 .view-panel:not([hidden]) .connection-flow::after { animation: connection-arrive 700ms 160ms cubic-bezier(.16, 1, .3, 1) forwards; }
-.view-panel:not([hidden]) .connection-facts { animation: section-arrive 400ms 80ms cubic-bezier(.16, 1, .3, 1) both; }
 .view-panel:not([hidden]) .plan-hero { animation: section-arrive 420ms cubic-bezier(.16, 1, .3, 1) both; }
 .view-panel:not([hidden]) .day-plan { animation: row-arrive 400ms 90ms cubic-bezier(.16, 1, .3, 1) both; }
 .view-panel:not([hidden]) #tomorrow-plan { animation-delay: 150ms; }
@@ -415,7 +410,6 @@ button:active:not(:disabled) { transform: scale(.98); }
 @media (max-width: 600px) {
   .connection-path { grid-template-columns: 70px minmax(35px, 1fr) 70px; gap: 8px; min-height: 150px; padding: 20px 14px; }
   .connection-device svg { width: 38px; height: 38px; }
-  .connection-facts { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   .site-row { transition: background-color 120ms ease-out, border-color 120ms ease-out; }
@@ -425,7 +419,6 @@ button:active:not(:disabled) { transform: scale(.98); }
   .view-panel:not([hidden]) .schedule-intro,
   .view-panel:not([hidden]) .site-row,
   .view-panel:not([hidden]) .connection-path,
-  .view-panel:not([hidden]) .connection-facts,
   .view-panel:not([hidden]) .plan-hero,
   .view-panel:not([hidden]) .day-plan,
   .view-panel:not([hidden]) #add-domain-form,
@@ -433,4 +426,27 @@ button:active:not(:disabled) { transform: scale(.98); }
   .view-panel:not([hidden]) .connection-rail .connection,
   .view-panel:not([hidden]) .connection-flow::after { animation: none; }
   .connection-flow::after { clip-path: inset(0 0 0 0); }
+}
+
+/* Keep the connection task and its recent sync information together. */
+.connection-rail { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(300px, .88fr); gap: 0 30px; width: 100%; }
+.connection-intro { grid-column: 1 / -1; }
+.connection-overview { grid-column: 1; min-width: 0; }
+.connection-path { margin-top: 30px; }
+.connection-caption { max-width: 52ch; margin-top: 18px; color: var(--muted); font-size: .9rem; }
+.connection-rail .sync { margin-top: 24px; padding: 16px 0 0; border-top: 1px solid var(--line); border-bottom: 0; }
+.connection-rail #last-sync { margin: 0; font-size: .88rem; }
+.connection-rail .connection { grid-column: 2; grid-row: 2; align-self: start; margin-top: 30px; padding: 28px; border-radius: 16px; background: var(--surface); }
+.connection-rail .connection h2 { font-size: 1.5rem; }
+.connection-rail .connection > p { max-width: 38ch; }
+.connection-rail #settings-form { margin-top: 26px; }
+.connection-rail #settings-form button { width: 100%; }
+
+@media (max-width: 850px) {
+  .connection-rail { grid-template-columns: 1fr; }
+  .connection-overview, .connection-rail .connection { grid-column: 1; }
+  .connection-rail .connection { grid-row: auto; margin-top: 28px; }
+}
+@media (max-width: 600px) {
+  .connection-rail .connection { padding: 22px; }
 }

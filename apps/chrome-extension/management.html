@@ -71,20 +71,21 @@
       <div id="view-connection" class="view-panel" hidden>
         <div class="connection-rail">
           <div class="connection-intro"><h1>Connection</h1><p>Your focus plan travels from your phone to Chrome.</p></div>
+          <div class="connection-overview">
           <div class="connection-path" aria-label="Phone syncs the plan to this computer">
             <div class="connection-device"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="13" y="5" width="22" height="38" rx="5"/><path d="M21 37h6"/></svg><span>Phone</span></div>
             <div class="connection-flow" aria-hidden="true"></div>
             <div class="connection-device"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="7" width="38" height="27" rx="3"/><path d="M17 41h14m-7-7v7"/></svg><span>This PC</span></div>
           </div>
-          <div class="connection-facts"><div><span>Status</span><strong id="connection-state">Checking…</strong></div><div><span>Plan version</span><strong id="connection-revision">Checking…</strong></div></div>
-          <section class="sync" aria-labelledby="sync-heading">
-            <h2 id="sync-heading">Sync status</h2>
+          <p class="connection-caption">Chrome keeps the last plan received from your phone so it can continue working offline.</p>
+          <section class="sync" aria-label="Recent sync">
             <p id="last-sync">Last successful sync: Never</p>
             <p id="sync-error" class="error" role="alert" hidden></p>
           </section>
+          </div>
           <section class="connection" aria-labelledby="settings-heading">
-            <h2 id="settings-heading">Connection</h2>
-            <p>Enter the deployed sync API URL and bearer token from the phone's sync settings. Neon database credentials are not used here.</p>
+            <h2 id="settings-heading">Sync settings</h2>
+            <p>Enter the sync API URL and bearer token shown in the phone's sync settings.</p>
             <form id="settings-form">
               <label for="api-url">Sync API URL</label><input id="api-url" name="api-url" type="url" autocomplete="url" placeholder="https://your-sync-api.example" required>
               <label for="api-token">Bearer token</label><input id="api-token" name="api-token" type="password" autocomplete="off" required>
