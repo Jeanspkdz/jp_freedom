@@ -9,6 +9,7 @@ const val DEFAULT_REQUIRED_BLOCK_COUNT = 3
 const val MAX_BLOCK_NOTE_LENGTH = 2_000
 val DEFAULT_EVENING_CUTOFF: LocalTime = LocalTime.of(21, 0)
 const val DEFAULT_STUDY_HOURS_TARGET_MINUTES = 180
+const val DEFAULT_BREAK_MINUTES = 15
 val SUPPORTED_EVENING_CUTOFFS: List<LocalTime> = listOf(
     LocalTime.of(21, 0),
     LocalTime.of(22, 0),
@@ -19,6 +20,7 @@ data class FocusSettings(
     val requiredBlockCount: Int = DEFAULT_REQUIRED_BLOCK_COUNT,
     val eveningCutoff: LocalTime = DEFAULT_EVENING_CUTOFF,
     val studyHoursTargetMinutes: Int = DEFAULT_STUDY_HOURS_TARGET_MINUTES,
+    val breakMinutes: Int = DEFAULT_BREAK_MINUTES,
 ) {
     init {
         require(requiredBlockCount > 0) { "The minimum number of blocks must be greater than zero." }
@@ -28,6 +30,7 @@ data class FocusSettings(
         require(studyHoursTargetMinutes in 30..720 && studyHoursTargetMinutes % 30 == 0) {
             "The study-hours target must be between 30 minutes and 12 hours in 30-minute increments."
         }
+        require(breakMinutes in 1..60) { "The break duration must be between 1 and 60 minutes." }
     }
 }
 

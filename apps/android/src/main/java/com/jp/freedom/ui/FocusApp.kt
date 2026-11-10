@@ -137,6 +137,10 @@ fun FocusApp(
                     PolicyAlarmScheduler.scheduleNext(context)
                     PolicyAlarmScheduler.broadcastRecheck(context)
                 }
+                if (studyTimerController.finishBreakIfDue() != null) {
+                    PolicyAlarmScheduler.scheduleNext(context)
+                    PolicyAlarmScheduler.broadcastRecheck(context)
+                }
                 val timer = repository.activeStudySession()
                 val review = repository.pendingStudyReview()
                 val policy = FocusPolicy.evaluate(
@@ -355,13 +359,28 @@ fun FocusApp(
             },
             onReview = { task, status, note, remaining ->
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        studyTimerController.review(task, status, note, remaining)
+                    val reviewed = withContext(Dispatchers.IO) {
+                        studyTimerController.review(task, status, note, remaining, Duration.ofMinutes(focusSettings.breakMinutes.toLong()))
                     }
                     com.jp.freedom.enforcement.StudySessionNotifier.dismiss(context)
                     pendingReview = null
-                    page = AppPage.PLANNER
+                    studySession = reviewed
+                    page = AppPage.STUDY_TIMER
+                    PolicyAlarmScheduler.scheduleNext(context)
+                    PolicyAlarmScheduler.broadcastRecheck(context)
                     refreshVersion++
+                }
+            },
+            onEndBreak = { nextTask ->
+                scope.launch {
+                    val ended = withContext(Dispatchers.IO) { studyTimerController.endBreak(nextTask) }
+                    if (ended != null) {
+                        studySession = null
+                        PolicyAlarmScheduler.scheduleNext(context)
+                        PolicyAlarmScheduler.broadcastRecheck(context)
+                        page = AppPage.PLANNER
+                        refreshVersion++
+                    }
                 }
             },
         )
