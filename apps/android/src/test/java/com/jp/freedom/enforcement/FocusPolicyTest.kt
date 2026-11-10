@@ -5,6 +5,7 @@ import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.StudyTimerSession
+import com.jp.freedom.domain.StudySessionState
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -174,6 +175,25 @@ class FocusPolicyTest {
         val allowed = FocusPolicy.allowedPackages(state, "jp", setOf("phone", "messages"))
         assertTrue("com.openai.chatgpt" in allowed)
         assertFalse("social.app" in allowed)
+    }
+
+    @Test
+    fun breakPausesPhoneRestrictionsAndRechecksEveningRestrictionWhenTimeExpires() {
+        val start = LocalDateTime.of(2026, 11, 3, 21, 0).atZone(ZoneId.systemDefault()).toInstant()
+        val breaking = StudyTimerSession.start("Reading", Duration.ofMinutes(30), AccessProfile.ESSENTIALS_ONLY, start).copy(
+            state = StudySessionState.BREAKING,
+            breakStartedAt = start,
+            breakDurationMillis = Duration.ofMinutes(15).toMillis(),
+        )
+        val settings = FocusSettings(studyHoursTargetMinutes = 180)
+        val now = LocalDateTime.of(2026, 11, 3, 21, 10)
+        val shortPlan = listOf(block.copy(date = date.plusDays(1)))
+
+        assertNull(FocusPolicy.evaluate(now, shortPlan, settings, breaking).blockedReason)
+        assertEquals(
+            BlockedReason.EVENING_RESTRICTION,
+            FocusPolicy.evaluate(now.plusMinutes(10), shortPlan, settings, breaking.copy(breakDurationMillis = Duration.ofMinutes(5).toMillis())).blockedReason,
+        )
     }
 
     private fun evaluate(time: LocalTime, candidate: PlannedBlock = block) =

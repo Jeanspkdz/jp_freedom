@@ -58,7 +58,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
     fun settings(): FocusSettings = readSettings(database.readableDatabase)
 
-    override fun activeStudySession(): StudyTimerSession? = readStudySession(database.readableDatabase, "state = ?", arrayOf(StudySessionState.ACTIVE.name))
+    override fun activeStudySession(): StudyTimerSession? = readStudySession(database.readableDatabase, "state IN (?, ?)", arrayOf(StudySessionState.ACTIVE.name, StudySessionState.BREAKING.name))
 
     override fun pendingStudyReview(): StudyTimerSession? = readStudySession(database.readableDatabase, "state = ?", arrayOf(StudySessionState.PENDING_REVIEW.name))
 
@@ -70,6 +70,8 @@ class FocusRepository(context: Context) : StudySessionStore {
             put("actual_ms", session.actualMillis); put("state", session.state.name)
             session.completionStatus?.let { put("completion_status", it.name) } ?: putNull("completion_status")
             put("note", session.note); put("remaining", session.remaining)
+            session.breakStartedAt?.let { put("break_started_at", it.toEpochMilli()) } ?: putNull("break_started_at")
+            put("break_duration_ms", session.breakDurationMillis); put("next_task", session.nextTask)
         }
         database.writableDatabase.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
@@ -78,7 +80,7 @@ class FocusRepository(context: Context) : StudySessionStore {
         val db = database.writableDatabase
         db.beginTransaction()
         try {
-            val existing = db.rawQuery("SELECT 1 FROM study_sessions WHERE state IN (?, ?) LIMIT 1", arrayOf("ACTIVE", "PENDING_REVIEW")).use { it.moveToFirst() }
+            val existing = db.rawQuery("SELECT 1 FROM study_sessions WHERE state IN (?, ?, ?) LIMIT 1", arrayOf("ACTIVE", "PENDING_REVIEW", "BREAKING")).use { it.moveToFirst() }
             if (existing) return false
             saveStudySession(session)
             db.setTransactionSuccessful()
@@ -117,6 +119,9 @@ class FocusRepository(context: Context) : StudySessionStore {
                 completionStatus = cursor.getColumnIndexOrThrow("completion_status").let { if (cursor.isNull(it)) null else CompletionStatus.valueOf(cursor.getString(it)) },
                 note = cursor.getString(cursor.getColumnIndexOrThrow("note")) ?: "",
                 remaining = cursor.getString(cursor.getColumnIndexOrThrow("remaining")) ?: "",
+                breakStartedAt = cursor.getColumnIndexOrThrow("break_started_at").let { if (cursor.isNull(it)) null else Instant.ofEpochMilli(cursor.getLong(it)) },
+                breakDurationMillis = cursor.getLong(cursor.getColumnIndexOrThrow("break_duration_ms")),
+                nextTask = cursor.getString(cursor.getColumnIndexOrThrow("next_task")) ?: "",
             )
         }
 
@@ -132,6 +137,7 @@ class FocusRepository(context: Context) : StudySessionStore {
                 put(COLUMN_REQUIRED_COUNT, settings.requiredBlockCount)
                 put(COLUMN_CUTOFF_MINUTE, settings.eveningCutoff.toMinuteOfDay())
                 put(COLUMN_STUDY_TARGET_MINUTES, settings.studyHoursTargetMinutes)
+                put(COLUMN_BREAK_MINUTES, settings.breakMinutes)
             }
             db.insertWithOnConflict(TABLE_SETTINGS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
             val paths = buildList {
@@ -351,7 +357,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
     private fun readSettings(db: SQLiteDatabase): FocusSettings = db.query(
         TABLE_SETTINGS,
-        arrayOf(COLUMN_REQUIRED_COUNT, COLUMN_CUTOFF_MINUTE, COLUMN_STUDY_TARGET_MINUTES),
+        arrayOf(COLUMN_REQUIRED_COUNT, COLUMN_CUTOFF_MINUTE, COLUMN_STUDY_TARGET_MINUTES, COLUMN_BREAK_MINUTES),
         "$COLUMN_SETTINGS_ID = 1",
         null,
         null,
@@ -364,6 +370,7 @@ class FocusRepository(context: Context) : StudySessionStore {
                 requiredBlockCount = cursor.getInt(0).coerceAtLeast(1),
                 eveningCutoff = LocalTime.of(cursor.getInt(1) / 60, cursor.getInt(1) % 60),
                 studyHoursTargetMinutes = cursor.getInt(2).coerceIn(30, 720),
+                breakMinutes = cursor.getInt(3).coerceIn(1, 60),
             )
         }.getOrDefault(FocusSettings())
     }
@@ -588,6 +595,12 @@ class FocusRepository(context: Context) : StudySessionStore {
                 db.execSQL("ALTER TABLE $TABLE_SETTINGS ADD COLUMN $COLUMN_STUDY_TARGET_MINUTES INTEGER NOT NULL DEFAULT 180")
             }
             if (oldVersion < 6) createStudySessionTable(db)
+            if (oldVersion < 7) {
+                db.execSQL("ALTER TABLE $TABLE_SETTINGS ADD COLUMN $COLUMN_BREAK_MINUTES INTEGER NOT NULL DEFAULT 15")
+                db.execSQL("ALTER TABLE study_sessions ADD COLUMN break_started_at INTEGER")
+                db.execSQL("ALTER TABLE study_sessions ADD COLUMN break_duration_ms INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE study_sessions ADD COLUMN next_task TEXT NOT NULL DEFAULT ''")
+            }
         }
 
         private fun createStudySessionTable(db: SQLiteDatabase) {
@@ -595,7 +608,8 @@ class FocusRepository(context: Context) : StudySessionStore {
                 id TEXT PRIMARY KEY NOT NULL, task_name TEXT NOT NULL, duration_ms INTEGER NOT NULL,
                 access_profile TEXT NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER,
                 actual_ms INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL,
-                completion_status TEXT, note TEXT NOT NULL DEFAULT '', remaining TEXT NOT NULL DEFAULT '')""")
+                completion_status TEXT, note TEXT NOT NULL DEFAULT '', remaining TEXT NOT NULL DEFAULT '',
+                break_started_at INTEGER, break_duration_ms INTEGER NOT NULL DEFAULT 0, next_task TEXT NOT NULL DEFAULT '')""")
         }
 
         private fun createPlanTables(db: SQLiteDatabase) {
@@ -617,7 +631,8 @@ class FocusRepository(context: Context) : StudySessionStore {
                     $COLUMN_SETTINGS_ID INTEGER PRIMARY KEY NOT NULL,
                     $COLUMN_REQUIRED_COUNT INTEGER NOT NULL,
                     $COLUMN_CUTOFF_MINUTE INTEGER NOT NULL,
-                    $COLUMN_STUDY_TARGET_MINUTES INTEGER NOT NULL DEFAULT 180
+                    $COLUMN_STUDY_TARGET_MINUTES INTEGER NOT NULL DEFAULT 180,
+                    $COLUMN_BREAK_MINUTES INTEGER NOT NULL DEFAULT 15
                 )""".trimIndent(),
             )
         }
@@ -660,7 +675,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 6
+            private const val DATABASE_VERSION = 7
         }
     }
 
@@ -682,6 +697,7 @@ class FocusRepository(context: Context) : StudySessionStore {
         const val COLUMN_REQUIRED_COUNT = "required_count"
         const val COLUMN_CUTOFF_MINUTE = "cutoff_minute"
         const val COLUMN_STUDY_TARGET_MINUTES = "study_target_minutes"
+        const val COLUMN_BREAK_MINUTES = "break_minutes"
         const val COLUMN_DOMAIN = "domain"
         const val COLUMN_PATH = "path"
         const val COLUMN_REVISION = "revision"

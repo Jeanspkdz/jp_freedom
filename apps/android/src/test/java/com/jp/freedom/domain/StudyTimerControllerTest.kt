@@ -27,11 +27,27 @@ class StudyTimerControllerTest {
         assertNull(reviewController.start(Duration.ofMinutes(60), AccessProfile.ESSENTIALS_ONLY))
 
         assertNotNull(reviewController.review("Read chapter 4", CompletionStatus.PARTLY_DONE, "Good progress", "Exercises"))
+        assertFalse(reviewController.canStartAnother())
+        assertNotNull(reviewController.endBreak("Review exercises"))
         assertTrue(reviewController.canStartAnother())
         assertEquals(StudyTimerDestination.PLANNER, reviewController.destination())
         assertNotNull(reviewController.start(Duration.ofMinutes(60), AccessProfile.ESSENTIALS_ONLY))
     }
 
+    @Test fun reviewingStartsAnUnrestrictedBreakThatCanOnlyEndAfterNamingTheNextTask() {
+        val store = MemorySessionStore()
+        val controller = controller(store, "2026-11-10T12:00:00Z")
+        controller.start(Duration.ofMinutes(45), AccessProfile.ESSENTIALS_ONLY)
+        controller.stop()
+        val reviewed = controller.review("Math", CompletionStatus.FINISHED, "", "", Duration.ofMinutes(15))
+
+        assertEquals(StudySessionState.BREAKING, reviewed?.state)
+        assertFalse(controller.canStartAnother())
+        assertNull(controller.endBreak(""))
+        assertEquals(StudyTimerDestination.BREAK, controller.destination())
+        assertEquals(StudySessionState.REVIEWED, controller.endBreak("Read biology" )?.state)
+        assertTrue(controller.canStartAnother())
+    }
     private fun controller(store: MemorySessionStore, now: String) = StudyTimerController(
         store,
         Clock.fixed(Instant.parse(now), ZoneOffset.UTC),
@@ -39,7 +55,7 @@ class StudyTimerControllerTest {
 
     private class MemorySessionStore : StudySessionStore {
         private val sessions = mutableListOf<StudyTimerSession>()
-        override fun activeStudySession() = sessions.lastOrNull { it.state == StudySessionState.ACTIVE }
+        override fun activeStudySession() = sessions.lastOrNull { it.state == StudySessionState.ACTIVE || it.state == StudySessionState.BREAKING }
         override fun pendingStudyReview() = sessions.lastOrNull { it.state == StudySessionState.PENDING_REVIEW }
         override fun saveStudySession(session: StudyTimerSession) {
             sessions.removeAll { it.id == session.id }
