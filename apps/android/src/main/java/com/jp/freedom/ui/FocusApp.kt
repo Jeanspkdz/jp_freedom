@@ -239,6 +239,7 @@ fun FocusApp(
             isTodaySelected = dayOffset == 0,
             blocks = allBlocks.filter { it.date == selectedDate },
             allBlocks = allBlocks,
+            studySessions = studySessions,
             settings = focusSettings,
             restrictionActive = restrictionActive,
             hasSyncKey = syncConfiguration.hasWriteToken,

@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
+import com.jp.freedom.domain.StudyTimerSession
+import com.jp.freedom.domain.StudySessionState
 import com.jp.freedom.data.SyncStatus
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -72,6 +74,7 @@ fun PlannerScreen(
     isTodaySelected: Boolean,
     blocks: List<PlannedBlock>,
     allBlocks: List<PlannedBlock>,
+    studySessions: List<StudyTimerSession>,
     settings: FocusSettings,
     restrictionActive: Boolean,
     hasSyncKey: Boolean,
@@ -103,6 +106,10 @@ fun PlannerScreen(
     val requiredPlanDate = com.jp.freedom.domain.DayPlanPolicy
         .requiredPlanDateForEvening(LocalDate.now())
     val targetDate = requiredPlanDate ?: LocalDate.now().plusDays(1)
+    val targetMinutes = settings.studyHoursTargetMinutes
+    val actualMinutes = studySessions.filter { it.startedAt.atZone(java.time.ZoneId.systemDefault()).toLocalDate() == LocalDate.now() }
+        .sumOf { if (it.state == StudySessionState.ACTIVE) Duration.between(it.startedAt, java.time.Instant.now()).toMinutes() else it.actualMillis / 60_000 }
+        .toInt()
     val targetCount = allBlocks.count { it.date == targetDate }
     val isRestDayTomorrow = requiredPlanDate == null
 
@@ -136,6 +143,8 @@ fun PlannerScreen(
                 isRestDayTomorrow = isRestDayTomorrow,
                 onOpenTomorrowPlan = onOpenTomorrowPlan,
                 onAddBlock = onAddBlock,
+                onOpenStudyTimer = onOpenStudyTimer,
+                onOpenDailyReview = onOpenDailyReview,
             )
         },
         containerColor = MaterialTheme.colorScheme.background,
@@ -172,6 +181,8 @@ fun PlannerScreen(
                 onSelectTomorrow = onSelectTomorrow,
             )
 
+            StudyHoursLedger(actualMinutes, targetMinutes, blocks)
+
             OutlinedButton(
                 onClick = if (hasSyncKey) onSyncNow else onOpenSettings,
                 enabled = syncStatus != SyncStatus.SYNCING,
@@ -192,11 +203,8 @@ fun PlannerScreen(
                 )
             }
 
-            OutlinedButton(onClick = onOpenStudyTimer, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-                Text("Start study timer")
-            }
-            OutlinedButton(onClick = onOpenDailyReview, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-                Text("Review today's study")
+            IconButton(onClick = if (hasSyncKey) onSyncNow else onOpenSettings, modifier = Modifier.align(Alignment.End).padding(end = 12.dp)) {
+                Icon(Icons.Outlined.CloudSync, contentDescription = if (syncStatus == SyncStatus.ERROR) "Retry sync" else "Sync changes")
             }
 
             if (!accessibilityEnabled || !exactAlarmsAllowed) {
@@ -248,7 +256,6 @@ fun PlannerScreen(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 16.dp),
                 ) {
-                    item { StudySummary(blocks) }
                     itemsIndexed(blocks, key = { _, block -> block.id }) { index, block ->
                         val isCurrent = block.id == activeBlock?.id
                         val isNext = block.id == nextBlock?.id
@@ -324,6 +331,27 @@ private fun StudySummary(blocks: List<PlannedBlock>) {
             }
             if (blocks.size > 3) Text("+${blocks.size - 3} more blocks", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
         }
+    }
+}
+
+@Composable
+private fun StudyHoursLedger(actualMinutes: Int, targetMinutes: Int, blocks: List<PlannedBlock>) {
+    val planned = blocks.sumOf { Duration.between(it.startTime, it.endTime).toMinutes().coerceAtLeast(0) }.toInt()
+    val colors = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("${actualMinutes / 60}:${(actualMinutes % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.displaySmall, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, color = colors.onSurface)
+                Text("ESTUDIADO", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${targetMinutes / 60}:${(targetMinutes % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.headlineMedium, fontFamily = FontFamily.Monospace, color = colors.onSurface)
+                Text("META DIARIA", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        LinearProgressIndicator(progress = { (actualMinutes.toFloat() / targetMinutes.coerceAtLeast(1)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(4.dp), color = colors.primary, trackColor = colors.surfaceVariant)
+        Text("Planificado: ${planned / 60} h ${planned % 60} min", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelMedium, color = colors.secondary)
     }
 }
 
@@ -485,6 +513,8 @@ private fun PlannerBottomBar(
     isRestDayTomorrow: Boolean,
     onOpenTomorrowPlan: () -> Unit,
     onAddBlock: () -> Unit,
+    onOpenStudyTimer: () -> Unit,
+    onOpenDailyReview: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -547,16 +577,20 @@ private fun PlannerBottomBar(
             }
         }
         Button(
-            onClick = onAddBlock,
+            onClick = onOpenStudyTimer,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp),
-            shape = RoundedCornerShape(50),
+            shape = RoundedCornerShape(14.dp),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         ) {
-            Icon(Icons.Outlined.Add, contentDescription = null)
+            Icon(Icons.Outlined.School, contentDescription = null)
             Spacer(Modifier.width(12.dp))
-            Text("Add block", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("Iniciar sesión", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onOpenDailyReview, modifier = Modifier.weight(1f)) { Text("Revisar día") }
+            TextButton(onClick = onAddBlock, modifier = Modifier.weight(1f)) { Text("Añadir al plan") }
         }
     }
 }
