@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import com.jp.freedom.MainActivity
 import com.jp.freedom.data.FocusRepository
+import com.jp.freedom.domain.StudyTimerPolicy
 import java.time.LocalDateTime
 
 class FocusAccessibilityService : AccessibilityService() {
@@ -58,10 +59,19 @@ class FocusAccessibilityService : AccessibilityService() {
 
     private fun enforceCurrentPolicy() {
         val packageName = foregroundPackage ?: return
+        repository.activeStudySession()?.let { session ->
+            StudyTimerPolicy.finishIfDue(session, java.time.Instant.now())?.let { ended ->
+                if (repository.finishStudySession(ended)) {
+                    StudySessionNotifier.show(this, ended)
+                    PolicyAlarmScheduler.scheduleNext(this)
+                }
+            }
+        }
         val policy = FocusPolicy.evaluate(
             now = LocalDateTime.now(),
             blocks = repository.allBlocks(),
             settings = repository.settings(),
+            studySession = repository.activeStudySession(),
         )
         val policyReason = policy.blockedReason
         if (policyReason == null) {

@@ -6,6 +6,7 @@ import android.content.Intent
 
 class PolicyAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        completeExpiredStudySession(context)
         PolicyAlarmScheduler.scheduleNext(context)
         PolicyAlarmScheduler.broadcastRecheck(context)
     }
@@ -13,7 +14,17 @@ class PolicyAlarmReceiver : BroadcastReceiver() {
 
 class PolicyBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        completeExpiredStudySession(context)
         PolicyAlarmScheduler.scheduleNext(context)
         PolicyAlarmScheduler.broadcastRecheck(context)
+    }
+}
+
+private fun completeExpiredStudySession(context: Context) {
+    val repository = com.jp.freedom.data.FocusRepository(context)
+    repository.activeStudySession()?.let { session ->
+        com.jp.freedom.domain.StudyTimerPolicy.finishIfDue(session, java.time.Instant.now())?.let { ended ->
+            if (repository.finishStudySession(ended)) StudySessionNotifier.show(context, ended)
+        }
     }
 }

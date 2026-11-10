@@ -23,6 +23,9 @@ object PolicyAlarmScheduler {
         val settings = repository.settings()
         val blocks = repository.allBlocks()
         val upcoming = mutableListOf<LocalDateTime>()
+        repository.activeStudySession()?.let { session ->
+            upcoming += LocalDateTime.ofInstant(session.startedAt.plusMillis(session.durationMillis), ZoneId.systemDefault()).takeIf { it.isAfter(now) } ?: now.plusSeconds(1)
+        }
 
         for (offset in 0L..1L) {
             val date = LocalDate.now().plusDays(offset)

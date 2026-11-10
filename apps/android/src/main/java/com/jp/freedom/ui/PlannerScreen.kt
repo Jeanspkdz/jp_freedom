@@ -81,6 +81,7 @@ fun PlannerScreen(
     onSelectToday: () -> Unit,
     onSelectTomorrow: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenStudyTimer: () -> Unit,
     onSyncNow: () -> Unit,
     onOpenTomorrowPlan: () -> Unit,
     onAddBlock: () -> Unit,
@@ -188,6 +189,10 @@ fun PlannerScreen(
                         else -> "Sync changes"
                     },
                 )
+            }
+
+            OutlinedButton(onClick = onOpenStudyTimer, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                Text("Start study timer")
             }
 
             if (!accessibilityEnabled || !exactAlarmsAllowed) {

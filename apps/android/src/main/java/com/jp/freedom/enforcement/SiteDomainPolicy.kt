@@ -16,7 +16,7 @@ object SiteDomainPolicy {
         if (state.blockedReason == null) return true
         if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return false
 
-        val profile = state.activeBlock?.accessProfile ?: return false
+        val profile = state.accessProfile ?: return false
         val normalized = domain.trimEnd('.').lowercase()
         val chatGptAllowed = profile != AccessProfile.ESSENTIALS_ONLY
         val searchAllowed = profile == AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH
