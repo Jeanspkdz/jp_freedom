@@ -69,6 +69,8 @@ fun SettingsScreen(
     accessibilityEnabled: Boolean,
     exactAlarmsAllowed: Boolean,
     siteFilterEnabled: Boolean,
+    dailyReviewReminderTime: String,
+    onDailyReviewReminderTimeChange: (String) -> Unit,
     onBack: () -> Unit,
     onSettingsChange: (FocusSettings) -> Unit,
     onDesktopDomainsChange: (List<String>) -> Unit,
@@ -81,6 +83,7 @@ fun SettingsScreen(
     var endpoint by rememberSaveable(syncConfiguration.endpoint) { mutableStateOf(syncConfiguration.endpoint) }
     var writeToken by remember { mutableStateOf("") }
     var newDomain by rememberSaveable { mutableStateOf("") }
+    var reminderDraft by rememberSaveable(dailyReviewReminderTime) { mutableStateOf(dailyReviewReminderTime) }
     var formError by remember { mutableStateOf<String?>(null) }
     Scaffold(
         topBar = {
@@ -249,7 +252,20 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("03", "Sync with Chrome")
+                SectionHeading("03", "Daily review reminder")
+                Text("Choose when the phone reminds you to review today's timer sessions. Default: 9:00 PM.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(
+                    value = reminderDraft,
+                    onValueChange = { input ->
+                        reminderDraft = input.filter { it.isDigit() || it == ':' }.take(5)
+                        if (reminderDraft.matches(Regex("\\d{2}:\\d{2}")) && runCatching { LocalTime.parse(reminderDraft) }.isSuccess) onDailyReviewReminderTimeChange(reminderDraft)
+                    },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Reminder time (24-hour)") },
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionHeading("04", "Sync with Chrome")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),

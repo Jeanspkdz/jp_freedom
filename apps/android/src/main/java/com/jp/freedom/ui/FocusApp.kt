@@ -57,6 +57,7 @@ private enum class AppPage {
     BLOCKED,
     STUDY_TIMER,
     SESSION_REVIEW,
+    DAILY_REVIEW,
 }
 
 @Composable
@@ -66,6 +67,8 @@ fun FocusApp(
     initialBlockedReason: BlockedReason?,
     blockedRequestVersion: Int,
     openSessionReviewVersion: Int,
+    openDailyReviewVersion: Int,
+    requestedDailyReviewDate: String?,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -88,6 +91,9 @@ fun FocusApp(
     var siteFilterEnabled by remember { mutableStateOf(SiteFilterVpnService.isRunning()) }
     var studySession by remember { mutableStateOf<StudyTimerSession?>(null) }
     var pendingReview by remember { mutableStateOf<StudyTimerSession?>(null) }
+    var studySessions by remember { mutableStateOf(emptyList<StudyTimerSession>()) }
+    var dailyReviewDate by remember { mutableStateOf(requestedDailyReviewDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()) }
+    var dailyReviewReminderTime by remember { mutableStateOf(com.jp.freedom.enforcement.DailyReviewReminder.time(context).toString()) }
     val studyTimerController = remember(repository) { StudyTimerController(repository) }
     var queuedTimerStart by remember { mutableStateOf<Pair<Duration, AccessProfile>?>(null) }
     fun persistTimerStart(duration: Duration, profile: AccessProfile) {
@@ -139,6 +145,7 @@ fun FocusApp(
                 }
                 val timer = repository.activeStudySession()
                 val review = repository.pendingStudyReview()
+                val sessions = repository.studySessions()
                 val policy = FocusPolicy.evaluate(
                     now = LocalDateTime.now(),
                     blocks = blocks,
@@ -147,7 +154,7 @@ fun FocusApp(
                 )
                 val restricted = policy.blockedReason == BlockedReason.EVENING_RESTRICTION
                 val policyBlocked = policy.blockedReason != null
-            PlannerSnapshot(blocks, settings, domains, sync, restricted, policyBlocked, timer, review)
+            PlannerSnapshot(blocks, settings, domains, sync, restricted, policyBlocked, timer, review, sessions)
             }
             allBlocks = snapshot.blocks
             focusSettings = snapshot.settings
@@ -157,6 +164,7 @@ fun FocusApp(
             currentPolicyBlocked = snapshot.policyBlocked
             studySession = snapshot.studySession
             pendingReview = snapshot.pendingReview
+            studySessions = snapshot.studySessions
             stateLoaded = true
             delay(if (studySession != null || page == AppPage.STUDY_TIMER) 1_000 else if (page == AppPage.SETTINGS) 1_500 else 60_000)
         }
@@ -170,6 +178,13 @@ fun FocusApp(
         if (openSessionReviewVersion > 0 && stateLoaded) {
             val destination = withContext(Dispatchers.IO) { studyTimerController.destination(openReviewRequest = true) }
             page = if (destination == StudyTimerDestination.REVIEW) AppPage.SESSION_REVIEW else AppPage.PLANNER
+        }
+    }
+
+    LaunchedEffect(openDailyReviewVersion, stateLoaded, requestedDailyReviewDate) {
+        if (openDailyReviewVersion > 0 && stateLoaded) {
+            dailyReviewDate = requestedDailyReviewDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()
+            page = AppPage.DAILY_REVIEW
         }
     }
 
@@ -187,7 +202,7 @@ fun FocusApp(
 
     BackHandler(enabled = page != AppPage.PLANNER) {
         page = when (page) {
-            AppPage.BLOCK_EDITOR, AppPage.SETTINGS, AppPage.BLOCKED, AppPage.STUDY_TIMER, AppPage.SESSION_REVIEW -> AppPage.PLANNER
+            AppPage.BLOCK_EDITOR, AppPage.SETTINGS, AppPage.BLOCKED, AppPage.STUDY_TIMER, AppPage.SESSION_REVIEW, AppPage.DAILY_REVIEW -> AppPage.PLANNER
             AppPage.PLANNER -> AppPage.PLANNER
         }
     }
@@ -230,6 +245,7 @@ fun FocusApp(
             onSelectTomorrow = { dayOffset = 1 },
             onOpenSettings = { page = AppPage.SETTINGS },
             onOpenStudyTimer = { page = if (pendingReview != null) AppPage.SESSION_REVIEW else AppPage.STUDY_TIMER },
+            onOpenDailyReview = { page = AppPage.DAILY_REVIEW },
             onSyncNow = syncNow,
             onOpenTomorrowPlan = {
                 dayOffset = 1
@@ -282,6 +298,11 @@ fun FocusApp(
             accessibilityEnabled = accessibilityEnabled,
             exactAlarmsAllowed = exactAlarmsAllowed,
             siteFilterEnabled = siteFilterEnabled,
+            dailyReviewReminderTime = dailyReviewReminderTime,
+            onDailyReviewReminderTimeChange = { value ->
+                dailyReviewReminderTime = value
+                runCatching { com.jp.freedom.enforcement.DailyReviewReminder.saveTime(context, java.time.LocalTime.parse(value)) }
+            },
             onBack = { page = AppPage.PLANNER },
             onSettingsChange = { updated ->
                 focusSettings = updated
@@ -366,6 +387,14 @@ fun FocusApp(
             },
         )
 
+        AppPage.DAILY_REVIEW -> DailyReviewScreen(
+            review = com.jp.freedom.domain.StudyTimerPolicy.dailyReview(
+                dailyReviewDate, java.time.ZoneId.systemDefault(), focusSettings.studyHoursTargetMinutes,
+                studySessions, allBlocks,
+            ),
+            onBack = { page = AppPage.PLANNER },
+        )
+
         AppPage.BLOCKED -> BlockedScreen(
             reason = initialBlockedReason,
             onOpenPlanner = { page = AppPage.PLANNER },
@@ -390,6 +419,7 @@ private data class PlannerSnapshot(
     val policyBlocked: Boolean,
     val studySession: StudyTimerSession?,
     val pendingReview: StudyTimerSession?,
+    val studySessions: List<StudyTimerSession>,
 )
 
 private fun isAccessibilityServiceEnabled(context: Context): Boolean {

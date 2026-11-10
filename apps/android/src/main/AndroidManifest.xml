@@ -63,6 +63,7 @@
         <receiver
             android:name=".enforcement.PolicyAlarmReceiver"
             android:exported="false" />
+        <receiver android:name=".enforcement.DailyReviewReminderReceiver" android:exported="false" />
         <service
             android:name=".sync.AndroidSyncJobService"
             android:exported="false"

@@ -6,8 +6,35 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 class StudyTimerPolicyTest {
+    @Test fun dailyReviewIncludesOnlySessionsStartedOnTheRequestedLocalDay() {
+        val sessions = listOf(
+            reviewed("today", Instant.parse("2026-11-10T05:00:00Z"), 90, "Math", CompletionStatus.FINISHED, "note", ""),
+            reviewed("yesterday", Instant.parse("2026-11-10T04:59:59Z"), 60, "History", CompletionStatus.PARTLY_DONE, "", "chapter 2"),
+        )
+        val summary = StudyTimerPolicy.dailyReview(LocalDate.of(2026, 11, 10), java.time.ZoneId.of("America/Lima"), 180, sessions, emptyList())
+        assertEquals(90, summary.actualMinutes)
+        assertEquals(180, summary.targetMinutes)
+        assertEquals(1, summary.sessions.size)
+        assertEquals("Math", summary.sessions.single().taskName)
+    }
+
+    private fun reviewed(id: String, startedAt: Instant, actualMinutes: Long, task: String, status: CompletionStatus, note: String, remaining: String) =
+        StudyTimerSession(id, task, 3_600_000, AccessProfile.ESSENTIALS_ONLY, startedAt, startedAt.plusSeconds(3600), actualMinutes * 60_000,
+            StudySessionState.REVIEWED, status, note, remaining)
+
+    @Test fun dailyReminderUsesTheNextOccurrenceOfItsConfiguredLocalTime() {
+        val zone = ZoneId.of("America/Lima")
+        val atEight = ZonedDateTime.of(2026, 11, 10, 20, 0, 0, 0, zone)
+        assertEquals(ZonedDateTime.of(2026, 11, 10, 21, 0, 0, 0, zone), StudyTimerPolicy.nextReminder(atEight, LocalTime.of(21, 0)))
+        val atNine = atEight.withHour(21)
+        assertEquals(ZonedDateTime.of(2026, 11, 11, 21, 0, 0, 0, zone), StudyTimerPolicy.nextReminder(atNine, LocalTime.of(21, 0)))
+    }
     private val start = Instant.parse("2026-11-10T12:00:00Z")
 
     @Test fun expiryRecordsPlannedDurationAndRequiresReview() {

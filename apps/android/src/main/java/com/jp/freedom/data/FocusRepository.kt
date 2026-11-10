@@ -62,6 +62,16 @@ class FocusRepository(context: Context) : StudySessionStore {
 
     override fun pendingStudyReview(): StudyTimerSession? = readStudySession(database.readableDatabase, "state = ?", arrayOf(StudySessionState.PENDING_REVIEW.name))
 
+    fun studySessions(): List<StudyTimerSession> = database.readableDatabase.query(
+        "study_sessions", null, null, null, null, null, "started_at DESC",
+    ).use { cursor -> buildList {
+        while (cursor.moveToNext()) {
+            val id = cursor.getColumnIndexOrThrow("id")
+            val sessionId = cursor.getString(id)
+            readStudySession(database.readableDatabase, "id = ?", arrayOf(sessionId))?.let(::add)
+        }
+    } }
+
     override fun saveStudySession(session: StudyTimerSession) {
         val values = ContentValues().apply {
             put("id", session.id); put("task_name", session.taskName); put("duration_ms", session.durationMillis)

@@ -82,6 +82,7 @@ fun PlannerScreen(
     onSelectTomorrow: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenStudyTimer: () -> Unit,
+    onOpenDailyReview: () -> Unit,
     onSyncNow: () -> Unit,
     onOpenTomorrowPlan: () -> Unit,
     onAddBlock: () -> Unit,
@@ -193,6 +194,9 @@ fun PlannerScreen(
 
             OutlinedButton(onClick = onOpenStudyTimer, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
                 Text("Start study timer")
+            }
+            OutlinedButton(onClick = onOpenDailyReview, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                Text("Review today's study")
             }
 
             if (!accessibilityEnabled || !exactAlarmsAllowed) {

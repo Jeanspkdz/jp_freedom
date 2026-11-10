@@ -2,6 +2,10 @@ package com.jp.freedom.domain
 
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.LocalTime
+import java.time.ZonedDateTime
 
 enum class StudySessionState { ACTIVE, PENDING_REVIEW, REVIEWED }
 
@@ -40,9 +44,29 @@ object StudyTimerPolicy {
 
     fun canStartAnother(session: StudyTimerSession?): Boolean = session == null || session.state == StudySessionState.REVIEWED
 
+    fun dailyReview(date: LocalDate, zone: ZoneId, targetMinutes: Int, sessions: List<StudyTimerSession>, blocks: List<PlannedBlock>): DailyReview =
+        DailyReview(
+            date = date,
+            sessions = sessions.filter { it.startedAt.atZone(zone).toLocalDate() == date }.sortedBy { it.startedAt },
+            actualMinutes = sessions.filter { it.startedAt.atZone(zone).toLocalDate() == date }.sumOf { it.actualMillis } / 60_000,
+            targetMinutes = targetMinutes,
+            plannedBlocks = blocks.filter { it.date == date }.sortedBy { it.startTime },
+        )
+
+    fun nextReminder(now: ZonedDateTime, reminderTime: LocalTime): ZonedDateTime =
+        now.toLocalDate().atTime(reminderTime).atZone(now.zone).let { if (it.isAfter(now)) it else it.plusDays(1) }
+
     private fun finish(session: StudyTimerSession, now: Instant) = session.copy(
         endedAt = now,
         actualMillis = Duration.between(session.startedAt, now).toMillis().coerceAtLeast(0).coerceAtMost(session.durationMillis),
         state = StudySessionState.PENDING_REVIEW,
     )
 }
+
+data class DailyReview(
+    val date: LocalDate,
+    val sessions: List<StudyTimerSession>,
+    val actualMinutes: Long,
+    val targetMinutes: Int,
+    val plannedBlocks: List<PlannedBlock>,
+)

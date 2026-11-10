@@ -9,6 +9,7 @@ class PolicyAlarmReceiver : BroadcastReceiver() {
         completeExpiredStudySession(context)
         PolicyAlarmScheduler.scheduleNext(context)
         PolicyAlarmScheduler.broadcastRecheck(context)
+        DailyReviewReminder.schedule(context)
     }
 }
 
@@ -17,6 +18,7 @@ class PolicyBootReceiver : BroadcastReceiver() {
         completeExpiredStudySession(context)
         PolicyAlarmScheduler.scheduleNext(context)
         PolicyAlarmScheduler.broadcastRecheck(context)
+        DailyReviewReminder.schedule(context)
     }
 }
 
