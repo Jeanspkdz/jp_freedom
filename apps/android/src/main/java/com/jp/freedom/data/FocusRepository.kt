@@ -606,11 +606,21 @@ class FocusRepository(context: Context) : StudySessionStore {
             }
             if (oldVersion < 6) createStudySessionTable(db)
             if (oldVersion < 7) {
-                db.execSQL("ALTER TABLE $TABLE_SETTINGS ADD COLUMN $COLUMN_BREAK_MINUTES INTEGER NOT NULL DEFAULT 15")
-                db.execSQL("ALTER TABLE study_sessions ADD COLUMN break_started_at INTEGER")
-                db.execSQL("ALTER TABLE study_sessions ADD COLUMN break_duration_ms INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE study_sessions ADD COLUMN next_task TEXT NOT NULL DEFAULT ''")
+                addColumnIfMissing(db, TABLE_SETTINGS, COLUMN_BREAK_MINUTES, "INTEGER NOT NULL DEFAULT 15")
+                addColumnIfMissing(db, "study_sessions", "break_started_at", "INTEGER")
+                addColumnIfMissing(db, "study_sessions", "break_duration_ms", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfMissing(db, "study_sessions", "next_task", "TEXT NOT NULL DEFAULT ''")
             }
+        }
+
+        private fun addColumnIfMissing(db: SQLiteDatabase, table: String, column: String, definition: String) {
+            val exists = db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+                val nameColumn = cursor.getColumnIndexOrThrow("name")
+                var found = false
+                while (cursor.moveToNext()) if (cursor.getString(nameColumn) == column) found = true
+                found
+            }
+            if (!exists) db.execSQL("ALTER TABLE $table ADD COLUMN $column $definition")
         }
 
         private fun createStudySessionTable(db: SQLiteDatabase) {
