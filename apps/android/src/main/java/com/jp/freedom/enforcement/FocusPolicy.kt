@@ -22,6 +22,9 @@ object FocusPolicy {
         settings: FocusSettings,
         studySession: StudyTimerSession? = null,
     ): FocusPolicyState {
+        if (studySession?.state == StudySessionState.BREAKING &&
+            StudyTimerPolicy.finishBreakIfDue(studySession, now.atZone(java.time.ZoneId.systemDefault()).toInstant()) == null
+        ) return FocusPolicyState(null, null)
         if (studySession?.state == StudySessionState.ACTIVE && StudyTimerPolicy.finishIfDue(studySession, now.atZone(java.time.ZoneId.systemDefault()).toInstant()) == null) {
             return FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, studySession.accessProfile)
         }

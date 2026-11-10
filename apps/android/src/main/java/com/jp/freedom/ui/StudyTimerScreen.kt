@@ -20,6 +20,7 @@ import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.StudyTimerPolicy
 import com.jp.freedom.domain.StudyTimerSession
+import com.jp.freedom.domain.StudySessionState
 import java.time.Duration
 import java.time.Instant
 
@@ -29,6 +30,7 @@ fun StudyTimerScreen(
     session: StudyTimerSession?, pendingReview: StudyTimerSession?,
     onBack: () -> Unit, onStart: (Duration, AccessProfile) -> Unit, onStop: () -> Unit,
     onReview: (String, CompletionStatus, String, String) -> Unit,
+    onEndBreak: (String) -> Unit,
 ) {
     var minutes by remember { mutableIntStateOf(60) }
     var customMinutes by remember { mutableStateOf("") }
@@ -37,6 +39,7 @@ fun StudyTimerScreen(
     var note by remember(pendingReview?.id) { mutableStateOf(pendingReview?.note.orEmpty()) }
     var remaining by remember(pendingReview?.id) { mutableStateOf(pendingReview?.remaining.orEmpty()) }
     var status by remember(pendingReview?.id) { mutableStateOf<CompletionStatus?>(null) }
+    var nextTask by remember(session?.id) { mutableStateOf("") }
     Scaffold(topBar = { TopAppBar(title = { Text(if (pendingReview != null) "Review session" else "Study timer") }) }) { pad ->
         Column(Modifier.padding(pad).padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             if (pendingReview != null) {
@@ -51,6 +54,14 @@ fun StudyTimerScreen(
                 OutlinedTextField(remaining, { remaining = it }, label = { Text("Remaining work (optional)") }, modifier = Modifier.fillMaxWidth())
                 Button(onClick = { status?.let { onReview(task.trim(), it, note, remaining) } }, enabled = task.isNotBlank() && status != null, modifier = Modifier.fillMaxWidth()) { Text("Save review") }
                 OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Later") }
+            } else if (session?.state == StudySessionState.BREAKING) {
+                val remainingTime = StudyTimerPolicy.breakRemaining(session, Instant.now())
+                Text("Break", style = MaterialTheme.typography.headlineSmall)
+                Text("${remainingTime.toMinutes().toString().padStart(2, '0')}:${(remainingTime.seconds % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.displayMedium)
+                Text("Phone restrictions are paused during your break.")
+                OutlinedTextField(nextTask, { nextTask = it }, label = { Text("What will you work on next?") }, modifier = Modifier.fillMaxWidth())
+                Button(onClick = { onEndBreak(nextTask.trim()) }, enabled = nextTask.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("End break and continue") }
+                OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to planner") }
             } else if (session != null) {
                 val remainingTime = StudyTimerPolicy.remaining(session, Instant.now())
                 Text("${remainingTime.toMinutes().toString().padStart(2, '0')}:${(remainingTime.seconds % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.displayMedium)

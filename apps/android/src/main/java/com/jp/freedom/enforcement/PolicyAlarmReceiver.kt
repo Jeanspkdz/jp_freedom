@@ -25,6 +25,10 @@ class PolicyBootReceiver : BroadcastReceiver() {
 private fun completeExpiredStudySession(context: Context) {
     val repository = com.jp.freedom.data.FocusRepository(context)
     repository.activeStudySession()?.let { session ->
+        if (session.state == com.jp.freedom.domain.StudySessionState.BREAKING) {
+            com.jp.freedom.domain.StudyTimerPolicy.finishBreakIfDue(session, java.time.Instant.now())?.let(repository::saveStudySession)
+            return@let
+        }
         com.jp.freedom.domain.StudyTimerPolicy.finishIfDue(session, java.time.Instant.now())?.let { ended ->
             if (repository.finishStudySession(ended)) StudySessionNotifier.show(context, ended)
         }

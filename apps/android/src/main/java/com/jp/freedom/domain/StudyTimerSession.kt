@@ -7,7 +7,7 @@ import java.time.ZoneId
 import java.time.LocalTime
 import java.time.ZonedDateTime
 
-enum class StudySessionState { ACTIVE, PENDING_REVIEW, REVIEWED }
+enum class StudySessionState { ACTIVE, PENDING_REVIEW, BREAKING, REVIEWED }
 
 data class StudyTimerSession(
     val id: String,
@@ -21,6 +21,9 @@ data class StudyTimerSession(
     val completionStatus: CompletionStatus? = null,
     val note: String = "",
     val remaining: String = "",
+    val breakStartedAt: Instant? = null,
+    val breakDurationMillis: Long = 0,
+    val nextTask: String = "",
 ) {
     companion object {
         fun start(taskName: String, duration: Duration, accessProfile: AccessProfile, now: Instant) =
@@ -38,6 +41,14 @@ object StudyTimerPolicy {
         if (session.state == StudySessionState.ACTIVE && !now.isBefore(session.startedAt.plusMillis(session.durationMillis))) finish(session, now) else null
 
     fun stop(session: StudyTimerSession, now: Instant): StudyTimerSession = finish(session, now)
+
+    fun breakRemaining(session: StudyTimerSession, now: Instant): Duration {
+        val startedAt = session.breakStartedAt ?: return Duration.ZERO
+        return Duration.ofMillis((session.breakDurationMillis - Duration.between(startedAt, now).toMillis()).coerceAtLeast(0))
+    }
+
+    fun finishBreakIfDue(session: StudyTimerSession, now: Instant): StudyTimerSession? =
+        if (session.state == StudySessionState.BREAKING && breakRemaining(session, now).isZero) session.copy(state = StudySessionState.REVIEWED) else null
 
     fun review(session: StudyTimerSession, taskName: String, status: CompletionStatus, note: String, remaining: String = "") =
         session.copy(taskName = taskName.trim(), completionStatus = status, note = note, remaining = remaining, state = StudySessionState.REVIEWED)

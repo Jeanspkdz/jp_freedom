@@ -24,7 +24,10 @@ object PolicyAlarmScheduler {
         val blocks = repository.allBlocks()
         val upcoming = mutableListOf<LocalDateTime>()
         repository.activeStudySession()?.let { session ->
-            upcoming += LocalDateTime.ofInstant(session.startedAt.plusMillis(session.durationMillis), ZoneId.systemDefault()).takeIf { it.isAfter(now) } ?: now.plusSeconds(1)
+            val ending = if (session.state == com.jp.freedom.domain.StudySessionState.BREAKING) {
+                session.breakStartedAt?.plusMillis(session.breakDurationMillis)
+            } else session.startedAt.plusMillis(session.durationMillis)
+            ending?.let { LocalDateTime.ofInstant(it, ZoneId.systemDefault()).takeIf { end -> end.isAfter(now) } ?: now.plusSeconds(1) }?.let(upcoming::add)
         }
 
         for (offset in 0L..1L) {

@@ -150,6 +150,26 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Break after each session", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("${settings.breakMinutes} min", style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { onSettingsChange(settings.copy(breakMinutes = settings.breakMinutes - 1)) }, enabled = settings.breakMinutes > 1) {
+                                Icon(Icons.Outlined.Remove, contentDescription = "Shorten break")
+                            }
+                            IconButton(onClick = { onSettingsChange(settings.copy(breakMinutes = settings.breakMinutes + 1)) }, enabled = settings.breakMinutes < 60) {
+                                Icon(Icons.Outlined.Add, contentDescription = "Lengthen break")
+                            }
+                        }
+                        Text("Phone restrictions pause after you save the required session review.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         Text("Required blocks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
