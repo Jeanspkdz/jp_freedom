@@ -48,9 +48,9 @@ fun BlockedScreen(
             Spacer(Modifier.height(20.dp))
             Text(
                 text = when {
-                    isEveningRestriction -> "Restricción nocturna activa"
-                    isSiteFilterSetup -> "Filtro web pendiente"
-                    else -> "App bloqueada durante el enfoque"
+                    isEveningRestriction -> "Evening restriction is active"
+                    isSiteFilterSetup -> "Website filter needs setup"
+                    else -> "App blocked during focus time"
                 },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
@@ -60,9 +60,9 @@ fun BlockedScreen(
             Spacer(Modifier.height(12.dp))
             Text(
                 text = when {
-                    isEveningRestriction -> "Completa los bloques requeridos del próximo día en tu planificador para liberar el teléfono."
-                    isSiteFilterSetup -> "Activa el filtro web en configuración para usar ChatGPT o Google Search en Chrome durante este bloque."
-                    else -> "Esta app no forma parte del modo de acceso elegido para el bloque actual."
+                    isEveningRestriction -> "Complete the required blocks for tomorrow in your planner to unlock your phone."
+                    isSiteFilterSetup -> "Turn on the website filter in Settings to use ChatGPT or Google Search in Chrome during this block."
+                    else -> "This app isn't included in the access mode selected for this block."
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
@@ -70,17 +70,17 @@ fun BlockedScreen(
             )
             Spacer(Modifier.height(28.dp))
             Button(onClick = onOpenPlanner, modifier = Modifier.height(52.dp)) {
-                Text("Abrir planificador")
+                Text("Open planner")
             }
             if (isSiteFilterSetup) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = onOpenSettings, modifier = Modifier.height(52.dp)) {
-                    Text("Configurar filtro web")
+                    Text("Set up website filter")
                 }
             }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = onBackToBlockedApp, modifier = Modifier.height(52.dp)) {
-                Text("Ir al inicio")
+                Text("Go to home")
             }
         }
     }

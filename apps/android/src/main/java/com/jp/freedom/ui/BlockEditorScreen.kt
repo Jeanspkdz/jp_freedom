@@ -91,14 +91,14 @@ fun BlockEditorScreen(
             TopAppBar(
                 title = {
                     Text(
-                        if (block == null) "Añadir bloque" else "Editar bloque",
+                        if (block == null) "Add block" else "Edit block",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                     }
                 },
             )
@@ -133,11 +133,11 @@ fun BlockEditorScreen(
                 Button(
                     onClick = {
                         if (name.isBlank()) {
-                            errorMessage = "Escribe una actividad para guardar el bloque."
+                            errorMessage = "Enter an activity name to save this block."
                             return@Button
                         }
                         if (!startTime.isBefore(endTime)) {
-                            errorMessage = "La hora de fin debe ser posterior a la hora de inicio."
+                            errorMessage = "The end time must be after the start time."
                             return@Button
                         }
                         val updated = PlannedBlock(
@@ -163,7 +163,7 @@ fun BlockEditorScreen(
                         .fillMaxWidth()
                         .height(56.dp),
                 ) {
-                    Text(if (isSaving) "Guardando…" else "Guardar bloque")
+                    Text(if (isSaving) "Saving…" else "Save block")
                 }
             }
         },
@@ -187,7 +187,7 @@ fun BlockEditorScreen(
                     tint = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = "${date.dayOfMonth} de ${date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "PE"))}",
+                    text = date.format(DateTimeFormatter.ofPattern("MMMM d", java.util.Locale.US)),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -200,20 +200,20 @@ fun BlockEditorScreen(
                     errorMessage = null
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Actividad") },
-                placeholder = { Text("Ej. Estudiar matemáticas") },
+                label = { Text("Activity") },
+                placeholder = { Text("e.g. Study math") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                supportingText = { Text("El nombre te ayuda a reconocer el bloque en tu agenda.") },
+                supportingText = { Text("Use a name that helps you recognize this block in your schedule.") },
             )
 
-            Text("Horario", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Schedule", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 TimeChoice(
-                    title = "Inicio",
+                    title = "Start",
                     time = startTime,
                     modifier = Modifier.weight(1f),
                     onChoose = { picked ->
@@ -222,7 +222,7 @@ fun BlockEditorScreen(
                     },
                 )
                 TimeChoice(
-                    title = "Fin",
+                    title = "End",
                     time = endTime,
                     modifier = Modifier.weight(1f),
                     onChoose = { picked ->
@@ -232,12 +232,12 @@ fun BlockEditorScreen(
                 )
             }
             Text(
-                "Los bloques no pueden superponerse y deben terminar el mismo día.",
+                "Blocks can't overlap and must end on the same day.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Text("Modo de bloqueo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Access mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             ExposedDropdownMenuBox(
                 expanded = expandedProfile,
                 onExpandedChange = { expandedProfile = !expandedProfile },
@@ -246,7 +246,7 @@ fun BlockEditorScreen(
                     value = accessProfile.title,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Acceso durante el bloque") },
+                    label = { Text("Allowed apps during this block") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedProfile) },
                     modifier = Modifier
                         .menuAnchor()
@@ -268,13 +268,13 @@ fun BlockEditorScreen(
                 }
             }
             Text(
-                text = "Apps permitidas: ${accessProfileDescription(accessProfile)}",
+                text = "Allowed apps: ${accessProfileDescription(accessProfile)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             if (block != null) {
-                Text("Progreso", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Progress", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     CompletionStatus.entries.forEach { status ->
                         FilterChip(
@@ -292,7 +292,7 @@ fun BlockEditorScreen(
                 ) {
                     Icon(Icons.Outlined.DeleteOutline, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Eliminar bloque")
+                    Text("Delete block")
                 }
             }
         }
@@ -301,18 +301,18 @@ fun BlockEditorScreen(
     if (showDeleteConfirmation && block != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
-            title = { Text("¿Eliminar este bloque?") },
-            text = { Text("Se quitará de la agenda y no se podrá recuperar.") },
+            title = { Text("Delete this block?") },
+            text = { Text("This block will be removed from your schedule and can't be recovered.") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showDeleteConfirmation = false
                         scope.launch { onDelete(block.id) }
                     },
-                ) { Text("Eliminar") }
+                ) { Text("Delete") }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancelar") }
+                TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancel") }
             },
         )
     }
@@ -340,7 +340,7 @@ private fun TimeChoice(
     }
     if (showPicker) {
         TimeEntryDialog(
-            title = "Hora de ${title.lowercase()}",
+            title = "${title} time",
             time = time,
             onDismiss = { showPicker = false },
             onConfirm = {
@@ -372,7 +372,7 @@ private fun TimeEntryDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Escribe la hora en formato de 24 horas.",
+                    "Enter the time in 24-hour format.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -385,7 +385,7 @@ private fun TimeEntryDialog(
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        label = { Text("Hora") },
+                        label = { Text("Hour") },
                         placeholder = { Text("00–23") },
                         singleLine = true,
                         isError = showError && (parsedHour == null || parsedHour !in 0..23),
@@ -400,7 +400,7 @@ private fun TimeEntryDialog(
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        label = { Text("Minutos") },
+                        label = { Text("Minutes") },
                         placeholder = { Text("00–59") },
                         singleLine = true,
                         isError = showError && (parsedMinute == null || parsedMinute !in 0..59),
@@ -409,7 +409,7 @@ private fun TimeEntryDialog(
                 }
                 if (showError) {
                     Text(
-                        "Introduce una hora entre 00:00 y 23:59.",
+                        "Enter a time between 00:00 and 23:59.",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -420,9 +420,9 @@ private fun TimeEntryDialog(
             TextButton(onClick = {
                 if (isValid) onConfirm(LocalTime.of(parsedHour, parsedMinute))
                 else showError = true
-            }) { Text("Aceptar") }
+            }) { Text("Confirm") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 
@@ -435,14 +435,14 @@ private fun defaultStartTime(): LocalTime {
 
 private fun validationMessage(validation: BlockValidation): String? = when (validation) {
     BlockValidation.Valid -> null
-    is BlockValidation.MissingName -> "Escribe una actividad para guardar el bloque."
-    is BlockValidation.InvalidTimeRange -> "La hora de fin debe ser posterior a la hora de inicio."
-    is BlockValidation.NoteTooLong -> "La nota es demasiado larga."
-    is BlockValidation.Overlapping -> "Este bloque se superpone con “${validation.firstBlockName}” o “${validation.secondBlockName}”. Cambia el horario."
+    is BlockValidation.MissingName -> "Enter an activity name to save this block."
+    is BlockValidation.InvalidTimeRange -> "The end time must be after the start time."
+    is BlockValidation.NoteTooLong -> "The note is too long."
+    is BlockValidation.Overlapping -> "This block overlaps with “${validation.firstBlockName}” or “${validation.secondBlockName}”. Change the time."
 }
 
 private fun accessProfileDescription(profile: AccessProfile): String = when (profile) {
-    AccessProfile.ESSENTIALS_ONLY -> "Teléfono, mensajes, emergencias, pantalla de inicio, Ajustes, teclado y JP Freedom."
-    AccessProfile.ESSENTIALS_WITH_CHATGPT -> "Las apps esenciales y ChatGPT."
-    AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> "Las apps esenciales, ChatGPT y Google."
+    AccessProfile.ESSENTIALS_ONLY -> "Phone, messages, emergency calls, home screen, Settings, keyboard, and JP Freedom."
+    AccessProfile.ESSENTIALS_WITH_CHATGPT -> "Essential apps and ChatGPT."
+    AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> "Essential apps, ChatGPT, and Google Search."
 }

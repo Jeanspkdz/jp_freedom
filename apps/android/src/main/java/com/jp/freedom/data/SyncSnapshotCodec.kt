@@ -41,7 +41,7 @@ object SyncSnapshotCodec {
     }
 
     fun decode(snapshot: JSONObject): SyncSnapshot {
-        require(snapshot.optInt("version", -1) == 1) { "El servidor envió una versión de plan no compatible." }
+        require(snapshot.optInt("version", -1) == 1) { "The server sent an unsupported plan version." }
         val settingsJson = snapshot.getJSONObject("settings")
         val settings = FocusSettings(
             requiredBlockCount = settingsJson.getInt("requiredBlockCount"),

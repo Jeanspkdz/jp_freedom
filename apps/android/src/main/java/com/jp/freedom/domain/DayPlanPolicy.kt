@@ -19,17 +19,17 @@ data class FocusSettings(
     val eveningCutoff: LocalTime = DEFAULT_EVENING_CUTOFF,
 ) {
     init {
-        require(requiredBlockCount > 0) { "El mínimo de bloques debe ser mayor que cero." }
+        require(requiredBlockCount > 0) { "The minimum number of blocks must be greater than zero." }
         require(eveningCutoff in SUPPORTED_EVENING_CUTOFFS) {
-            "La hora de corte debe ser 9, 10 u 11 p. m."
+            "The cutoff time must be 9, 10, or 11 PM."
         }
     }
 }
 
 enum class AccessProfile(val title: String) {
-    ESSENTIALS_ONLY("Esenciales"),
-    ESSENTIALS_WITH_CHATGPT("Esenciales + ChatGPT"),
-    ESSENTIALS_WITH_CHATGPT_AND_SEARCH("Esenciales + ChatGPT + Google Search"),
+    ESSENTIALS_ONLY("Essentials only"),
+    ESSENTIALS_WITH_CHATGPT("Essentials + ChatGPT"),
+    ESSENTIALS_WITH_CHATGPT_AND_SEARCH("Essentials + ChatGPT + Google Search"),
 }
 
 enum class CompletionStatus {
@@ -81,7 +81,7 @@ object DayPlanPolicy {
         requiredBlockCount: Int,
         blocks: List<PlannedBlock>,
     ): Boolean {
-        require(requiredBlockCount > 0) { "El mínimo de bloques debe ser mayor que cero." }
+        require(requiredBlockCount > 0) { "The minimum number of blocks must be greater than zero." }
         if (now.toLocalTime().isBefore(cutoff)) return false
 
         val requiredDate = requiredPlanDateForEvening(now.toLocalDate()) ?: return false

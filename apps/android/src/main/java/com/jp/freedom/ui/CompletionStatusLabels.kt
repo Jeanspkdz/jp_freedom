@@ -3,8 +3,8 @@ package com.jp.freedom.ui
 import com.jp.freedom.domain.CompletionStatus
 
 fun CompletionStatus.label(): String = when (this) {
-    CompletionStatus.NOT_STARTED -> "Aún no iniciado"
-    CompletionStatus.FINISHED -> "Finalizado"
-    CompletionStatus.PARTLY_DONE -> "Parcialmente hecho"
-    CompletionStatus.NOT_DONE -> "No realizado"
+    CompletionStatus.NOT_STARTED -> "Not started"
+    CompletionStatus.FINISHED -> "Completed"
+    CompletionStatus.PARTLY_DONE -> "Partially completed"
+    CompletionStatus.NOT_DONE -> "Not completed"
 }

@@ -1,9 +1,7 @@
 package com.jp.freedom.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,12 +29,14 @@ import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.Timelapse
+import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -49,8 +49,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -109,7 +109,7 @@ fun PlannerScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (isTodaySelected) "Plan de hoy" else "Plan de mañana",
+                        text = if (isTodaySelected) "Today's plan" else "Tomorrow's plan",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -118,7 +118,7 @@ fun PlannerScreen(
                 },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "Configuración")
+                        Icon(Icons.Outlined.Settings, contentDescription = "Settings")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -169,6 +169,7 @@ fun PlannerScreen(
                 onSelectToday = onSelectToday,
                 onSelectTomorrow = onSelectTomorrow,
             )
+
             OutlinedButton(
                 onClick = if (hasSyncKey) onSyncNow else onOpenSettings,
                 enabled = syncStatus != SyncStatus.SYNCING,
@@ -186,13 +187,6 @@ fun PlannerScreen(
                         syncStatus == SyncStatus.PENDING -> "Sync changes"
                         else -> "Sync changes"
                     },
-                )
-            }
-
-            if (blocks.isNotEmpty()) {
-                FocusHoursSummary(
-                    blocks = blocks,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
                 )
             }
 
@@ -223,6 +217,7 @@ fun PlannerScreen(
                     }
                 }
             }
+
             if (restrictionActive) {
                 RestrictionBanner(
                     remainingBlocks = (settings.requiredBlockCount - targetCount).coerceAtLeast(0),
@@ -242,93 +237,23 @@ fun PlannerScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 16.dp),
                 ) {
-            itemsIndexed(blocks, key = { _, block -> block.id }) { index, block ->
+                    item { StudySummary(blocks) }
+                    itemsIndexed(blocks, key = { _, block -> block.id }) { index, block ->
                         val isCurrent = block.id == activeBlock?.id
                         val isNext = block.id == nextBlock?.id
-                        TimelineBlock(
+                        EditorialBlock(
                             block = block,
                             isCurrent = isCurrent,
                             isNext = isNext,
-                            isFirst = index == 0,
-                            isLast = index == blocks.lastIndex,
+                            now = now.toLocalTime(),
                             onClick = { onEditBlock(block) },
                         )
+                        if (index != blocks.lastIndex) {
+                            Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                        }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FocusHoursSummary(
-    blocks: List<PlannedBlock>,
-    modifier: Modifier = Modifier,
-) {
-    val colors = MaterialTheme.colorScheme
-    val durations = blocks.map { block ->
-        Duration.between(block.startTime, block.endTime).toMinutes().coerceAtLeast(0)
-    }
-    val totalMinutes = durations.sum()
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-    val durationLabel = when {
-        hours == 0L -> "$minutes min"
-        minutes == 0L -> "$hours h"
-        else -> "$hours h $minutes min"
-    }
-
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = colors.primary.copy(alpha = 0.10f),
-        border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.45f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Timelapse,
-                    contentDescription = null,
-                    tint = colors.primary,
-                    modifier = Modifier.size(28.dp),
-                )
-                Column {
-                    Text(
-                        "$durationLabel de enfoque",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.onSurface,
-                    )
-                    Text(
-                        if (blocks.size == 1) "1 sesión planificada" else "${blocks.size} sesiones planificadas",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.onSurfaceVariant,
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                durations.forEachIndexed { index, duration ->
-                    Box(
-                        modifier = Modifier
-                            .weight(duration.coerceAtLeast(1).toFloat())
-                            .height(9.dp)
-                            .background(
-                                color = androidx.compose.ui.graphics.Color(0xFFA65608),
-                                shape = RoundedCornerShape(50),
-                            ),
-                    )
                 }
             }
         }
@@ -351,123 +276,102 @@ private fun DaySelector(
             onClick = onSelectToday,
             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
         ) {
-            Text("Hoy", style = MaterialTheme.typography.titleMedium)
+            Text("Today", style = MaterialTheme.typography.titleMedium)
         }
         SegmentedButton(
             selected = !isTodaySelected,
             onClick = onSelectTomorrow,
             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
         ) {
-            Text("Mañana", style = MaterialTheme.typography.titleMedium)
+            Text("Tomorrow", style = MaterialTheme.typography.titleMedium)
         }
     }
 }
 
 @Composable
-private fun TimelineBlock(
-    block: PlannedBlock,
-    isCurrent: Boolean,
-    isNext: Boolean,
-    isFirst: Boolean,
-    isLast: Boolean,
-    onClick: () -> Unit,
-) {
+private fun StudySummary(blocks: List<PlannedBlock>) {
     val colors = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier.fillMaxWidth().height(156.dp),
-        verticalAlignment = Alignment.Top,
+    val minutes = blocks.sumOf { Duration.between(it.startTime, it.endTime).toMinutes().coerceAtLeast(0) }
+    val total = if (minutes % 60L == 0L) "${minutes / 60} hr" else "${minutes / 60} hr ${minutes % 60} min"
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = colors.surface,
+        border = BorderStroke(1.dp, colors.outlineVariant),
     ) {
-        Canvas(
-            modifier = Modifier
-                .width(20.dp)
-                .height(156.dp),
-        ) {
-            val center = androidx.compose.ui.geometry.Offset(size.width / 2f, 20.dp.toPx())
-            val timelineColor = androidx.compose.ui.graphics.Color(0xFFA65608)
-            drawLine(
-                color = timelineColor,
-                start = androidx.compose.ui.geometry.Offset(center.x, if (isFirst) center.y else 0f),
-                end = androidx.compose.ui.geometry.Offset(center.x, if (isLast) center.y else size.height),
-                strokeWidth = if (isCurrent) 3.dp.toPx() else 2.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-            drawCircle(
-                color = if (isCurrent) timelineColor else colors.background,
-                radius = 7.dp.toPx(),
-                center = center,
-            )
-            drawCircle(
-                color = timelineColor,
-                radius = 7.dp.toPx(),
-                center = center,
-                style = Stroke(width = if (isCurrent) 0.dp.toPx() else 1.5.dp.toPx()),
-            )
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.Outlined.School, contentDescription = null, tint = colors.primary, modifier = Modifier.size(30.dp))
+                Text("$total of study", style = MaterialTheme.typography.headlineMedium, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = colors.onSurface)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                blocks.take(3).forEach { block ->
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.fillMaxWidth().height(8.dp).background(Color(0xFFF5AE55), RoundedCornerShape(50)))
+                        Spacer(Modifier.height(6.dp))
+                        Text("${block.startTime.clockText()}–${block.endTime.clockText()}", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, maxLines = 1, softWrap = false)
+                    }
+                }
+            }
+            if (blocks.size > 3) Text("+${blocks.size - 3} more blocks", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
         }
-        BlockSurface(
-            block = block,
-            isCurrent = isCurrent,
-            isNext = isNext,
-            onClick = onClick,
-            modifier = Modifier
-                .weight(1f)
-                .padding(bottom = 12.dp),
-        )
     }
 }
 
 @Composable
-private fun BlockSurface(
+private fun EditorialBlock(
     block: PlannedBlock,
     isCurrent: Boolean,
     isNext: Boolean,
+    now: LocalTime,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
+    val duration = Duration.between(block.startTime, block.endTime).toMillis().coerceAtLeast(1)
+    val elapsed = Duration.between(block.startTime, now).toMillis()
+    val progress = (elapsed.toFloat() / duration).coerceIn(0f, 1f)
     Surface(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 144.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = if (isCurrent) colors.primaryContainer.copy(alpha = 0.64f) else colors.surface,
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (isCurrent) colors.primary.copy(alpha = 0.36f) else colors.outlineVariant,
-        ),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 132.dp).padding(vertical = 5.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = if (isCurrent) colors.primaryContainer else Color.Transparent,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text(
+                text = "${block.startTime.clockText()}–${block.endTime.clockText()}",
+                style = MaterialTheme.typography.headlineMedium,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                color = colors.onSurface,
+                maxLines = 1,
+                softWrap = false,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = block.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
                     color = colors.onSurface,
-                    maxLines = 2,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = "${block.startTime.clockText()}–${block.endTime.clockText()}",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isCurrent || isNext) colors.primary else colors.onSurfaceVariant,
-                    maxLines = 1,
-                    softWrap = false,
-                )
                 when {
-                    isCurrent -> StateLabel("En curso", emphasized = true)
-                    isNext -> StateLabel("Siguiente", emphasized = false)
-                    block.completionStatus == CompletionStatus.NOT_STARTED -> StateLabel("Pendiente", emphasized = false)
+                    isCurrent -> StateLabel("In progress", emphasized = true)
+                    isNext -> StateLabel("Next", emphasized = false)
+                    block.completionStatus == CompletionStatus.NOT_STARTED -> StateLabel("Upcoming", emphasized = false)
                     block.completionStatus == CompletionStatus.FINISHED -> StateLabel(block.completionStatus.label(), emphasized = false)
                     block.completionStatus == CompletionStatus.PARTLY_DONE -> StateLabel(block.completionStatus.label(), emphasized = false)
                     block.completionStatus == CompletionStatus.NOT_DONE -> StateLabel(block.completionStatus.label(), emphasized = false)
                 }
+            }
+            if (isCurrent) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth().height(5.dp),
+                    color = colors.primary,
+                    trackColor = colors.surface.copy(alpha = 0.7f),
+                )
             }
         }
     }
@@ -509,14 +413,14 @@ private fun EmptyAgenda(
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            text = if (isTodaySelected) "Tu agenda de hoy está vacía" else "Tu agenda de mañana está vacía",
+            text = if (isTodaySelected) "Your schedule is empty today" else "Your schedule is empty tomorrow",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Añade un bloque para organizar tu tiempo de enfoque.",
+            text = "Add a block to plan your focus time.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -548,18 +452,18 @@ private fun RestrictionBanner(
             )
             Column(Modifier.weight(1f)) {
                 Text(
-                    "Restricción nocturna activa",
+                    "Evening restriction is active",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.onErrorContainer,
                 )
                 Text(
-                    if (remainingBlocks == 1) "Añade 1 bloque para liberarla" else "Añade $remainingBlocks bloques para liberarla",
+                    if (remainingBlocks == 1) "Add 1 block to unlock your phone" else "Add $remainingBlocks blocks to unlock your phone",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onErrorContainer,
                 )
             }
-            TextButton(onClick = onOpenPlan) { Text("Planificar") }
+            TextButton(onClick = onOpenPlan) { Text("Plan") }
         }
     }
 }
@@ -603,7 +507,7 @@ private fun PlannerBottomBar(
                     )
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = if (isRestDayTomorrow) "Mañana · día libre" else "Mañana",
+                            text = if (isRestDayTomorrow) "Tomorrow · day off" else "Tomorrow",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -612,13 +516,13 @@ private fun PlannerBottomBar(
                         )
                         if (isRestDayTomorrow) {
                             Text(
-                                text = "Puedes añadir bloques si quieres",
+                                text = "Add blocks if you like",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
                             Text(
-                                text = "$targetCount de $requiredCount bloques",
+                                text = "$targetCount of $requiredCount blocks",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -626,7 +530,7 @@ private fun PlannerBottomBar(
                     }
                     Icon(
                         imageVector = Icons.Outlined.ChevronRight,
-                        contentDescription = "Abrir plan",
+                        contentDescription = "Open plan",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(22.dp),
                     )
@@ -643,17 +547,17 @@ private fun PlannerBottomBar(
         ) {
             Icon(Icons.Outlined.Add, contentDescription = null)
             Spacer(Modifier.width(12.dp))
-            Text("Añadir bloque", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("Add block", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 private fun dateLabel(date: LocalDate, isTodaySelected: Boolean): String {
-    val prefix = if (isTodaySelected) "Hoy" else "Mañana"
-    val formatted = date.format(DateTimeFormatter.ofPattern("d 'de' MMMM", spanishLocale()))
+    val prefix = if (isTodaySelected) "Today" else "Tomorrow"
+    val formatted = date.format(DateTimeFormatter.ofPattern("MMM d", englishLocale()))
     return "$prefix, $formatted"
 }
 
 private fun LocalTime.clockText(): String = format(DateTimeFormatter.ofPattern("HH:mm"))
 
-private fun spanishLocale() = Locale("es", "PE")
+private fun englishLocale() = Locale.US

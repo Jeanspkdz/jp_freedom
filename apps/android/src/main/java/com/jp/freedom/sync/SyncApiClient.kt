@@ -25,7 +25,7 @@ class SyncApiClient(private val endpoint: String, private val writeToken: String
             val snapshot = SyncSnapshotCodec.decode(body.getJSONObject("snapshot"))
             return ServerSnapshot(revision, snapshot)
         } catch (error: Exception) {
-            throw SyncFailure("El servidor envió un plan que no se puede leer.", error)
+            throw SyncFailure("The server sent a plan that couldn't be read.", error)
         } finally {
             response.connection.disconnect()
         }
@@ -44,7 +44,7 @@ class SyncApiClient(private val endpoint: String, private val writeToken: String
         } catch (error: SyncFailure) {
             throw error
         } catch (error: Exception) {
-            throw SyncFailure("El servidor respondió sin confirmar la versión guardada.", error)
+            throw SyncFailure("The server responded without confirming the saved version.", error)
         } finally {
             response.connection.disconnect()
         }
@@ -54,7 +54,7 @@ class SyncApiClient(private val endpoint: String, private val writeToken: String
         val connection = try {
             URL(endpoint).openConnection() as HttpURLConnection
         } catch (error: Exception) {
-            throw SyncFailure("La dirección de sincronización no es válida.", error)
+            throw SyncFailure("The sync address is invalid.", error)
         }
         connection.connectTimeout = 10_000
         connection.readTimeout = 15_000
@@ -71,21 +71,21 @@ class SyncApiClient(private val endpoint: String, private val writeToken: String
                 connection.outputStream.use { it.write(bytes) }
             } catch (error: Exception) {
                 connection.disconnect()
-                throw SyncFailure("No se pudo enviar el plan. Revisa la conexión y vuelve a intentar.", error)
+                throw SyncFailure("Couldn't send the plan. Check your connection and try again.", error)
             }
         }
         val status = try {
             connection.responseCode
         } catch (error: Exception) {
             connection.disconnect()
-            throw SyncFailure("No se pudo conectar con la API. Comprueba internet y la dirección configurada.", error)
+            throw SyncFailure("Couldn't connect to the API. Check your internet connection and configured address.", error)
         }
         val stream = if (status in 200..299) connection.inputStream else connection.errorStream
         val responseText = try {
             stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
         } catch (error: Exception) {
             connection.disconnect()
-            throw SyncFailure("No se pudo leer la respuesta del servidor.", error)
+            throw SyncFailure("Couldn't read the server response.", error)
         }
         if (status == HttpURLConnection.HTTP_CONFLICT) return HttpResponse(status, responseText, connection)
         if (status !in 200..299) {
@@ -99,12 +99,12 @@ class SyncApiClient(private val endpoint: String, private val writeToken: String
         val code = runCatching { JSONObject(body).optString("error") }.getOrDefault("")
         return when {
             status == HttpURLConnection.HTTP_UNAUTHORIZED || status == HttpURLConnection.HTTP_FORBIDDEN ->
-                "La API rechazó la clave de escritura. Revisa el token configurado en el teléfono."
+                "The API rejected the write key. Check the token configured on your phone."
             status == 422 ->
-                "La API rechazó el plan o la lista de sitios. Revisa que no haya horarios superpuestos y vuelve a intentar."
-            status >= 500 -> "La API no está disponible ahora. Los cambios siguen guardados en el teléfono y se reintentará."
-            code == "invalid_json" -> "La API no reconoció el formato enviado. Actualiza la aplicación o revisa el servidor."
-            else -> "La API respondió con error ($status). Revisa la dirección de sincronización."
+                "The API rejected the plan or website list. Check for overlapping schedules and try again."
+            status >= 500 -> "The API is unavailable right now. Changes are still saved on your phone and will be retried."
+            code == "invalid_json" -> "The API didn't recognize the submitted format. Update the app or check the server."
+            else -> "The API returned an error ($status). Check the sync address."
         }
     }
 

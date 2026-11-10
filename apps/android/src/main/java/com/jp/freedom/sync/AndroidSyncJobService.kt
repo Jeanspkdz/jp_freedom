@@ -28,8 +28,8 @@ class AndroidSyncJobService : JobService() {
     }
 
     private fun Throwable.userMessage(): String = when (this) {
-        is SyncFailure -> message ?: "No se pudo sincronizar. Los cambios siguen guardados en este teléfono."
-        else -> "Ocurrió un error al sincronizar. Los cambios siguen guardados en este teléfono; vuelve a intentar."
+        is SyncFailure -> message ?: "Couldn't sync. Changes are still saved on this phone."
+        else -> "A sync error occurred. Changes are still saved on this phone; try again."
     }
 
     companion object {
@@ -54,7 +54,7 @@ private class SyncEngine(private val context: android.content.Context) {
         val token = try {
             SyncConfigurationStore(context).writeToken()
         } catch (error: Exception) {
-            throw SyncFailure("No se pudo leer la clave protegida. Vuelve a ingresar el token de escritura.", error)
+            throw SyncFailure("Couldn't read the protected key. Enter the write token again.", error)
         } ?: run {
             FocusRepository(context).markNotConfigured()
             return false
@@ -105,7 +105,7 @@ private class SyncEngine(private val context: android.content.Context) {
                 }
             }
         }
-        repository.markSyncError("El servidor cambió varias veces durante la sincronización. Los cambios locales se conservaron; vuelve a intentar.")
+        repository.markSyncError("The server changed several times during sync. Local changes were kept; try again.")
         return true
     }
 

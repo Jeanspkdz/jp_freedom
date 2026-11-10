@@ -3,5 +3,5 @@
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="false"
-    android:description="@string/focus_accessibility_description"
+        android:description="@string/focus_accessibility_description"
     android:notificationTimeout="100" />

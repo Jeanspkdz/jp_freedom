@@ -56,7 +56,7 @@ class SiteFilterVpnService : VpnService() {
                 runCatching { builder.addDisallowedApplication(app) }
             }
 
-            tunnel = builder.establish() ?: error("Android no creó la interfaz del filtro web.")
+            tunnel = builder.establish() ?: error("Android couldn't create the website filter interface.")
             setRunning(true)
             PolicyAlarmScheduler.broadcastRecheck(this)
             worker = thread(name = "jp-freedom-dns") { processTunnel(upstreamDns) }
@@ -88,7 +88,7 @@ class SiteFilterVpnService : VpnService() {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Filtro web de JP Freedom", NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL_ID, "JP Freedom website filter", NotificationManager.IMPORTANCE_LOW),
             )
         }
         val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -97,8 +97,8 @@ class SiteFilterVpnService : VpnService() {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
         }.setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setContentTitle("Filtro DNS activo")
-            .setContentText("La VPN aplica reglas de filtrado a consultas DNS durante los bloques.")
+            .setContentTitle("DNS filter is on")
+            .setContentText("The VPN applies filtering rules to DNS queries during focus blocks.")
             .setOngoing(true)
             .build()
 

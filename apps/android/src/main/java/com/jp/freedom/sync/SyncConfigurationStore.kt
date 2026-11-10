@@ -22,20 +22,20 @@ object SyncEndpoint {
     fun validate(value: String): EndpointValidation {
         val raw = value.trim().trimEnd('/')
         val uri = runCatching { URI(raw) }.getOrNull()
-            ?: return EndpointValidation.Invalid("Escribe una dirección HTTPS válida para la API.")
+            ?: return EndpointValidation.Invalid("Enter a valid HTTPS address for the API.")
         val host = uri.host?.lowercase()
         val scheme = uri.scheme?.lowercase()
         if (host.isNullOrBlank() || uri.userInfo != null || uri.query != null || uri.fragment != null) {
-            return EndpointValidation.Invalid("La dirección debe incluir un servidor y no puede tener credenciales ni parámetros.")
+            return EndpointValidation.Invalid("The address must include a host and can't contain credentials or query parameters.")
         }
-        if (scheme == null) return EndpointValidation.Invalid("La dirección debe empezar con HTTPS.")
+        if (scheme == null) return EndpointValidation.Invalid("The address must start with HTTPS.")
         if (uri.path.isNotEmpty() && uri.path != "/v1/snapshot") {
-            return EndpointValidation.Invalid("Usa la dirección base de la API o termina en /v1/snapshot.")
+            return EndpointValidation.Invalid("Use the API base address or end the address with /v1/snapshot.")
         }
         val localHttp = scheme == "http" &&
             (host == "localhost" || host == "127.0.0.1")
         if (scheme != "https" && !localHttp) {
-            return EndpointValidation.Invalid("Por seguridad, la dirección debe usar HTTPS.")
+            return EndpointValidation.Invalid("For security, the address must use HTTPS.")
         }
         val endpointPath = if (uri.path == "/v1/snapshot") "" else "/v1/snapshot"
         return EndpointValidation.Valid("$scheme://${uri.rawAuthority}${uri.path}$endpointPath")
@@ -51,12 +51,12 @@ class SyncConfigurationStore(context: Context) {
     )
 
     fun saveEndpoint(endpoint: String) {
-        check(preferences.edit().putString(KEY_ENDPOINT, endpoint).commit()) { "No se pudo guardar la dirección de sincronización." }
+        check(preferences.edit().putString(KEY_ENDPOINT, endpoint).commit()) { "Couldn't save the sync address." }
     }
 
     fun saveWriteToken(token: String) {
         val encrypted = encrypt(token)
-        check(preferences.edit().putString(KEY_ENCRYPTED_TOKEN, encrypted).commit()) { "No se pudo guardar la clave de sincronización." }
+        check(preferences.edit().putString(KEY_ENCRYPTED_TOKEN, encrypted).commit()) { "Couldn't save the sync key." }
     }
 
     fun writeToken(): String? = preferences.getString(KEY_ENCRYPTED_TOKEN, null)?.let(::decrypt)
@@ -73,7 +73,7 @@ class SyncConfigurationStore(context: Context) {
 
     private fun decrypt(value: String): String {
         val parts = value.split('.', limit = 2)
-        check(parts.size == 2) { "La clave guardada no es válida. Vuelve a ingresarla." }
+        check(parts.size == 2) { "The saved key is invalid. Enter it again." }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(
             Cipher.DECRYPT_MODE,

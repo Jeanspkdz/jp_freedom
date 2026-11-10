@@ -241,7 +241,7 @@ class FocusRepository(context: Context) {
                     conflictResolved -> SyncStatus.CONFLICT_RESOLVED.name
                     else -> SyncStatus.UP_TO_DATE.name
                 })
-                if (stillPending) put(COLUMN_MESSAGE, "Hay cambios nuevos esperando sincronización.") else putNull(COLUMN_MESSAGE)
+                if (stillPending) put(COLUMN_MESSAGE, "New changes are waiting to sync.") else putNull(COLUMN_MESSAGE)
             }
             db.update(TABLE_SYNC_STATE, values, "$COLUMN_SETTINGS_ID = 1", null)
             scheduleAgain = stillPending

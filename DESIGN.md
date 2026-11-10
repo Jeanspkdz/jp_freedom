@@ -118,9 +118,9 @@ JP Freedom presents the day as a time-ordered board, so the current focus state 
 
 ## Colors
 
-The light and dark schemes use the same semantic roles from FocusTheme. Warm amber is the primary role for the active block and main action; the pale amber container supports the selected row. Cool slate and silver roles organize supporting controls and secondary surfaces. Neutral foregrounds maintain contrast across the day and night schemes. Error roles identify a restriction or a form problem.
+The app uses one fixed warm light scheme from FocusTheme, regardless of the phone theme. Amber marks the active block and main action; pale amber supports the selected row. Warm neutrals organize supporting controls and secondary surfaces. Error roles identify a restriction or a form problem.
 
-**The Role-First Rule.** Use semantic Material color roles so surfaces and content stay paired in both system themes.
+**The Role-First Rule.** Use semantic Material color roles so surfaces and content stay paired in the fixed app palette.
 
 ## Typography
 
@@ -130,13 +130,13 @@ The interface uses the Android system sans-serif through the default Material 3 
 
 ## Layout
 
-The planner reads from top to bottom: day selection, date, a time rail, and agenda rows ordered by start time. The time rail remains separate from each block surface, with a stable time column and a minimum-height row. Keep the tomorrow summary and primary action grouped at the bottom of the planner. Editor and settings content use a scrollable single-column form; respect status, navigation, and keyboard insets.
+The planner reads from top to bottom: screen title, selected date, day selection, study hours summary, then agenda rows ordered by start time. The summary derives total hours and its compact schedule from real blocks. Each row leads with a prominent time range, followed by activity and status. Only the current row has a pale amber background and an in-row progress indicator. Keep the tomorrow summary and primary action grouped at the bottom of the planner. Editor and settings content use a scrollable single-column form; respect status, navigation, and keyboard insets.
 
 The layout uses the shared spacing rhythm in the frontmatter. Use the larger steps for screen insets and the smaller steps between labels, controls, and row details. Keep touch targets at Android's native minimum and allow content to grow with font scaling.
 
 ## Elevation & Depth
 
-The visual language is mostly flat. White and variant surfaces, thin outlines, and the timeline rail separate content; no custom drop shadows are defined. Use Material 3 state layers for pressed and focused controls, and keep elevation subordinate to the schedule.
+The visual language is mostly flat. Warm surfaces and thin dividers separate content; no custom drop shadows are defined. Use Material 3 state layers for pressed and focused controls, and keep elevation subordinate to the schedule.
 
 **The Flat-Board Rule.** Separate agenda rows with tonal surfaces and borders rather than decorative shadow.
 
@@ -150,7 +150,7 @@ Agenda rows use a gently rounded rectangle; the current icon tile is slightly ti
 
 **Day selector — compact and native.** Use a two-choice Material 3 segmented control for Hoy and Mañana. Preserve a clear selected state, readable labels, and a 48 dp minimum touch target.
 
-**Agenda row — time first, state in place.** The time rail shows the 24-hour range beside a tappable block surface. Keep the current block highlighted with the amber container at 64% opacity and a primary outline at 36% opacity; ordinary rows use a neutral surface and outline. A small icon tile and a visible state label reinforce the row without replacing its activity name.
+**Agenda row — time first, state in place.** Show the 24-hour range in prominent editorial type, then the activity and state. Use a thin divider between rows. Highlight only the current block with a pale amber surface and an internal progress bar; ordinary rows stay neutral. Do not add a timeline rail or circle markers.
 
 **State chips — concise and persistent.** The active chip uses the primary role; other completion states use a neutral variant. Always pair color with a text label.
 
@@ -163,7 +163,7 @@ Agenda rows use a gently rounded rectangle; the current icon tile is slightly ti
 ## Do's and Don'ts
 
 - Do keep the time, activity, and state readable together.
-- Do use the semantic light and dark roles from FocusTheme.
+- Do use the fixed warm light roles from FocusTheme.
 - Do pair status color with an explicit text label.
 - Do follow system font scaling and native Android touch behavior.
 - Don't rely on a transient animation as the only signal of a changed or current block.

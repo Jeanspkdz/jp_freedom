@@ -142,7 +142,6 @@ fun FocusApp(
     val exactAlarmsAllowed = remember(activityResumeVersion) {
         canScheduleExactAlarms(context)
     }
-
     val syncNow: () -> Unit = {
         scope.launch {
             syncState = syncState.copy(status = SyncStatus.SYNCING, message = null)
@@ -158,6 +157,7 @@ fun FocusApp(
             refreshVersion++
         }
     }
+
     when (page) {
         AppPage.PLANNER -> PlannerScreen(
             date = selectedDate,
@@ -264,7 +264,7 @@ fun FocusApp(
                         syncState = syncState.copy(
                             status = SyncStatus.ERROR,
                             message = saved.exceptionOrNull()?.message
-                                ?: "No se pudo guardar la configuración de sincronización.",
+                                ?: "Couldn't save the sync settings.",
                         )
                     }
                 }
