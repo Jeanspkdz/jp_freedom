@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -73,12 +74,16 @@ fun StudyTimerScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StudyTimerPolicy.PRESETS.forEach { preset ->
                         val value = preset.toMinutes().toInt()
-                        OutlinedButton(onClick = { minutes = value; customMinutes = "" }) {
-                            Text(when (value) { 30 -> "30m"; 90 -> "1h 30m"; else -> "${value / 60}h" })
-                        }
+                        FilterChip(
+                            selected = minutes == value && customMinutes.isEmpty(),
+                            onClick = { minutes = value; customMinutes = "" },
+                            label = { Text(when (value) { 30 -> "30m"; 90 -> "1h 30m"; else -> "${value / 60}h" }) },
+                        )
                     }
                 }
-                OutlinedTextField(customMinutes, { input -> customMinutes = input.filter(Char::isDigit) }, label = { Text("Custom minutes") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(customMinutes, { input ->
+                    customMinutes = input.filter(Char::isDigit)
+                }, label = { Text("Custom minutes") }, modifier = Modifier.fillMaxWidth())
                 Text("Choose phone access", style = MaterialTheme.typography.titleLarge)
                 AccessProfile.values().forEach { option ->
                     OutlinedButton(onClick = { profile = option }, modifier = Modifier.fillMaxWidth()) { Text((if (profile == option) "✓ " else "") + option.title) }
