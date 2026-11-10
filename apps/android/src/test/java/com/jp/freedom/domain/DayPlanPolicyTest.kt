@@ -45,7 +45,7 @@ class DayPlanPolicyTest {
     }
 
     @Test
-    fun eveningRestrictionTracksTheRequiredCountAtAndAfterCutoff() {
+    fun eveningRestrictionTracksTheStudyHoursTargetAtAndAfterCutoff() {
         val today = LocalDate.of(2026, 11, 3)
         val planDate = today.plusDays(1)
         val twoBlocks = listOf(
@@ -53,14 +53,14 @@ class DayPlanPolicyTest {
             plannedBlock("second", planDate, "Practicar", 10, 0, 11, 0),
         )
         val threeBlocks = twoBlocks + plannedBlock("third", planDate, "Repasar", 11, 0, 12, 0)
-        val requiredCount = 3
+        val targetMinutes = 180
         val cutoff = LocalTime.of(21, 0)
 
         assertFalse(
             DayPlanPolicy.shouldRestrictEvening(
                 now = LocalDateTime.of(today, LocalTime.of(20, 59)),
                 cutoff = cutoff,
-                requiredBlockCount = requiredCount,
+                studyHoursTargetMinutes = targetMinutes,
                 blocks = twoBlocks,
             ),
         )
@@ -68,7 +68,7 @@ class DayPlanPolicyTest {
             DayPlanPolicy.shouldRestrictEvening(
                 now = LocalDateTime.of(today, cutoff),
                 cutoff = cutoff,
-                requiredBlockCount = requiredCount,
+                studyHoursTargetMinutes = targetMinutes,
                 blocks = twoBlocks,
             ),
         )
@@ -76,7 +76,7 @@ class DayPlanPolicyTest {
             DayPlanPolicy.shouldRestrictEvening(
                 now = LocalDateTime.of(today, cutoff),
                 cutoff = cutoff,
-                requiredBlockCount = requiredCount,
+                studyHoursTargetMinutes = targetMinutes,
                 blocks = threeBlocks,
             ),
         )
@@ -84,7 +84,7 @@ class DayPlanPolicyTest {
             DayPlanPolicy.shouldRestrictEvening(
                 now = LocalDateTime.of(today, cutoff),
                 cutoff = cutoff,
-                requiredBlockCount = requiredCount,
+                studyHoursTargetMinutes = targetMinutes,
                 blocks = twoBlocks,
             ),
         )
@@ -103,7 +103,7 @@ class DayPlanPolicyTest {
             DayPlanPolicy.shouldRestrictEvening(
                 now = LocalDateTime.of(saturday, cutoff),
                 cutoff = cutoff,
-                requiredBlockCount = 3,
+                studyHoursTargetMinutes = 180,
                 blocks = emptyList(),
             ),
         )
@@ -111,7 +111,7 @@ class DayPlanPolicyTest {
             DayPlanPolicy.shouldRestrictEvening(
                 now = LocalDateTime.of(sunday, cutoff),
                 cutoff = cutoff,
-                requiredBlockCount = 3,
+                studyHoursTargetMinutes = 180,
                 blocks = emptyList(),
             ),
         )
@@ -125,6 +125,59 @@ class DayPlanPolicyTest {
             listOf(LocalTime.of(21, 0), LocalTime.of(22, 0), LocalTime.of(23, 0)),
             SUPPORTED_EVENING_CUTOFFS,
         )
+    }
+
+    @Test
+    fun eveningRestrictionUsesPlannedDurationForTheNextRequiredDate() {
+        val today = LocalDate.of(2026, 11, 3)
+        val nextDay = today.plusDays(1)
+        val blocks = listOf(
+            plannedBlock("first", nextDay, "Study", 9, 0, 10, 30),
+            plannedBlock("second", nextDay, "Practice", 11, 0, 12, 30),
+            plannedBlock("other-day", nextDay.plusDays(1), "Later", 9, 0, 12, 0),
+        )
+
+        assertEquals(180, DayPlanPolicy.plannedStudyMinutes(nextDay, blocks))
+        assertFalse(
+            DayPlanPolicy.shouldRestrictEvening(
+                now = today.atTime(21, 0),
+                cutoff = LocalTime.of(21, 0),
+                studyHoursTargetMinutes = 180,
+                blocks = blocks,
+            ),
+        )
+        assertTrue(
+            DayPlanPolicy.shouldRestrictEvening(
+                now = today.atTime(21, 0),
+                cutoff = LocalTime.of(21, 0),
+                studyHoursTargetMinutes = 181,
+                blocks = blocks,
+            ),
+        )
+    }
+
+    @Test
+    fun addingAPlannedBlockCanMeetTheEveningStudyHoursTargetImmediately() {
+        val today = LocalDate.of(2026, 11, 3)
+        val nextDay = today.plusDays(1)
+        val shortPlan = listOf(plannedBlock("first", nextDay, "Study", 9, 0, 11, 0))
+        val completePlan = shortPlan + plannedBlock("second", nextDay, "Practice", 11, 0, 12, 0)
+
+        assertTrue(
+            DayPlanPolicy.shouldRestrictEvening(
+                today.atTime(21, 0), LocalTime.of(21, 0), 180, shortPlan,
+            ),
+        )
+        assertFalse(
+            DayPlanPolicy.shouldRestrictEvening(
+                today.atTime(21, 0), LocalTime.of(21, 0), 180, completePlan,
+            ),
+        )
+    }
+
+    @Test
+    fun studyHoursTargetDefaultsToThreeHours() {
+        assertEquals(180, FocusSettings().studyHoursTargetMinutes)
     }
 
     private fun plannedBlock(

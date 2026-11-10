@@ -8,6 +8,7 @@ import java.time.DayOfWeek
 const val DEFAULT_REQUIRED_BLOCK_COUNT = 3
 const val MAX_BLOCK_NOTE_LENGTH = 2_000
 val DEFAULT_EVENING_CUTOFF: LocalTime = LocalTime.of(21, 0)
+const val DEFAULT_STUDY_HOURS_TARGET_MINUTES = 180
 val SUPPORTED_EVENING_CUTOFFS: List<LocalTime> = listOf(
     LocalTime.of(21, 0),
     LocalTime.of(22, 0),
@@ -17,11 +18,15 @@ val SUPPORTED_EVENING_CUTOFFS: List<LocalTime> = listOf(
 data class FocusSettings(
     val requiredBlockCount: Int = DEFAULT_REQUIRED_BLOCK_COUNT,
     val eveningCutoff: LocalTime = DEFAULT_EVENING_CUTOFF,
+    val studyHoursTargetMinutes: Int = DEFAULT_STUDY_HOURS_TARGET_MINUTES,
 ) {
     init {
         require(requiredBlockCount > 0) { "The minimum number of blocks must be greater than zero." }
         require(eveningCutoff in SUPPORTED_EVENING_CUTOFFS) {
             "The cutoff time must be 9, 10, or 11 PM."
+        }
+        require(studyHoursTargetMinutes in 30..720 && studyHoursTargetMinutes % 30 == 0) {
+            "The study-hours target must be between 30 minutes and 12 hours in 30-minute increments."
         }
     }
 }
@@ -78,16 +83,20 @@ object DayPlanPolicy {
     fun shouldRestrictEvening(
         now: LocalDateTime,
         cutoff: LocalTime,
-        requiredBlockCount: Int,
+        studyHoursTargetMinutes: Int,
         blocks: List<PlannedBlock>,
     ): Boolean {
-        require(requiredBlockCount > 0) { "The minimum number of blocks must be greater than zero." }
+        require(studyHoursTargetMinutes > 0) { "The study-hours target must be greater than zero." }
         if (now.toLocalTime().isBefore(cutoff)) return false
 
         val requiredDate = requiredPlanDateForEvening(now.toLocalDate()) ?: return false
-        val plannedCount = blocks.count { it.date == requiredDate }
-        return plannedCount < requiredBlockCount
+        return plannedStudyMinutes(requiredDate, blocks) < studyHoursTargetMinutes
     }
+
+    fun plannedStudyMinutes(date: LocalDate, blocks: List<PlannedBlock>): Int =
+        blocks.asSequence()
+            .filter { it.date == date }
+            .sumOf { java.time.Duration.between(it.startTime, it.endTime).toMinutes().toInt() }
 
     fun validateBlocks(
         blocks: List<PlannedBlock>,

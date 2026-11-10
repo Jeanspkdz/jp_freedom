@@ -65,6 +65,7 @@ class FocusRepository(context: Context) {
                 put(COLUMN_SETTINGS_ID, 1)
                 put(COLUMN_REQUIRED_COUNT, settings.requiredBlockCount)
                 put(COLUMN_CUTOFF_MINUTE, settings.eveningCutoff.toMinuteOfDay())
+                put(COLUMN_STUDY_TARGET_MINUTES, settings.studyHoursTargetMinutes)
             }
             db.insertWithOnConflict(TABLE_SETTINGS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
             val paths = buildList {
@@ -284,7 +285,7 @@ class FocusRepository(context: Context) {
 
     private fun readSettings(db: SQLiteDatabase): FocusSettings = db.query(
         TABLE_SETTINGS,
-        arrayOf(COLUMN_REQUIRED_COUNT, COLUMN_CUTOFF_MINUTE),
+        arrayOf(COLUMN_REQUIRED_COUNT, COLUMN_CUTOFF_MINUTE, COLUMN_STUDY_TARGET_MINUTES),
         "$COLUMN_SETTINGS_ID = 1",
         null,
         null,
@@ -296,6 +297,7 @@ class FocusRepository(context: Context) {
             FocusSettings(
                 requiredBlockCount = cursor.getInt(0).coerceAtLeast(1),
                 eveningCutoff = LocalTime.of(cursor.getInt(1) / 60, cursor.getInt(1) % 60),
+                studyHoursTargetMinutes = cursor.getInt(2).coerceIn(30, 720),
             )
         }.getOrDefault(FocusSettings())
     }
@@ -388,6 +390,7 @@ class FocusRepository(context: Context) {
                 put(COLUMN_SETTINGS_ID, 1)
                 put(COLUMN_REQUIRED_COUNT, snapshot.settings.requiredBlockCount)
                 put(COLUMN_CUTOFF_MINUTE, snapshot.settings.eveningCutoff.toMinuteOfDay())
+                put(COLUMN_STUDY_TARGET_MINUTES, readSettings(db).studyHoursTargetMinutes)
             },
             SQLiteDatabase.CONFLICT_REPLACE,
         )
@@ -514,6 +517,9 @@ class FocusRepository(context: Context) {
                     db.execSQL("UPDATE $TABLE_SYNC_STATE SET $COLUMN_GENERATION = 1, $COLUMN_PENDING = 1, $COLUMN_STATUS = 'PENDING' WHERE $COLUMN_SETTINGS_ID = 1")
                 }
             }
+            if (oldVersion < 5) {
+                db.execSQL("ALTER TABLE $TABLE_SETTINGS ADD COLUMN $COLUMN_STUDY_TARGET_MINUTES INTEGER NOT NULL DEFAULT 180")
+            }
         }
 
         private fun createPlanTables(db: SQLiteDatabase) {
@@ -534,7 +540,8 @@ class FocusRepository(context: Context) {
                 """CREATE TABLE IF NOT EXISTS $TABLE_SETTINGS (
                     $COLUMN_SETTINGS_ID INTEGER PRIMARY KEY NOT NULL,
                     $COLUMN_REQUIRED_COUNT INTEGER NOT NULL,
-                    $COLUMN_CUTOFF_MINUTE INTEGER NOT NULL
+                    $COLUMN_CUTOFF_MINUTE INTEGER NOT NULL,
+                    $COLUMN_STUDY_TARGET_MINUTES INTEGER NOT NULL DEFAULT 180
                 )""".trimIndent(),
             )
         }
@@ -577,7 +584,7 @@ class FocusRepository(context: Context) {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 4
+            private const val DATABASE_VERSION = 5
         }
     }
 
@@ -598,6 +605,7 @@ class FocusRepository(context: Context) {
         const val COLUMN_SETTINGS_ID = "id"
         const val COLUMN_REQUIRED_COUNT = "required_count"
         const val COLUMN_CUTOFF_MINUTE = "cutoff_minute"
+        const val COLUMN_STUDY_TARGET_MINUTES = "study_target_minutes"
         const val COLUMN_DOMAIN = "domain"
         const val COLUMN_PATH = "path"
         const val COLUMN_REVISION = "revision"

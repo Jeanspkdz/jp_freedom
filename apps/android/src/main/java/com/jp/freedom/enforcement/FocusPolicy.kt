@@ -20,7 +20,7 @@ object FocusPolicy {
         val eveningRestriction = DayPlanPolicy.shouldRestrictEvening(
             now = now,
             cutoff = settings.eveningCutoff,
-            requiredBlockCount = settings.requiredBlockCount,
+            studyHoursTargetMinutes = settings.studyHoursTargetMinutes,
             blocks = blocks,
         )
         if (eveningRestriction) return FocusPolicyState(BlockedReason.EVENING_RESTRICTION, null)

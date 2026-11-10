@@ -51,10 +51,26 @@ class FocusPolicyTest {
         val state = FocusPolicy.evaluate(
             now = date.atTime(21, 0),
             blocks = listOf(block.copy(date = nextDay, startTime = LocalTime.NOON, endTime = LocalTime.of(13, 0))),
-            settings = settings(requiredCount = 2),
+            settings = settings(targetMinutes = 120),
         )
         assertEquals(BlockedReason.EVENING_RESTRICTION, state.blockedReason)
         assertNull(state.activeBlock)
+    }
+
+    @Test
+    fun eveningRestrictionClearsAsSoonAsTheNextDayPlanMeetsItsStudyTarget() {
+        val nextDay = date.plusDays(1)
+        val twoHours = block.copy(date = nextDay, startTime = LocalTime.NOON, endTime = LocalTime.of(14, 0))
+        val threeHours = twoHours.copy(id = "second", startTime = LocalTime.of(14, 0), endTime = LocalTime.of(15, 0))
+        val now = date.atTime(21, 0)
+
+        assertEquals(
+            BlockedReason.EVENING_RESTRICTION,
+            FocusPolicy.evaluate(now, listOf(twoHours), FocusSettings(studyHoursTargetMinutes = 180)).blockedReason,
+        )
+        assertNull(
+            FocusPolicy.evaluate(now, listOf(twoHours, threeHours), FocusSettings(studyHoursTargetMinutes = 180)).blockedReason,
+        )
     }
 
     @Test
@@ -149,5 +165,5 @@ class FocusPolicyTest {
         settings(),
     )
 
-    private fun settings(requiredCount: Int = 3) = FocusSettings(requiredBlockCount = requiredCount)
+    private fun settings(targetMinutes: Int = 180) = FocusSettings(studyHoursTargetMinutes = targetMinutes)
 }
