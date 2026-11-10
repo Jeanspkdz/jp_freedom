@@ -127,6 +127,26 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Daily study-hours target", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(settings.studyHoursTargetMinutes.hoursLabel(), style = MaterialTheme.typography.displayMedium, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { onSettingsChange(settings.copy(studyHoursTargetMinutes = settings.studyHoursTargetMinutes - 30)) }, enabled = settings.studyHoursTargetMinutes > 30) {
+                                Icon(Icons.Outlined.Remove, contentDescription = "Decrease study-hours target")
+                            }
+                            IconButton(onClick = { onSettingsChange(settings.copy(studyHoursTargetMinutes = settings.studyHoursTargetMinutes + 30)) }, enabled = settings.studyHoursTargetMinutes < 720) {
+                                Icon(Icons.Outlined.Add, contentDescription = "Increase study-hours target")
+                            }
+                        }
+                        Text("Planned study time for the next required day must reach this target to lift the evening restriction.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         Text("Required blocks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -138,7 +158,7 @@ fun SettingsScreen(
                                 Icon(Icons.Outlined.Add, contentDescription = "Increase minimum")
                             }
                         }
-                        Text("Minimum number of blocks in tomorrow's plan to unlock your phone.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Minimum number of blocks in the next required day plan before Chrome sends planning reminders.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Surface(
@@ -402,3 +422,5 @@ private fun LocalTime.label(): String = when (hour) {
     22 -> "10 PM"
     else -> "11 PM"
 }
+
+private fun Int.hoursLabel(): String = if (this % 60 == 0) "${this / 60} h" else "${this / 60}.${(this % 60) / 30 * 5} h"
