@@ -14,10 +14,14 @@ import com.jp.freedom.domain.DesktopSiteBlocklist
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.SyncSnapshot
+import com.jp.freedom.domain.StudyTimerSession
+import com.jp.freedom.domain.StudySessionState
+import com.jp.freedom.domain.StudySessionStore
 import com.jp.freedom.sync.SyncScheduler
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.Instant
 
 data class PendingSyncState(
     val revision: Long,
@@ -43,7 +47,7 @@ data class LocalSyncBundle(val snapshot: SyncSnapshot, val state: PendingSyncSta
  * Plan data and pending sync paths share SQLite transactions so a merge cannot
  * persist a server revision for a snapshot that missed a concurrent local edit.
  */
-class FocusRepository(context: Context) {
+class FocusRepository(context: Context) : StudySessionStore {
     private val appContext = context.applicationContext
     private val database = FocusDatabase(appContext)
 
@@ -53,6 +57,68 @@ class FocusRepository(context: Context) {
     fun allBlocks(): List<PlannedBlock> = queryBlocks(database.readableDatabase, null, null)
 
     fun settings(): FocusSettings = readSettings(database.readableDatabase)
+
+    override fun activeStudySession(): StudyTimerSession? = readStudySession(database.readableDatabase, "state = ?", arrayOf(StudySessionState.ACTIVE.name))
+
+    override fun pendingStudyReview(): StudyTimerSession? = readStudySession(database.readableDatabase, "state = ?", arrayOf(StudySessionState.PENDING_REVIEW.name))
+
+    override fun saveStudySession(session: StudyTimerSession) {
+        val values = ContentValues().apply {
+            put("id", session.id); put("task_name", session.taskName); put("duration_ms", session.durationMillis)
+            put("access_profile", session.accessProfile.name); put("started_at", session.startedAt.toEpochMilli())
+            session.endedAt?.let { put("ended_at", it.toEpochMilli()) } ?: putNull("ended_at")
+            put("actual_ms", session.actualMillis); put("state", session.state.name)
+            session.completionStatus?.let { put("completion_status", it.name) } ?: putNull("completion_status")
+            put("note", session.note); put("remaining", session.remaining)
+        }
+        database.writableDatabase.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    override fun startStudySession(session: StudyTimerSession): Boolean {
+        val db = database.writableDatabase
+        db.beginTransaction()
+        try {
+            val existing = db.rawQuery("SELECT 1 FROM study_sessions WHERE state IN (?, ?) LIMIT 1", arrayOf("ACTIVE", "PENDING_REVIEW")).use { it.moveToFirst() }
+            if (existing) return false
+            saveStudySession(session)
+            db.setTransactionSuccessful()
+            return true
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    override fun finishStudySession(session: StudyTimerSession): Boolean {
+        val db = database.writableDatabase
+        return db.update(
+            "study_sessions",
+            ContentValues().apply {
+                put("ended_at", session.endedAt?.toEpochMilli())
+                put("actual_ms", session.actualMillis)
+                put("state", session.state.name)
+            },
+            "id = ? AND state = ?",
+            arrayOf(session.id, StudySessionState.ACTIVE.name),
+        ) == 1
+    }
+
+    private fun readStudySession(db: SQLiteDatabase, where: String, args: Array<String>): StudyTimerSession? =
+        db.query("study_sessions", null, where, args, null, null, "started_at DESC", "1").use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            StudyTimerSession(
+                id = cursor.getString(cursor.getColumnIndexOrThrow("id")),
+                taskName = cursor.getString(cursor.getColumnIndexOrThrow("task_name")),
+                durationMillis = cursor.getLong(cursor.getColumnIndexOrThrow("duration_ms")),
+                accessProfile = AccessProfile.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("access_profile"))),
+                startedAt = Instant.ofEpochMilli(cursor.getLong(cursor.getColumnIndexOrThrow("started_at"))),
+                endedAt = cursor.getColumnIndexOrThrow("ended_at").let { if (cursor.isNull(it)) null else Instant.ofEpochMilli(cursor.getLong(it)) },
+                actualMillis = cursor.getLong(cursor.getColumnIndexOrThrow("actual_ms")),
+                state = StudySessionState.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("state"))),
+                completionStatus = cursor.getColumnIndexOrThrow("completion_status").let { if (cursor.isNull(it)) null else CompletionStatus.valueOf(cursor.getString(it)) },
+                note = cursor.getString(cursor.getColumnIndexOrThrow("note")) ?: "",
+                remaining = cursor.getString(cursor.getColumnIndexOrThrow("remaining")) ?: "",
+            )
+        }
 
     fun desktopBlockedDomains(): List<String> = readDomains(database.readableDatabase)
 
@@ -464,6 +530,7 @@ class FocusRepository(context: Context) {
             createSyncTables(db)
             seedDomains(db)
             insertInitialSyncState(db)
+            createStudySessionTable(db)
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -520,6 +587,15 @@ class FocusRepository(context: Context) {
             if (oldVersion < 5) {
                 db.execSQL("ALTER TABLE $TABLE_SETTINGS ADD COLUMN $COLUMN_STUDY_TARGET_MINUTES INTEGER NOT NULL DEFAULT 180")
             }
+            if (oldVersion < 6) createStudySessionTable(db)
+        }
+
+        private fun createStudySessionTable(db: SQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS study_sessions (
+                id TEXT PRIMARY KEY NOT NULL, task_name TEXT NOT NULL, duration_ms INTEGER NOT NULL,
+                access_profile TEXT NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER,
+                actual_ms INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL,
+                completion_status TEXT, note TEXT NOT NULL DEFAULT '', remaining TEXT NOT NULL DEFAULT '')""")
         }
 
         private fun createPlanTables(db: SQLiteDatabase) {
@@ -584,7 +660,7 @@ class FocusRepository(context: Context) {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 5
+            private const val DATABASE_VERSION = 6
         }
     }
 

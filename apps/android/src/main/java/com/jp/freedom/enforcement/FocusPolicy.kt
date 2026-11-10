@@ -4,11 +4,15 @@ import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.DayPlanPolicy
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
+import com.jp.freedom.domain.StudyTimerSession
+import com.jp.freedom.domain.StudyTimerPolicy
+import com.jp.freedom.domain.StudySessionState
 import java.time.LocalDateTime
 
 data class FocusPolicyState(
     val blockedReason: BlockedReason?,
     val activeBlock: PlannedBlock?,
+    val accessProfile: AccessProfile? = activeBlock?.accessProfile,
 )
 
 object FocusPolicy {
@@ -16,7 +20,11 @@ object FocusPolicy {
         now: LocalDateTime,
         blocks: List<PlannedBlock>,
         settings: FocusSettings,
+        studySession: StudyTimerSession? = null,
     ): FocusPolicyState {
+        if (studySession?.state == StudySessionState.ACTIVE && StudyTimerPolicy.finishIfDue(studySession, now.atZone(java.time.ZoneId.systemDefault()).toInstant()) == null) {
+            return FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, studySession.accessProfile)
+        }
         val eveningRestriction = DayPlanPolicy.shouldRestrictEvening(
             now = now,
             cutoff = settings.eveningCutoff,
@@ -48,7 +56,7 @@ object FocusPolicy {
         defaultInputMethodPackage?.takeIf(String::isNotBlank)?.let(allowed::add)
         if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return allowed
 
-        val profile = state.activeBlock?.accessProfile
+        val profile = state.accessProfile
         when (profile) {
             AccessProfile.ESSENTIALS_WITH_CHATGPT -> allowed += CHATGPT_PACKAGE
             AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> {

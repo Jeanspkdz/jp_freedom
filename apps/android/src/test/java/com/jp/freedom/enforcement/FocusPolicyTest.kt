@@ -4,9 +4,13 @@ import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
+import com.jp.freedom.domain.StudyTimerSession
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -154,6 +158,22 @@ class FocusPolicyTest {
                 ),
             )
         }
+    }
+
+    @Test
+    fun activeStudyTimerAppliesItsPhoneAccessProfileWithoutCreatingPlannedBlock() {
+        val session = StudyTimerSession.start(
+            "Reading", Duration.ofMinutes(60), AccessProfile.ESSENTIALS_WITH_CHATGPT,
+            LocalDateTime.of(2026, 11, 3, 10, 0).atZone(ZoneId.systemDefault()).toInstant(),
+        )
+        val state = FocusPolicy.evaluate(
+            now = LocalDateTime.of(2026, 11, 3, 10, 30), blocks = emptyList(), settings = settings(), studySession = session,
+        )
+        assertEquals(BlockedReason.FOCUS_BLOCK, state.blockedReason)
+        assertNull(state.activeBlock)
+        val allowed = FocusPolicy.allowedPackages(state, "jp", setOf("phone", "messages"))
+        assertTrue("com.openai.chatgpt" in allowed)
+        assertFalse("social.app" in allowed)
     }
 
     private fun evaluate(time: LocalTime, candidate: PlannedBlock = block) =
