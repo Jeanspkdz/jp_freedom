@@ -85,7 +85,7 @@ export function makeDesktopBlockRules(snapshot, activeBlockId) {
   return domains.map((domain, index) => ({
     id: index + 1,
     priority: 1,
-    action: { type: 'redirect', redirect: { extensionPath: '/blocked.html' } },
+    action: { type: 'block' },
     condition: {
       requestDomains: [domain],
       resourceTypes: ['main_frame'],

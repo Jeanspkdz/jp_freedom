@@ -11,7 +11,6 @@
   },
   "permissions": ["storage", "alarms", "notifications", "declarativeNetRequest"],
   "host_permissions": ["http://localhost/*", "http://127.0.0.1/*", "https://br-floral-block-bddjl0rs-jpfreedomsync.compute.c-8.us-east-2.aws.neon.tech/*"],
-  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": { "service_worker": "src/service-worker.js", "type": "module" },
   "action": {
     "default_icon": {
@@ -21,11 +20,8 @@
     }
   },
   "options_ui": { "page": "management.html", "open_in_tab": true },
+  "sandbox": { "pages": ["focus-terrain.html"] },
   "declarative_net_request": {
     "rule_resources": [{ "id": "base", "enabled": true, "path": "rules.json" }]
-  },
-  "web_accessible_resources": [{
-    "resources": ["blocked.html", "management.css"],
-    "matches": ["http://*/*", "https://*/*"]
-  }]
+  }
 }

@@ -44,6 +44,41 @@ function formatPlanTime(value) {
   });
 }
 
+function planTimeInSeconds(value) {
+  const [hours, minutes] = value.split(':').map(Number);
+  return (hours * 60 + minutes) * 60;
+}
+
+function renderFocusMeter(documentRef, current, now) {
+  const remaining = documentRef.getElementById('focus-remaining');
+  const remainingValue = documentRef.getElementById('focus-remaining-value');
+  const progress = documentRef.getElementById('focus-progress');
+  const fill = documentRef.getElementById('focus-progress-fill');
+  if (!current) {
+    remaining.hidden = true;
+    progress.hidden = true;
+    remainingValue.textContent = '';
+    fill.style.width = '0%';
+    progress.setAttribute('aria-valuenow', '0');
+    return;
+  }
+
+  let start = planTimeInSeconds(current.startTime);
+  let end = planTimeInSeconds(current.endTime);
+  let currentTime = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  if (end <= start) end += 24 * 3600;
+  if (currentTime < start && end > 24 * 3600) currentTime += 24 * 3600;
+  const duration = end - start;
+  const elapsed = Math.min(Math.max(currentTime - start, 0), duration);
+  const secondsLeft = Math.max(end - currentTime, 0);
+  const percent = duration > 0 ? elapsed / duration * 100 : 0;
+  remainingValue.textContent = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
+  remaining.hidden = false;
+  progress.hidden = false;
+  fill.style.width = `${percent.toFixed(2)}%`;
+  progress.setAttribute('aria-valuenow', String(Math.round(percent)));
+}
+
 function renderDayPlan(documentRef, snapshot, date, prefix, currentBlockId) {
   const dateElement = documentRef.getElementById(`${prefix}-plan-date`);
   const emptyElement = documentRef.getElementById(`${prefix}-plan-empty`);
@@ -97,11 +132,14 @@ function render(documentRef, state, now) {
   const errorMessage = documentRef.getElementById('sync-error');
   const currentBlock = documentRef.getElementById('current-block');
   const plannedEnd = documentRef.getElementById('planned-end');
-  const permissionState = documentRef.getElementById('permission-state');
-  const grantSiteAccess = documentRef.getElementById('grant-site-access');
   const current = snapshot ? getCurrentAndNext(snapshot, now).current : null;
   const active = Boolean(current);
+  documentRef.getElementById('focus-heading').textContent = active ? 'In focus' : 'Focus plan';
+  documentRef.getElementById('focus-heading').classList?.toggle('is-active', active);
+  documentRef.getElementById('focus-live').hidden = !active;
   documentRef.querySelector?.('.focus-board')?.classList?.toggle('is-active', active);
+  state.focusBlockId = current?.id ?? null;
+  renderFocusMeter(documentRef, current, now);
   const currentBlockId = current?.id ?? null;
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   documentRef.getElementById('today-intro-date').textContent = now.toLocaleDateString(undefined, {
@@ -141,20 +179,6 @@ function render(documentRef, state, now) {
   lastSync.textContent = `Last successful sync: ${formatLocalTime(lastSuccessfulSync)}`;
   errorMessage.hidden = !error;
   errorMessage.textContent = error ?? '';
-  const missingDomains = state.missingDomains ?? [];
-  const accessState = !snapshot || snapshot.desktopBlockedDomains.length === 0
-    ? 'pending' : missingDomains.length ? 'needed' : 'ready';
-  const permissionLine = documentRef.querySelector?.('.permission-line');
-  for (const value of ['pending', 'needed', 'ready']) {
-    permissionLine?.classList?.toggle(`is-${value}`, accessState === value);
-  }
-  permissionState.textContent = accessState === 'pending'
-    ? 'Sync a plan and select sites to check access.'
-    : accessState === 'needed'
-      ? `Site access needed for ${missingDomains.join(', ')}.`
-      : 'Chrome can block your selected sites during a focus block.';
-  grantSiteAccess.hidden = missingDomains.length === 0;
-
   if (!snapshot) {
     protection.textContent = 'Protection inactive. No valid plan has synced.';
     sync.textContent = !connected
@@ -232,8 +256,6 @@ export async function initializeManagement({
     saving: false,
     blocklistMessage: null,
   };
-  const permissionState = documentRef.getElementById('permission-state');
-  const grantSiteAccess = documentRef.getElementById('grant-site-access');
   const views = ['plan', 'sites', 'connection'];
   const showView = selected => {
     for (const view of views) {
@@ -252,17 +274,17 @@ export async function initializeManagement({
   documentRef.getElementById('api-token').value = state.apiToken;
 
   const show = () => render(documentRef, state, now());
-  const refreshSiteAccess = async () => {
-    state.missingDomains = [];
-    if (state.snapshot && chromeApi.permissions?.contains) {
-      for (const domain of new Set(state.snapshot.desktopBlockedDomains ?? [])) {
-        const origins = [`http://${domain}/*`, `https://${domain}/*`];
-        if (!(await chromeApi.permissions.contains({ origins }))) state.missingDomains.push(domain);
-      }
+  const focusClock = globalThis.setInterval(() => {
+    if (documentRef.visibilityState === 'hidden') return;
+    const current = state.snapshot ? getCurrentAndNext(state.snapshot, now()).current : null;
+    if ((current?.id ?? null) !== state.focusBlockId) {
+      show();
+      return;
     }
-  };
+    renderFocusMeter(documentRef, current, now());
+  }, 1000);
+  focusClock?.unref?.();
   const updateRules = async () => {
-    await refreshSiteAccess();
     await applySnapshotRules(chromeApi, state.snapshot, now());
     show();
   };
@@ -368,15 +390,6 @@ export async function initializeManagement({
     }
     await persistDomainIntent(domain, true);
     if (state.online && state.snapshot.desktopBlockedDomains.includes(domain)) field.value = '';
-  });
-  documentRef.getElementById('grant-site-access').addEventListener('click', async () => {
-    if (!chromeApi.permissions?.request) return;
-    const origins = state.missingDomains.flatMap(domain => [`http://${domain}/*`, `https://${domain}/*`]);
-    if (origins.length && await chromeApi.permissions.request({ origins })) {
-      await refreshSiteAccess();
-      await applySnapshotRules(chromeApi, state.snapshot, now());
-      show();
-    }
   });
   const sync = async () => {
     state.error = null;

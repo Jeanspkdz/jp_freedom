@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JP Freedom</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+    body { color: #e7f5ee; font: 16px/1.4 system-ui, sans-serif; }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      background: radial-gradient(ellipse at center, transparent 42%, rgb(0 0 0 / 32%) 100%);
+      pointer-events: none;
+    }
+    .brand {
+      position: fixed;
+      z-index: 2;
+      top: 82%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      gap: clamp(8px, 4vw, 16px);
+      white-space: nowrap;
+      font-size: clamp(24px, 9vw, 37px);
+      font-weight: 350;
+      text-shadow: 0 1px 6px #000, 0 0 16px #000;
+    }
+    .brand svg { width: clamp(52px, 21vw, 84px); height: auto; color: #5fd0c4; }
+    .brand.cup-rendered svg { opacity: 0; }
+    .brand.cup-rendered::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      pointer-events: none;
+      left: var(--cup-center);
+      top: calc(50% + var(--cup-halo-offset));
+      width: 180px;
+      height: 180px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, #5fd0c4, transparent 70%);
+      opacity: calc(0.07 + 0.05 * var(--cup-pulse, 0));
+    }
+    .brand b {
+      padding: 3px 9px;
+      border-radius: 6px;
+      color: #fff;
+      background: #176a77;
+      font-weight: 700;
+      box-shadow: 0 0 24px rgb(95 208 196 / calc(0.14 + 0.21 * var(--cup-pulse, 0)));
+    }
+    @media (max-height: 360px) {
+      .brand { top: 76%; }
+    }
+    body.blocked .brand { top: min(82%, calc(100% - 188px)); }
+    @media (max-height: 450px) {
+      body.blocked .brand { top: max(27px, calc(100% - 160px)); font-size: 26px; }
+      body.blocked .brand svg { width: 54px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas aria-hidden="true" hidden></canvas>
+  <div class="brand">
+    <svg viewBox="0 0 56 56" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Cup">
+      <path d="M12 28h29v7a12 12 0 0 1-12 12h-5a12 12 0 0 1-12-12v-7Zm29 2h3a5 5 0 0 1 0 10h-4M9 51h36"/>
+    </svg>
+    <span><b>JP</b> Freedom</span>
+  </div>
+  <script type="module">
+    const TEXT = 'BLOCKED';
+    const FORM_DELAY = 0.2;
+    const FORM_DURATION = 2.8;
+    const CUP_PARTICLES = true;
+    const LOOP = false;
+    const TEXT_Y = 0.38;
+    const TEXT_COUNT = 22000;
+    const CUP_COUNT = 2500;
+    const CUP_FORM_DURATION = 1.2;
+    const STEAM_COUNT = 18000;
+    const STEAM_OFFSET = TEXT_COUNT + CUP_COUNT;
+
+    const vertexSource = `#version 300 es
+      precision highp float;
+      layout(location = 0) in vec4 a_particle;
+      layout(location = 1) in vec2 a_target;
+      layout(location = 2) in float a_isText;
+      layout(location = 3) in float a_isCup;
+      uniform vec2 u_origin, u_size, u_mouse, u_clickOrigin;
+      uniform float u_time, u_motion, u_hover, u_dpr, u_pulseTime, u_clickTime, u_form;
+      uniform float u_cupForm, u_cupExposure;
+      out vec3 v_color;
+      out float v_alpha;
+
+      const float PI = 3.14159265;
+      const float TAU = 6.28318531;
+      const vec3 STEAM = vec3(207, 238, 232) / 255.0;
+      const vec3 TURQUOISE = vec3(95, 208, 196) / 255.0;
+      const vec3 DARK_GREEN = vec3(15, 107, 69) / 255.0;
+      const vec3 GREEN = vec3(24, 224, 138) / 255.0;
+      const vec3 MINT = vec3(125, 255, 208) / 255.0;
+      const vec3 WHITE_MINT = vec3(232, 255, 246) / 255.0;
+      const vec3 AMBER = vec3(242, 166, 60) / 255.0;
+      const vec3 VIOLET = vec3(178, 119, 255) / 255.0;
+
+      vec2 rotate(vec2 p, float angle) {
+        float s = sin(angle);
+        float c = cos(angle);
+        return vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+      }
+
+      vec2 wrappedOffset(vec2 offset) {
+        return (fract(offset / u_size + 0.5) - 0.5) * u_size;
+      }
+
+      float edgeClearance(vec2 position) {
+        vec2 edge = min(position, u_size - position);
+        return min(edge.x, edge.y);
+      }
+
+      vec2 vortexCenter(float index) {
+        float columns = u_size.x < u_size.y ? 2.0 : 3.0;
+        vec2 cell = vec2(mod(index, columns), floor(index / columns));
+        vec2 center = (cell + 0.5) / vec2(columns, 6.0 / columns);
+        vec2 drift = vec2(sin(u_time * 0.082 + index * 1.9),
+                          cos(u_time * 0.105 + index * 2.4));
+        return clamp(center + drift * vec2(0.041, 0.052), vec2(0.10), vec2(0.90)) * u_size;
+      }
+
+      vec2 field(vec2 position, float side) {
+        // Compose radial rotations. Each preserves area and feathers into its neighbors.
+        for (int i = 0; i < 6; i++) {
+          float index = float(i);
+          vec2 center = vortexCenter(index);
+          vec2 offset = wrappedOffset(position - center);
+          // Feather tangential motion near the seam while preserving each radial rotation.
+          float radius = min(side * (0.33 + 0.035 * mod(index, 3.0)),
+                             edgeClearance(center) + side * 0.12);
+          float weight = 1.0 - smoothstep(0.28, 1.0, length(offset) / radius);
+          float direction = mod(index, 2.0) == 0.0 ? 1.0 : -1.0;
+          // One turn across a 24-second sweep, followed by a smooth return.
+          float phase = index * 0.23;
+          float turn = PI * (cos(phase) - cos(u_time * PI / 24.0 + phase));
+          position += rotate(offset, direction * turn * weight) - offset;
+        }
+
+        // Two periodic shears give the larger eddies a softer, curl-like drift.
+        position.x += side * 0.018 * sin(TAU * (position.y / u_size.y) + u_time * 0.27);
+        position.y += side * 0.014 * sin(TAU * (position.x / u_size.x) - u_time * 0.21);
+        return position;
+      }
+
+      vec2 vaporPosition(vec2 initial, float seed, float side, float phase) {
+        float rise = min(1.5, phase / 0.36);
+        float angle = initial.x * TAU + rise * 9.0 - u_time * 0.55;
+        float width = mix(6.0, min(47.0, side * 0.10), smoothstep(0.0, 1.35, rise));
+        vec2 origin = u_origin * u_size;
+        float lift = clamp(u_size.y * 0.19, 48.0, 190.0);
+        vec2 column = origin + vec2(
+          (sin(rise * 6.0 - u_time * 0.64) * 15.0 + sin(rise * 12.5 + seed * 35.0) * 5.0) * rise,
+          rise * lift
+        );
+        return column + vec2(cos(angle), sin(angle) * 0.26) * width * sqrt(initial.y);
+      }
+
+      vec2 steamPosition(vec2 initial, float seed, float orbit, float side, out float blend, out float life) {
+        // A continuously seeded plume joins the closest eddy above the rim.
+        float phase = fract(u_time * 0.05 + seed);
+        vec2 origin = u_origin * u_size;
+        float lift = clamp(u_size.y * 0.19, 48.0, 190.0);
+        vec2 join = origin + vec2(0.0, lift * 1.45);
+        join.x += (initial.x - 0.5) * side * 0.34;
+        vec2 nearest = vec2(0.0);
+        float totalWeight = 0.0;
+        for (int i = 0; i < 6; i++) {
+          vec2 center = vortexCenter(float(i));
+          vec2 delta = (join - center) / side;
+          float weight = exp(-18.0 * dot(delta, delta));
+          nearest += center * weight;
+          totalWeight += weight;
+        }
+        nearest /= max(totalWeight, 0.0001);
+        // Blend toward the lower eddies so the plume visibly fans into the field.
+        float orbitAngle = initial.x * TAU + u_time * 0.24 + phase * 1.2;
+        float orbitRadius = min(side * 0.32, edgeClearance(nearest));
+        vec2 destination = nearest + vec2(cos(orbitAngle), sin(orbitAngle))
+                         * orbitRadius * mix(0.045 / 0.32, 1.0, orbit);
+        blend = smoothstep(0.30, 0.70, phase);
+        life = smoothstep(0.0, 0.045, phase) * (1.0 - smoothstep(0.87, 1.0, phase));
+        return mix(vaporPosition(initial, seed, side, phase), destination, blend);
+      }
+
+      float pulse(vec2 position, vec2 origin, float start, out vec2 shove) {
+        vec2 delta = position - origin;
+        float distance = length(delta);
+        float age = u_time - start;
+        float offset = (distance - age * 700.0) / 90.0;
+        float wave = start < 0.0 || age < 0.0 ? 0.0 : exp(-offset * offset);
+        shove = delta * (10.0 * wave / max(distance, 1.0));
+        return wave;
+      }
+
+      vec2 pointerPush(vec2 position, float radius, float strength) {
+        vec2 delta = position - (u_mouse * 0.5 + 0.5) * u_size;
+        float distance = length(delta);
+        float push = strength * u_hover * (1.0 - smoothstep(0.0, radius, distance));
+        return delta / max(distance, 1.0) * push;
+      }
+
+      float easeOutCubic(float t) {
+        float remaining = 1.0 - t;
+        return 1.0 - remaining * remaining * remaining;
+      }
+
+      void drawTextParticle(vec2 initial, float seed, float orbit, float side) {
+        float delay = pow(seed, 2.0) * 0.45;
+        float k = easeOutCubic(clamp(u_form * 1.45 - delay, 0.0, 1.0));
+        if (k <= 0.0) {
+          gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
+          gl_PointSize = 1.0;
+          v_color = vec3(0.0);
+          v_alpha = 0.0;
+          return;
+        }
+        vec2 position = a_target * u_size;
+        if (k < 1.0) {
+          float rise = smoothstep(0.0, 0.35, k);
+          float flight = smoothstep(0.35, 1.0, k);
+          vec2 vapor = vaporPosition(initial, seed, side, rise * mix(0.20, 0.34, orbit));
+          vec2 trip = position - vapor;
+          vec2 normal = vec2(-trip.y, trip.x) / max(length(trip), 1.0);
+          position = mix(vapor, position, flight) + normal * (70.0 * sin(flight * PI) * (2.0 * seed - 1.0));
+        }
+        float anchored = smoothstep(0.75, 1.0, k);
+        vec3 vaporColor = mix(STEAM, MINT, smoothstep(0.10, 0.60, k));
+        vec3 color = mix(vaporColor, orbit < 0.25 ? AMBER : WHITE_MINT, anchored);
+        if (u_motion > 0.0) {
+          float phase = u_time * 2.0 + seed * 40.0;
+          position += vec2(sin(phase), cos(phase)) * anchored;
+          vec2 unusedShove;
+          float cup = pulse(position, u_origin * u_size, u_pulseTime, unusedShove);
+          color *= 1.0 + 3.0 * cup;
+          float clickAge = u_time - u_clickTime;
+          if (u_clickTime >= 0.0 && clickAge < 1.2) {
+            float burst = smoothstep(0.0, 0.08, clickAge) * (1.0 - smoothstep(0.0, 1.2, clickAge));
+            float angle = initial.x * TAU;
+            position += vec2(cos(angle), sin(angle)) * mix(12.0, 30.0, initial.y) * burst * anchored;
+          }
+          if (u_hover > 0.001) position += pointerPush(position, 100.0, 8.0);
+        }
+        gl_Position = vec4(position / u_size * 2.0 - 1.0, 0.0, 1.0);
+        gl_PointSize = mix(1.3, mix(1.6, 2.4, seed), anchored) * u_dpr;
+        v_color = color;
+        v_alpha = mix(0.10, 0.9, smoothstep(0.28, 0.95, k)) * smoothstep(0.0, 0.14, k);
+      }
+
+      void drawCupParticle(vec2 initial, float seed, float orbit) {
+        float k = easeOutCubic(clamp(u_cupForm * 1.2 - seed * 0.2, 0.0, 1.0));
+        vec2 position = a_target * u_size;
+        float wave = 0.0;
+        if (u_motion > 0.0) {
+          vec2 drift = vec2(cos(u_time * 1.6 + seed * TAU), sin(u_time * 1.6 + orbit * TAU));
+          position += (2.0 * initial - 1.0) * vec2(30.0, 22.0) * (1.0 - k) + drift * 0.6;
+          vec2 unusedShove;
+          wave = pulse(position, u_origin * u_size, u_pulseTime, unusedShove);
+          if (u_hover > 0.001) position += pointerPush(position, 100.0, 3.5);
+        }
+        gl_Position = vec4(position / u_size * 2.0 - 1.0, 0.0, 1.0);
+        gl_PointSize = mix(1.6, 2.2, seed) * (1.0 + wave * 0.15) * u_dpr;
+        v_color = TURQUOISE * (u_cupExposure * (1.0 + wave * 0.8));
+        v_alpha = mix(0.12, 0.85, k);
+      }
+
+      void main() {
+        vec2 initial = a_particle.xy;
+        float seed = a_particle.z;
+        float orbit = a_particle.w;
+        float side = min(u_size.x, u_size.y);
+        if (a_isText > 0.0) {
+          drawTextParticle(initial, seed, orbit, side);
+          return;
+        }
+        if (a_isCup > 0.0) {
+          drawCupParticle(initial, seed, orbit);
+          return;
+        }
+        vec2 position = initial * u_size;
+        float blend = 1.0;
+        float life = 1.0;
+        int steamIndex = gl_VertexID - ${STEAM_OFFSET};
+        bool steam = steamIndex >= 0 && steamIndex < ${STEAM_COUNT} && u_motion > 0.0;
+        if (steam) {
+          position = steamPosition(initial, seed, orbit, side, blend, life);
+        } else if (u_motion > 0.0) {
+          position = field(position, side);
+        }
+
+        position = fract((position + u_mouse * (8.0 * u_hover)) / u_size) * u_size;
+        float tone = smoothstep(0.28, 0.99, orbit);
+        // Subtle brightness variation travels with the eddies without emptying the field.
+        float shimmer = 0.82 + 0.18 * sin(initial.x * 75.0 + initial.y * 41.0 + seed * 1.7);
+        vec3 color = mix(DARK_GREEN, GREEN, tone);
+        if (orbit > 0.97) color = mix(AMBER, vec3(1.0, 0.77, 0.44), tone * 0.28);
+        else if (orbit < 0.10) color = mix(color, VIOLET, 0.68 * smoothstep(0.49, 0.62, position.y / u_size.y));
+        float density = clamp(sqrt(u_size.x * u_size.y / 950000.0), 0.38, 1.0);
+        float alpha = mix(0.25, 0.55, seed) * shimmer * density;
+        float size = mix(1.0, 2.2, seed * seed);
+        if (steam) {
+          color = mix(STEAM, mix(DARK_GREEN, GREEN, tone), blend);
+          alpha = mix(mix(0.045, 0.14, orbit), alpha * 0.72, blend) * life;
+          size = mix(mix(1.0, 1.6, orbit), size, blend);
+        }
+
+        // Both waves share the same profile and can coexist.
+        if (u_motion > 0.0) {
+          vec2 cupShove, clickShove;
+          float cup = pulse(position, u_origin * u_size, u_pulseTime, cupShove);
+          float click = pulse(position, u_clickOrigin * u_size, u_clickTime, clickShove);
+          float wave = max(cup, click);
+          position += (cupShove + clickShove) * smoothstep(0.0, 24.0, edgeClearance(position));
+          alpha *= 1.0 + 2.0 * wave;
+          size *= 1.0 + 0.8 * wave;
+          color = mix(color, MINT, wave * 0.90);
+        }
+
+        if (u_hover > 0.001) {
+          // A local hover must not send a second band of points through the opposite edge.
+          vec2 edge = min(position, u_size - position);
+          position += pointerPush(position, 140.0, 19.0) * smoothstep(vec2(0.0), vec2(52.0), edge);
+        }
+        gl_Position = vec4(fract(position / u_size) * 2.0 - 1.0, 0.0, 1.0);
+        gl_PointSize = size * u_dpr;
+        v_color = color;
+        v_alpha = min(alpha, 1.0);
+      }
+    `;
+
+    const fragmentSource = `#version 300 es
+      precision mediump float;
+      in vec3 v_color;
+      in float v_alpha;
+      out vec4 outColor;
+      void main() {
+        // Soft, circular point for additive blending.
+        vec2 q = gl_PointCoord * 2.0 - 1.0;
+        float r2 = dot(q, q);
+        if (r2 > 1.0) discard;
+        outColor = vec4(v_color, v_alpha * (1.0 - smoothstep(0.14, 1.0, r2)));
+      }
+    `;
+
+    const canvas = document.querySelector('canvas');
+    const brand = document.querySelector('.brand');
+    const cup = brand.querySelector('svg');
+    const cupPath = CUP_PARTICLES ? new Path2D(cup.querySelector('path').getAttribute('d')) : null;
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    const mask = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    if (new URLSearchParams(location.search).has('blocked')) {
+      document.body.classList.add('blocked');
+    }
+
+    function createProgram(gl) {
+      const program = gl.createProgram();
+      for (const [type, source] of [[gl.VERTEX_SHADER, vertexSource], [gl.FRAGMENT_SHADER, fragmentSource]]) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
+        gl.attachShader(program, shader);
+        gl.deleteShader(shader);
+      }
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+      return program;
+    }
+
+    function buildParticles(gl) {
+      const count = 150000;
+      const particles = new Float32Array(count * 4);
+      let state = 2463534242;
+      function random() {
+        state ^= state << 13;
+        state ^= state >>> 17;
+        state ^= state << 5;
+        return (state >>> 0) / 4294967296;
+      }
+      for (let i = 0; i < count; i++) {
+        // Keep every plume particle while reserving slots for the word and cup.
+        let slot = i;
+        if (i < STEAM_COUNT) slot += STEAM_OFFSET;
+        else if (i < STEAM_COUNT + STEAM_OFFSET) slot -= STEAM_COUNT;
+        let index = slot * 4;
+        particles[index++] = random();
+        const y = random();
+        particles[index++] = random() < 0.14 ? (y + random()) * 0.5 : y;
+        particles[index++] = random();
+        particles[index++] = random();
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+      gl.bufferData(gl.ARRAY_BUFFER, particles, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+      return { count, particles };
+    }
+
+    function sampleText(width, height, family) {
+      const font = '800 100px ' + family;
+      mask.font = font;
+      const metrics = mask.measureText(TEXT);
+      const ascent = metrics.actualBoundingBoxAscent;
+      const glyphHeight = ascent + metrics.actualBoundingBoxDescent;
+      const tracking = 8;
+      const glyphs = Array.from(TEXT, letter => ({
+        letter,
+        advance: mask.measureText(letter).width + tracking,
+      }));
+      const lineWidth = glyphs.reduce((sum, glyph) => sum + glyph.advance, 0) - tracking;
+      if (lineWidth <= 0 || glyphHeight <= 0) return [];
+
+      const aspect = lineWidth / glyphHeight;
+      const maskWidth = Math.max(1, Math.floor(Math.min(width * 0.60, 900, height * 0.13 * aspect * 1.25)));
+      const maskHeight = Math.max(1, Math.floor(Math.min(height * 0.13, maskWidth / aspect * 1.25)));
+      mask.canvas.width = maskWidth;
+      mask.canvas.height = maskHeight;
+      mask.font = font;
+      mask.fillStyle = '#fff';
+      mask.setTransform(maskWidth / lineWidth, 0, 0, maskHeight / glyphHeight, 0, 0);
+      let offset = 0;
+      for (const { letter, advance } of glyphs) {
+        mask.fillText(letter, offset, ascent);
+        offset += advance;
+      }
+
+      const step = Math.max(3, Math.ceil(Math.sqrt(maskWidth * maskHeight / TEXT_COUNT)));
+      const left = (width - maskWidth) / 2;
+      const logo = brand.getBoundingClientRect();
+      const preferredTop = height * TEXT_Y - maskHeight / 2;
+      const aboveLogo = logo.top - maskHeight - 8;
+      const top = preferredTop + maskHeight + 8 > logo.top && preferredTop < logo.bottom + 8
+        ? (aboveLogo >= 0 ? aboveLogo : Math.min(logo.bottom + 8, height - maskHeight))
+        : preferredTop;
+      return sampleMask(step, { left, top, width: maskWidth, height: maskHeight }, width, height);
+    }
+
+    function sampleCup(bounds, width, height) {
+      // Supersample the narrow SVG stroke so it stays connected on small screens.
+      mask.canvas.width = Math.max(1, Math.round(bounds.width * 2));
+      mask.canvas.height = Math.max(1, Math.round(bounds.height * 2));
+      mask.setTransform(mask.canvas.width / 56, 0, 0, mask.canvas.height / 56, 0, 0);
+      mask.strokeStyle = '#fff';
+      mask.lineWidth = 2.2;
+      mask.lineCap = 'round';
+      mask.lineJoin = 'round';
+      mask.stroke(cupPath);
+      return sampleMask(2, bounds, width, height);
+    }
+
+    function sampleMask(step, bounds, width, height) {
+      const { width: columns, height: rows } = mask.canvas;
+      const { data } = mask.getImageData(0, 0, columns, rows);
+      const points = [];
+      for (let y = 1; y < rows; y += step) {
+        for (let x = 1; x < columns; x += step) {
+          if (data[(y * columns + x) * 4 + 3] > 128) {
+            points.push([
+              (bounds.left + (x + 0.5) * bounds.width / columns) / width,
+              1 - (bounds.top + (y + 0.5) * bounds.height / rows) / height,
+            ]);
+          }
+        }
+      }
+      return points;
+    }
+
+    function textPoints(width, height) {
+      for (const family of ['system-ui', 'sans-serif']) {
+        try {
+          const points = sampleText(width, height, family);
+          if (points.length) return points;
+        } catch (error) {
+          if (family === 'sans-serif') console.warn('Could not sample the blocked text', error);
+        }
+      }
+      return [];
+    }
+
+    function updateTargets(renderer, bounds, width, height) {
+      const letters = fontsReady ? textPoints(width, height) : [];
+      for (let i = letters.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [letters[i], letters[j]] = [letters[j], letters[i]];
+      }
+      letters.length = Math.min(letters.length, TEXT_COUNT);
+
+      let cupPoints = [];
+      if (cupPath) {
+        try {
+          cupPoints = sampleCup(bounds, width, height);
+        } catch (error) {
+          console.warn('Could not sample the cup', error);
+        }
+      }
+      const { gl, count, particles, targetBuffer, uniforms } = renderer;
+      const targets = new Float32Array(count * 4);
+      // Limit overlap on small masks so the letter strokes still read as points.
+      const textCount = Math.min(TEXT_COUNT, letters.length * 6);
+      const cupEnd = TEXT_COUNT + (cupPoints.length ? CUP_COUNT : 0);
+      for (let i = 0; i < count; i++) {
+        const index = i * 4;
+        const initialX = particles[index];
+        const initialY = particles[index + 1];
+        if (i < textCount) {
+          const [x, y] = letters[i % letters.length];
+          const jitter = Number(i >= letters.length);
+          targets[index] = x + jitter * (2 * initialX - 1) / width;
+          targets[index + 1] = y + jitter * (2 * initialY - 1) / height;
+          targets[index + 2] = 1;
+        } else if (i >= TEXT_COUNT && i < cupEnd) {
+          const [x, y] = cupPoints[(i - TEXT_COUNT) % cupPoints.length];
+          targets[index] = x + (2 * initialX - 1) * 0.65 / width;
+          targets[index + 1] = y + (2 * initialY - 1) * 0.65 / height;
+          targets[index + 3] = 1;
+        } else {
+          targets[index] = initialX;
+          targets[index + 1] = initialY;
+        }
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, targetBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, targets, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 0);
+      gl.enableVertexAttribArray(2);
+      gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 16, 8);
+      gl.enableVertexAttribArray(3);
+      gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 16, 12);
+      // Compensate for repeated samples under additive blending.
+      gl.uniform1f(uniforms.cupExposure, Math.min(1, 1.8 * cupPoints.length / CUP_COUNT));
+      brand.classList.toggle('cup-rendered', cupPoints.length > 0);
+      if (textCount) formStart ??= elapsed;
+    }
+
+    function updateOrigin(gl, uniforms, bounds, width, height) {
+      // The midpoint of the cup's rim in the SVG's 56 × 56 viewBox.
+      const center = bounds.width * 26.5 / 56;
+      const x = bounds.left + center;
+      const y = bounds.top + bounds.height * 28 / 56;
+      gl.uniform2f(uniforms.origin, x / width, 1 - y / height);
+      brand.style.setProperty('--cup-center', center + 'px');
+      brand.style.setProperty('--cup-halo-offset', (bounds.height * 12 / 56) + 'px');
+    }
+
+    function schedulePulse(time) {
+      const first = 1.5;
+      const interval = 4.5;
+      return time < first ? -1 : first + Math.floor((time - first) / interval) * interval;
+    }
+
+    function smoothProgress(progress) {
+      const t = Math.max(0, Math.min(1, progress));
+      return t * t * (3 - 2 * t);
+    }
+
+    function formation(time) {
+      const hold = 12;
+      const dissolve = 3;
+      const active = Math.max(0, time - FORM_DELAY);
+      const phase = LOOP ? active % (FORM_DURATION + hold + dissolve) : active;
+      if (LOOP && phase > FORM_DURATION + hold) {
+        return 1 - smoothProgress((phase - FORM_DURATION - hold) / dissolve);
+      }
+      const progress = Math.min(1, phase / FORM_DURATION);
+      const remaining = 1 - progress;
+      return 1 - remaining * remaining;
+    }
+
+    let renderer;
+    let frame = 0;
+    let lastTime = null;
+    let elapsed = 0;
+    let fontsReady = false;
+    let formStart = null;
+    let cupLight = 0;
+    let needsResize = true;
+    let targetX = 0, targetY = 0, targetHover = 0;
+    let mouseX = 0, mouseY = 0, hover = 0;
+    let clickX = 0, clickY = 0, clickTime = -1;
+
+    function schedule() {
+      const waitingForFonts = reducedMotion.matches && mask && !fontsReady;
+      if (!frame && renderer && !document.hidden && !waitingForFonts) frame = requestAnimationFrame(loop);
+    }
+
+    function loop(now) {
+      frame = 0;
+      if (!renderer || document.hidden) return;
+      const { gl, uniforms, count } = renderer;
+      if (needsResize) {
+        const width = Math.max(1, canvas.clientWidth);
+        const height = Math.max(1, canvas.clientHeight);
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        canvas.width = Math.max(1, Math.round(width * dpr));
+        canvas.height = Math.max(1, Math.round(height * dpr));
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        const bounds = cup.getBoundingClientRect();
+        updateOrigin(gl, uniforms, bounds, width, height);
+        gl.uniform2f(uniforms.size, width, height);
+        gl.uniform1f(uniforms.dpr, dpr);
+        if (mask) updateTargets(renderer, bounds, width, height);
+        needsResize = false;
+      }
+      const motion = !reducedMotion.matches;
+      if (motion) {
+        const dt = lastTime === null ? 0 : (now - lastTime) / 1000;
+        elapsed += dt;
+        const easing = 1 - Math.pow(0.92, dt * 60);
+        mouseX += (targetX - mouseX) * easing;
+        mouseY += (targetY - mouseY) * easing;
+        hover += (targetHover - hover) * easing;
+      }
+      lastTime = now;
+      const influence = motion ? hover : 0;
+      gl.uniform2f(uniforms.mouse, influence > 0.001 ? mouseX : 3, influence > 0.001 ? mouseY : 3);
+      gl.uniform1f(uniforms.hover, influence);
+      gl.uniform1f(uniforms.time, motion ? elapsed : 0);
+      gl.uniform1f(uniforms.motion, Number(motion));
+      gl.uniform1f(uniforms.form, formStart === null ? 0 : motion ? formation(elapsed - formStart) : 1);
+      gl.uniform1f(uniforms.cupForm, motion ? Math.min(1, elapsed / CUP_FORM_DURATION) : 1);
+      const pulseTime = motion ? schedulePulse(elapsed) : -1;
+      gl.uniform1f(uniforms.pulseTime, pulseTime);
+      const age = elapsed - pulseTime;
+      const offset = (age - 0.10) / 0.16;
+      const light = pulseTime < 0 ? 0 : Math.round(Math.min(age / 0.10, 1) * Math.exp(-offset * offset) * 100) / 100;
+      if (light !== cupLight) {
+        cupLight = light;
+        brand.style.setProperty('--cup-pulse', light);
+      }
+      gl.uniform1f(uniforms.clickTime, motion ? clickTime : -1);
+      gl.uniform2f(uniforms.clickOrigin, clickX, clickY);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.POINTS, 0, count);
+      if (motion) schedule();
+    }
+
+    function start() {
+      try {
+        const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false });
+        if (!gl) return;
+        const program = createProgram(gl);
+        gl.useProgram(program);
+        const uniforms = Object.fromEntries(
+          ['origin', 'size', 'mouse', 'time', 'motion', 'hover', 'dpr', 'pulseTime', 'clickTime', 'clickOrigin',
+            'form', 'cupForm', 'cupExposure']
+            .map(name => [name, gl.getUniformLocation(program, 'u_' + name)])
+        );
+        renderer = { gl, uniforms, ...buildParticles(gl), targetBuffer: mask ? gl.createBuffer() : null };
+        gl.clearColor(0, 0, 0, 1);
+        gl.disable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        canvas.hidden = false;
+        needsResize = true;
+        schedule();
+      } catch (error) {
+        console.warn('Focus particles could not initialize', error);
+        renderer = undefined;
+        canvas.hidden = true;
+        brand.classList.remove('cup-rendered');
+      }
+    }
+
+    function stop() {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      lastTime = null;
+    }
+
+    window.addEventListener('resize', () => {
+      needsResize = true;
+      schedule();
+    });
+    window.addEventListener('pointermove', event => {
+      if (reducedMotion.matches || event.pointerType === 'touch') return;
+      targetX = 2 * event.clientX / innerWidth - 1;
+      targetY = 1 - 2 * event.clientY / innerHeight;
+      if (hover < 0.001) {
+        mouseX = targetX;
+        mouseY = targetY;
+      }
+      targetHover = 1;
+    });
+    window.addEventListener('click', event => {
+      if (reducedMotion.matches) return;
+      clickX = event.clientX / innerWidth;
+      clickY = 1 - event.clientY / innerHeight;
+      clickTime = elapsed;
+    });
+    const releasePointer = () => { targetHover = 0; };
+    document.documentElement.addEventListener('pointerleave', releasePointer);
+    window.addEventListener('blur', releasePointer);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        releasePointer();
+        stop();
+      } else {
+        schedule();
+      }
+    });
+    reducedMotion.addEventListener('change', () => {
+      releasePointer();
+      hover = 0;
+      clickTime = -1;
+      stop();
+      schedule();
+    });
+    canvas.addEventListener('webglcontextlost', event => {
+      event.preventDefault();
+      stop();
+      renderer = undefined;
+      canvas.hidden = true;
+      brand.classList.remove('cup-rendered');
+    });
+    canvas.addEventListener('webglcontextrestored', start);
+    if (mask) {
+      const onFontsReady = () => {
+        fontsReady = true;
+        needsResize = true;
+        schedule();
+      };
+      document.fonts.ready.then(onFontsReady, onFontsReady);
+    }
+    start();
+  </script>
+</body>
+</html>

@@ -9,37 +9,35 @@
   <body>
     <main class="app-shell">
       <header class="page-header">
-        <div class="brand">
-          <span class="brand-emblem"><svg class="brand-ring" viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="32" cy="32" r="29" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="76 106"/></svg><img src="icons/app-48.png" alt="" width="48" height="48"></span>
-          <span class="brand-wordmark">JP Freedom<svg viewBox="0 0 210 12" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M3 9C55 3 135 3 207 7" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></span>
-        </div>
+        <div class="brand"><img src="icons/app-48.png" alt="" width="48" height="48"><span>JP Freedom</span></div>
+        <nav class="view-nav" aria-label="Extension sections">
+          <button id="tab-plan" class="view-tab is-selected" type="button" aria-controls="view-plan" aria-current="page">Plan</button>
+          <button id="tab-sites" class="view-tab" type="button" aria-controls="view-sites">Sites</button>
+          <button id="tab-connection" class="view-tab" type="button" aria-controls="view-connection">Connection</button>
+        </nav>
         <div class="header-actions"><p id="sync-state" role="status">Checking sync…</p><button id="sync-now" type="button">Sync now</button></div>
       </header>
-      <nav class="view-nav" aria-label="Extension sections">
-        <button id="tab-plan" class="view-tab is-selected" type="button" aria-controls="view-plan" aria-current="page">Plan</button>
-        <button id="tab-sites" class="view-tab" type="button" aria-controls="view-sites">Blocked sites</button>
-        <button id="tab-connection" class="view-tab" type="button" aria-controls="view-connection">Connection</button>
-      </nav>
       <div id="view-plan" class="view-panel">
         <div class="plan-hero">
         <img class="hero-illustration" src="illustrations/focus-landscape.png" alt="" aria-hidden="true">
-        <div class="plan-intro"><p id="today-intro-date"></p><h1>Focus plan</h1><p id="protection-state" role="status">Checking protection…</p></div>
+        <div class="plan-intro"><p id="today-intro-date"></p><div class="focus-title"><h1 id="focus-heading">Focus plan</h1><span id="focus-live" class="focus-live" aria-hidden="true" hidden></span></div><p id="protection-state" role="status">Checking protection…</p></div>
         <section class="focus-board" aria-labelledby="plan-heading">
           <div class="focus-main"><h2 id="plan-heading">Current focus block</h2><p id="current-block">Loading plan…</p></div>
-          <p id="planned-end" hidden></p>
+          <div class="focus-meta"><p id="planned-end" hidden></p><p id="focus-remaining" hidden><strong id="focus-remaining-value"></strong> left</p></div>
+          <div id="focus-progress" class="focus-progress" role="progressbar" aria-label="Focus block progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span id="focus-progress-fill"></span></div>
         </section>
         </div>
         <section class="schedule" aria-labelledby="schedule-heading">
         <div class="schedule-intro"><h2 id="schedule-heading">Your schedule</h2><p>Today and tomorrow from your phone.</p></div>
       <div class="day-plans">
         <section class="day-plan" aria-labelledby="today-plan-heading">
-          <div class="day-plan-header"><h2 id="today-plan-heading">Today’s plan</h2><time id="today-plan-date"></time></div>
+            <div class="day-plan-header"><h2 id="today-plan-heading">Today’s schedule</h2><time id="today-plan-date"></time></div>
           <img id="today-plan-art" class="empty-art" src="illustrations/open-plan.png" alt="" aria-hidden="true" hidden>
           <p id="today-plan-empty" class="day-plan-empty" role="status">Loading plan…</p>
           <ol id="today-plan-list" class="day-plan-list"></ol>
         </section>
         <section id="tomorrow-plan" class="day-plan" aria-labelledby="tomorrow-plan-heading">
-          <div class="day-plan-header"><h2 id="tomorrow-plan-heading">Tomorrow’s plan</h2><time id="tomorrow-plan-date"></time></div>
+            <div class="day-plan-header"><h2 id="tomorrow-plan-heading">Tomorrow’s schedule</h2><time id="tomorrow-plan-date"></time></div>
           <img id="tomorrow-plan-art" class="empty-art" src="illustrations/open-plan.png" alt="" aria-hidden="true" hidden>
           <p id="tomorrow-plan-empty" class="day-plan-empty" role="status">Loading plan…</p>
           <ol id="tomorrow-plan-list" class="day-plan-list"></ol>
@@ -49,26 +47,30 @@
       </div>
       <div id="view-sites" class="view-panel" hidden>
         <section class="blocklist" aria-labelledby="blocklist-heading">
-          <h1 id="blocklist-heading">Blocked sites</h1>
-          <p class="section-description">Selected sites are blocked in Chrome during a focus block. Each domain includes its subdomains. Selected sites stay locked until the block ends.</p>
-          <div class="permission-line"><p id="permission-state" role="status">Checking Chrome site access…</p><button id="grant-site-access" type="button" hidden>Grant site access</button></div>
-          <form id="add-domain-form">
-            <label for="custom-domain">Add a domain</label>
-            <div class="domain-input-row"><input id="custom-domain" name="custom-domain" type="text" autocomplete="off" placeholder="example.com" aria-describedby="domain-help"><button id="add-domain" type="submit">Add site</button></div>
-            <p id="domain-help" class="field-help">Enter a bare domain such as example.com. URLs and paths are not accepted.</p>
-          </form>
-          <fieldset id="common-sites">
-            <legend>Common sites</legend>
-            <label class="site-row" data-monogram="F"><input id="domain-facebook.com" type="checkbox" data-domain="facebook.com"><span class="site-name">Facebook</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row" data-monogram="I"><input id="domain-instagram.com" type="checkbox" data-domain="instagram.com"><span class="site-name">Instagram</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row" data-monogram="T"><input id="domain-tiktok.com" type="checkbox" data-domain="tiktok.com"><span class="site-name">TikTok</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row" data-monogram="X"><input id="domain-x.com" type="checkbox" data-domain="x.com"><span class="site-name">X</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row" data-monogram="R"><input id="domain-reddit.com" type="checkbox" data-domain="reddit.com"><span class="site-name">Reddit</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row" data-monogram="Y"><input id="domain-youtube.com" type="checkbox" data-domain="youtube.com"><span class="site-name">YouTube</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            <label class="site-row" data-monogram="W"><input id="domain-web.whatsapp.com" type="checkbox" data-domain="web.whatsapp.com"><span class="site-name">WhatsApp Web</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-          </fieldset>
-          <div id="custom-sites" aria-label="Custom sites"></div>
-          <p id="blocklist-status" role="status"></p>
+          <div class="blocklist-controls">
+            <h1 id="blocklist-heading">Blocked sites</h1>
+            <p class="section-description">Selected sites are blocked in Chrome during a focus block. Each domain includes its subdomains. Selected sites stay locked until the block ends.</p>
+            <div class="permission-line"><p id="permission-state" role="status">Chrome blocks selected sites during active focus blocks. Site access permission is not needed.</p></div>
+            <form id="add-domain-form">
+              <label for="custom-domain">Add a domain</label>
+              <div class="domain-input-row"><input id="custom-domain" name="custom-domain" type="text" autocomplete="off" placeholder="example.com" aria-describedby="domain-help"><button id="add-domain" type="submit">Add site</button></div>
+              <p id="domain-help" class="field-help">Enter a bare domain such as example.com. URLs and paths are not accepted.</p>
+            </form>
+            <p id="blocklist-status" role="status"></p>
+          </div>
+          <div class="blocklist-choices" role="region" aria-label="Site choices" tabindex="0">
+            <fieldset id="common-sites">
+              <legend>Common sites</legend>
+              <label class="site-row" data-monogram="F"><input id="domain-facebook.com" type="checkbox" data-domain="facebook.com"><span class="site-name">Facebook</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="I"><input id="domain-instagram.com" type="checkbox" data-domain="instagram.com"><span class="site-name">Instagram</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="T"><input id="domain-tiktok.com" type="checkbox" data-domain="tiktok.com"><span class="site-name">TikTok</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="X"><input id="domain-x.com" type="checkbox" data-domain="x.com"><span class="site-name">X</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="R"><input id="domain-reddit.com" type="checkbox" data-domain="reddit.com"><span class="site-name">Reddit</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="Y"><input id="domain-youtube.com" type="checkbox" data-domain="youtube.com"><span class="site-name">YouTube</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="W"><input id="domain-web.whatsapp.com" type="checkbox" data-domain="web.whatsapp.com"><span class="site-name">WhatsApp Web</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            </fieldset>
+            <div id="custom-sites" aria-label="Custom sites"></div>
+          </div>
         </section>
       </div>
       <div id="view-connection" class="view-panel" hidden>
@@ -98,6 +100,9 @@
         </div>
       </div>
     </main>
+    <svg class="planner-wave" viewBox="0 0 1440 160" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <path d="M0 0 C260 28 480 110 770 132 C1045 154 1240 120 1440 116 V160 H0 Z" fill="currentColor"/>
+    </svg>
     <script type="module" src="src/management.js"></script>
   </body>
 </html>

@@ -97,6 +97,7 @@ test('blocklist rules cover configured hosts and are empty outside a focus block
   const current = { id: 'focus', date: '2026-11-04', name: 'Study', startTime: '10:00', endTime: '11:00', completionStatus: 'NOT_STARTED' };
   const rules = makeDesktopBlockRules(snapshot, current);
   assert.deepEqual(rules.map(rule => rule.condition.requestDomains[0]), ['facebook.com', 'youtube.com']);
+  assert.ok(rules.every(rule => rule.action.type === 'block'));
   assert.ok(rules.every(rule => rule.condition.resourceTypes.length === 1 && rule.condition.resourceTypes[0] === 'main_frame'));
   assert.deepEqual(makeDesktopBlockRules(snapshot, null), []);
 });

@@ -13,8 +13,12 @@ function createNode() {
     checked: false,
     className: '',
     dataset: {},
+    style: {},
+    attributes: new Map(),
     listeners: new Map(),
     children: [],
+    setAttribute(name, value) { this.attributes.set(name, value); },
+    removeAttribute(name) { this.attributes.delete(name); },
     addEventListener(type, listener) {
       this.listeners.set(type, listener);
     },
@@ -500,28 +504,26 @@ test('a Finished block is released when its newer snapshot syncs', async () => {
   assert.deepEqual(harness.rules, []);
 });
 
-test('management explains missing site access and requests it from the user gesture', async () => {
+test('management applies active DNR blocks without site permissions', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const snapshot = {
     version: 1,
     settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
     desktopBlockedDomains: ['reddit.com'],
-    blocks: [],
+    blocks: [{ id: 'focus', date: '2026-11-05', name: 'Study', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
   };
   const harness = createHarness({ lastValidSnapshot: snapshot });
-  let requested;
-  let granted = false;
   harness.chromeApi.permissions = {
-    async contains() { return granted; },
-    async request({ origins }) { requested = origins; granted = true; return true; },
+    async contains() { return false; },
+    async request() { throw new Error('site access should not be requested for DNR block rules'); },
   };
 
   await initializeManagement({ ...harness, now: () => now, fetchImpl: async () => { throw new Error('unexpected request'); } });
 
-  assert.match(harness.nodes.get('permission-state').textContent, /site access.*needed/i);
-  await harness.nodes.get('grant-site-access').listeners.get('click')();
-  assert.deepEqual(requested, ['http://reddit.com/*', 'https://reddit.com/*']);
-  assert.equal(harness.nodes.get('permission-state').textContent, 'Chrome can block your selected sites during a focus block.');
+  assert.equal(harness.nodes.has('grant-site-access'), false);
+  assert.equal(harness.rules.length, 1);
+  assert.deepEqual(harness.rules[0].action, { type: 'block' });
+  assert.deepEqual(harness.rules[0].condition.requestDomains, ['reddit.com']);
 });
 
 test('the blocked page shows the active activity and planned end without a bypass control', async () => {

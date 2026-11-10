@@ -349,7 +349,7 @@ button:active:not(:disabled) { transform: scale(.98); }
   button { transition: none; }
 }
 
-/* Site choices read as a single list with recognizable, compact marks. */
+/* Site choices use recognizable, compact marks. */
 .blocklist { width: min(100%, 900px); }
 #sync-state { display: inline-flex; align-items: center; gap: 8px; }
 #sync-state::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
@@ -481,4 +481,334 @@ button:active:not(:disabled) { transform: scale(.98); }
 @media (prefers-reduced-motion: reduce) {
   .brand-ring, .brand-wordmark svg path { animation: none; }
   .brand-wordmark svg path { stroke-dashoffset: 0; }
+}
+
+/* Approved editorial refresh: warm stone, charcoal, and clear blue-petrol. */
+:root {
+  color-scheme: light;
+  background: #f7f6f2;
+  color: #252b30;
+  --surface: #fff;
+  --muted: #526168;
+  --line: #cbd3d5;
+  --line-soft: #dce2e3;
+  --amber: #176b78;
+  --on-amber: #fff;
+  --amber-soft: #dcebed;
+  --on-amber-soft: #21383d;
+  --focus: #176b78;
+  scrollbar-color: #9eafb2 #f7f6f2;
+}
+
+::selection { color: #fff; background: #176b78; }
+button:focus-visible, input:focus-visible, .site-row:has(input:focus-visible) { outline-color: #176b78; }
+input:not([type="checkbox"]) { caret-color: #176b78; }
+.app-shell { max-width: 1240px; }
+.brand { color: #252b30; }
+.brand-emblem { background: #dcebed; }
+.brand-ring, .brand-wordmark svg { color: #176b78; }
+.view-tab:hover:not(:disabled), .view-tab.is-selected { color: #176b78; }
+.view-tab.is-selected { border-bottom-color: #176b78; }
+.plan-hero { background: #f7f6f2; color: #252b30; }
+.hero-illustration { display: none; }
+#today-intro-date, #protection-state { color: #526168; }
+.plan-intro h1, .schedule-intro h2, .day-plan-header h2, .blocklist h1, .connection-intro h1 { color: #252b30; }
+.plan-hero .focus-board { background: #e7eff0; color: #21383d; box-shadow: none; }
+.plan-hero .focus-main h2, .plan-hero #current-block, .plan-hero #planned-end { color: #21383d; }
+.plan-hero .focus-board.is-active { box-shadow: inset 0 0 0 2px #176b78; }
+.schedule .day-plan, .schedule .day-plan + .day-plan { border-color: #dce2e3; background: #fff; color: #252b30; }
+.schedule .day-plan-header { background: #f0f2ef; }
+.schedule .day-plan-header time, .schedule .day-plan-empty, .schedule-intro p { color: #526168; }
+.schedule .day-plan-list:not(:empty) { border-color: #dce2e3; }
+.schedule .day-plan-row { border-color: #e2e7e7; }
+.schedule .day-plan-row.is-current { background: #176b78; color: #fff; }
+.schedule .day-plan-status { color: inherit; }
+.tomorrow-link { color: #176b78; }
+.site-row:hover:not(:has(input:disabled)) { border-color: #176b78; }
+.site-row input:checked ~ .site-action { background: #dcebed; color: #21383d; border-color: #b6ced1; }
+.site-row:hover { background: color-mix(in srgb, #dcebed 48%, transparent); }
+.site-row:has(input[data-domain="facebook.com"])::before { background: #2864c5; }
+.site-row:has(input[data-domain="instagram.com"])::before { background: #b82774; }
+.site-row:has(input[data-domain="tiktok.com"])::before { background: #5c545e; }
+.site-row:has(input[data-domain="x.com"])::before { background: #38343a; }
+.site-row:has(input[data-domain="reddit.com"])::before { background: #b34414; }
+.site-row:has(input[data-domain="youtube.com"])::before { background: #b01f1f; }
+.site-row:has(input[data-domain="web.whatsapp.com"])::before { background: #17804d; }
+.connection-path, .connection-rail .connection { background: #fff; }
+.connection-device, .sync-timestamp svg { color: #176b78; }
+.connection-flow::after { background: #176b78; }
+.sync-timestamp, .blocklist .permission-line.is-needed { background: #dcebed; color: #21383d; }
+.blocklist .permission-line::before { background: #176b78; }
+.blocklist .permission-line.is-ready { background: #e8f2ec; color: #20523a; }
+.blocklist .permission-line.is-ready::before { background: #28734e; }
+main.app-shell [data-impeccable-variants] [data-impeccable-variant="1"] .live-header-a { background: #e7eff0; color: #21383d; border-radius: 14px; }
+main.app-shell [data-impeccable-variants] [data-impeccable-variant="1"] .live-mark { background: #fff; }
+main.app-shell [data-impeccable-variants] [data-impeccable-variant="1"] .live-sync { background: #176b78; color: #fff; }
+main.app-shell [data-impeccable-variants] [data-impeccable-variant="1"] .live-sync:focus-visible { outline-color: #176b78; }
+
+@media (max-width: 600px) {
+  .schedule .day-plan-header { background: #f0f2ef; }
+  .plan-hero { overflow: visible; }
+}
+
+/* Approved comp: editorial focus column beside the two-day agenda. */
+.app-shell { width: min(1520px, calc(100% - 80px)); max-width: 1520px; padding: 0 0 64px; }
+.page-header { display: grid; grid-template-columns: minmax(220px, 1fr) auto minmax(210px, 1fr); gap: 24px; min-height: 116px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.brand { grid-column: auto; gap: 14px; font-family: "JP Roboto", Roboto, Arial, sans-serif; font-size: 1.55rem; color: var(--ink, #252b30); white-space: nowrap; }
+.brand img { width: 46px; height: 46px; border-radius: 11px; }
+.view-nav { justify-content: center; gap: 30px; margin: 0; border: 0; }
+.view-tab { min-height: 46px; padding: 0 4px 10px; font-size: .98rem; }
+.header-actions { gap: 12px; }
+#sync-state { max-width: 190px; text-align: right; font-size: .78rem; }
+#sync-now { min-height: 42px; padding: 8px 18px; }
+.view-panel { padding-top: 46px; }
+#view-plan { position: relative; display: grid; grid-template-columns: minmax(300px, .68fr) minmax(0, 1.55fr); align-items: start; gap: clamp(34px, 5vw, 76px); padding-bottom: 150px; }
+#view-plan > *:not(.planner-wave) { position: relative; z-index: 1; }
+.app-shell { position: relative; isolation: isolate; }
+.page-header { position: relative; z-index: 1; }
+.planner-wave { position: fixed; z-index: 0; left: 50%; bottom: 0; width: 100vw; height: 96px; transform: translateX(-50%); color: #176b78; pointer-events: none; }
+.plan-hero { display: flex; flex-direction: column; justify-content: flex-start; min-height: 0; padding: 0; overflow: visible; background: transparent; color: #252b30; }
+.plan-intro { margin: 0 0 48px; }
+#today-intro-date { margin: 0 0 15px; color: #526168; font-size: .92rem; }
+.plan-intro h1 { max-width: none; font-size: clamp(3.8rem, 5.2vw, 5.3rem); line-height: .98; letter-spacing: -.035em; }
+#protection-state { max-width: 34ch; margin-top: 20px; color: #526168; font-size: .98rem; text-align: left; }
+.plan-hero .focus-board { display: block; min-height: 0; margin: 0; padding: 24px; border: 0; border-radius: 12px; background: #e7eff0; color: #21383d; box-shadow: none; }
+.plan-hero .focus-main { display: block; }
+.plan-hero .focus-main h2 { color: #21383d; font-size: .76rem; letter-spacing: .14em; text-transform: uppercase; }
+.plan-hero #current-block { margin-top: 14px; color: #252b30; font-size: clamp(2rem, 3.1vw, 3rem); line-height: 1.05; }
+.plan-hero #planned-end { display: block; margin-top: 12px; color: #526168; font-size: 1rem; }
+.schedule { min-width: 0; padding: 0; }
+.schedule-intro { display: none; }
+.schedule .day-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(18px, 2.3vw, 36px); margin: 0; }
+.schedule .day-plan, .schedule .day-plan + .day-plan { display: block; min-height: 0; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; color: #252b30; }
+.schedule .day-plan-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin: 0 0 18px; padding: 0; border: 0; background: transparent; }
+.schedule .day-plan-header h2 { font-family: var(--display-font); font-size: clamp(1.45rem, 2vw, 1.9rem); font-weight: 700; letter-spacing: -.025em; }
+.schedule .day-plan-header h2::after { display: block; width: 46px; height: 4px; margin-top: 12px; background: #176b78; content: ""; }
+.schedule .day-plan-header time { margin: 0; color: #526168; font-size: .9rem; }
+.schedule .day-plan-empty { padding: 20px 0; color: #526168; text-align: left; }
+.schedule .empty-art { display: none !important; }
+.schedule .day-plan-empty:not([hidden]) { border-top: 1px solid #dce2e3; font-size: .92rem; }
+.schedule .day-plan-list { margin: 0; padding: 0; border: 0; }
+.schedule .day-plan-row { grid-template-columns: minmax(88px, auto) minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; min-height: 48px; padding: 9px 8px; border-bottom: 1px solid #dce2e3; border-radius: 0; }
+.schedule .day-plan-row:first-child { border-top: 0; }
+.schedule .day-plan-row.is-current { padding-inline: 12px; border-radius: 4px; background: #176b78; color: #fff; }
+.schedule .day-plan-time { color: inherit; font-size: .88rem; }
+.schedule .day-plan-name { font-size: 1rem; }
+.schedule .day-plan-status { color: inherit; font-size: .7rem; }
+.schedule #tomorrow-plan .day-plan-header { margin-top: 0; }
+#tomorrow-plan.schedule .day-plan, .schedule #tomorrow-plan { background: transparent; color: #252b30; }
+.blocklist, .connection-rail { max-width: 100%; }
+
+@media (max-width: 1050px) {
+  .app-shell { width: min(100% - 48px, 900px); }
+  .page-header { grid-template-columns: auto 1fr; }
+  .view-nav { justify-content: flex-end; }
+  .header-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  #view-plan { grid-template-columns: minmax(240px, .72fr) minmax(0, 1.4fr); gap: 34px; }
+  .schedule .day-plans { grid-template-columns: 1fr; gap: 34px; }
+}
+@media (max-width: 680px) {
+  .app-shell { width: calc(100% - 32px); padding-bottom: 40px; }
+  .page-header { grid-template-columns: 1fr; gap: 16px; padding: 18px 0; }
+  .brand { font-size: 1.32rem; }
+  .view-nav { justify-content: flex-start; gap: 22px; overflow-x: auto; }
+  .header-actions { grid-column: auto; justify-content: space-between; }
+  #sync-state { text-align: left; }
+  .view-panel { padding-top: 30px; }
+  #view-plan { grid-template-columns: 1fr; gap: 36px; }
+  .plan-intro { margin-bottom: 24px; }
+  .plan-intro h1 { max-width: none; font-size: clamp(3rem, 14vw, 4rem); }
+  .plan-hero .focus-board { padding: 20px; }
+  .schedule .day-plans { gap: 30px; }
+  .schedule .day-plan-row { grid-template-columns: minmax(86px, auto) minmax(0, 1fr); }
+  .schedule .day-plan-status { grid-column: 2; grid-row: 2; }
+}
+
+/* Reserve a footer below the viewport panels. */
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { display: flex; flex-direction: column; min-width: 320px; }
+.app-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  padding: 0 clamp(18px, 3vw, 48px);
+  overflow: hidden;
+}
+.page-header { flex: 0 0 auto; min-height: clamp(76px, 12vh, 116px); }
+.view-panel { flex: 1 1 auto; min-height: 0; padding-top: clamp(18px, 4vh, 42px); overflow: hidden; }
+.view-panel[hidden] { display: none !important; }
+#view-connection { overflow-y: auto; overscroll-behavior: contain; }
+.blocklist {
+  display: grid;
+  grid-template-rows: fit-content(70%) minmax(0, 1fr);
+  gap: clamp(12px, 2vh, 24px);
+  width: min(100%, 1200px);
+  height: 100%;
+}
+.blocklist-controls { min-width: 0; padding: 6px; overflow-y: auto; overscroll-behavior: contain; }
+.blocklist-choices {
+  min-width: 0;
+  min-height: 0;
+  padding: 6px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.blocklist-choices:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+#common-sites { min-width: 0; margin-top: 0; }
+#custom-sites:empty { display: none; }
+@media (min-width: 850px) {
+  .blocklist { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); grid-template-rows: minmax(0, 1fr); }
+}
+@media (min-width: 960px) {
+  #common-sites, #custom-sites { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 849px) {
+  .blocklist .permission-line, #add-domain-form { margin-top: 12px; }
+}
+#view-plan {
+  height: 100%;
+  padding-bottom: 0;
+  grid-template-columns: minmax(270px, .68fr) minmax(0, 1.55fr);
+  gap: clamp(24px, 4vw, 68px);
+}
+.plan-hero, .schedule, .schedule .day-plans, .schedule .day-plan { min-width: 0; min-height: 0; }
+.plan-hero { overflow: hidden; }
+.plan-intro { margin-bottom: clamp(16px, 4vh, 42px); }
+.plan-hero .focus-board { overflow-wrap: anywhere; }
+.schedule { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.schedule .day-plans { flex: 1 1 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2vw, 32px); overflow: hidden; }
+.schedule .day-plan, .schedule .day-plan + .day-plan { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.schedule .day-plan-header { flex: 0 0 auto; }
+.schedule .day-plan-list { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.schedule .day-plan-list:empty { display: none; }
+.schedule .day-plan-empty:not([hidden]) { flex: 0 0 auto; }
+.schedule .day-plan-row {
+  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 2px 12px;
+  min-height: 56px;
+  padding: 7px 8px;
+}
+.schedule .day-plan-time { grid-column: 1; grid-row: 1 / span 2; }
+.schedule .day-plan-name { grid-column: 2; grid-row: 1; line-height: 1.25; }
+.schedule .day-plan-status { grid-column: 2; grid-row: 2; justify-self: start; font-size: .72rem; line-height: 1.2; opacity: .82; }
+.schedule #tomorrow-plan .day-plan-empty:not([hidden]) {
+  display: grid;
+  flex: 1 1 auto;
+  place-items: center;
+  margin: 0;
+  padding: 20px 12px;
+  border-top: 1px solid #dce2e3;
+  text-align: center;
+}
+.planner-wave {
+  position: static;
+  flex: none;
+  display: block;
+  width: 100%;
+  height: clamp(18px, 6vh, 64px);
+  transform: none;
+  color: #176b78;
+  pointer-events: none;
+}
+.app-shell > * { position: relative; z-index: 1; }
+
+@media (max-width: 1050px) {
+  .app-shell { width: 100%; max-width: none; padding-inline: 24px; }
+  .page-header { min-height: clamp(82px, 14vh, 112px); }
+  #view-plan { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); gap: 24px; }
+  .schedule .day-plans { grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 18px; overflow-y: auto; overscroll-behavior: contain; }
+  .schedule .day-plan { height: auto; }
+}
+@media (max-width: 680px) {
+  .app-shell { padding-inline: 16px; }
+  .page-header { min-height: 0; }
+  .view-panel { padding-top: 16px; }
+  #view-plan { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 12px; }
+  .plan-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .9fr); align-items: center; gap: 12px; }
+  .plan-intro { min-width: 0; margin: 0; }
+  #today-intro-date { margin-bottom: 4px; font-size: .75rem; }
+  .plan-intro h1 { font-size: clamp(1.9rem, 7vh, 3rem); }
+  #protection-state { margin-top: 6px; font-size: .76rem; }
+  .plan-hero .focus-board { padding: 12px; }
+  .plan-hero .focus-main h2 { font-size: .62rem; }
+  .plan-hero #current-block { margin-top: 6px; font-size: clamp(1.15rem, 5vh, 1.8rem); }
+  .plan-hero #planned-end { margin-top: 4px; font-size: .78rem; }
+  .schedule .day-plans { grid-template-columns: 1fr; grid-template-rows: none; overflow-x: hidden; overflow-y: auto; }
+  .schedule .day-plan { min-height: 220px; }
+  .schedule .day-plan-header h2 { font-size: 1.35rem; }
+  .schedule .day-plan-row { grid-template-columns: max-content minmax(0, 1fr); }
+}
+
+/* Active focus uses the reference's live pulse, light sweep, and real progress. */
+.focus-title { display: flex; align-items: center; gap: 16px; }
+.focus-title h1.is-active { animation: focus-heading-breathe 3.2s ease-in-out infinite; }
+.focus-live { position: relative; display: inline-grid; width: 46px; height: 46px; flex: 0 0 46px; place-items: center; }
+.focus-live[hidden] { display: none; }
+.focus-live::before, .focus-live::after { position: absolute; border-radius: 50%; content: ""; }
+.focus-live::before { inset: 0; background: rgb(23 107 120 / .12); animation: focus-radar 2.4s cubic-bezier(.2, .6, .3, 1) infinite; }
+.focus-live::after { inset: 16px; background: #1fb7a6; }
+.plan-hero .focus-board { position: relative; isolation: isolate; border: 1px solid #176b78; }
+.plan-hero .focus-board.is-active { overflow: hidden; box-shadow: 0 8px 28px rgb(23 107 120 / .12); }
+.plan-hero .focus-board.is-active .focus-main h2::before {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin: 0 10px 1px 0;
+  border-radius: 50%;
+  background: #1fb7a6;
+  content: "";
+  vertical-align: middle;
+  animation: focus-live-blink 1.4s ease-in-out infinite;
+}
+.plan-hero .focus-board.is-active::after {
+  position: absolute;
+  z-index: 0;
+  inset: 2px;
+  border-radius: 10px;
+  background: linear-gradient(100deg, transparent 30%, rgb(31 183 166 / .14) 50%, transparent 70%);
+  content: "";
+  pointer-events: none;
+  transform: translateX(-100%);
+  animation: focus-sweep 5s ease-in-out infinite;
+}
+.plan-hero .focus-board.is-active > * { position: relative; z-index: 1; }
+.plan-hero .focus-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 12px; color: #526168; font-size: .95rem; }
+.plan-hero #planned-end, .plan-hero #focus-remaining { display: block; margin: 0; color: inherit; font-size: inherit; }
+.plan-hero #planned-end[hidden], .plan-hero #focus-remaining[hidden], .plan-hero #focus-progress[hidden] { display: none !important; }
+.plan-hero #focus-remaining strong { color: #21383d; font-variant-numeric: tabular-nums; }
+.plan-hero .focus-progress { position: relative; height: 8px; margin-top: 18px; overflow: hidden; border-radius: 99px; background: rgb(23 107 120 / .16); }
+.plan-hero .focus-progress > span { position: absolute; inset: 0 auto 0 0; width: 0; overflow: hidden; border-radius: inherit; background: linear-gradient(90deg, #176b78, #1fb7a6); transition: width 1s linear; }
+.plan-hero .focus-progress > span::after { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgb(255 255 255 / .55), transparent); content: ""; transform: translateX(-100%); animation: focus-progress-glint 1.8s linear infinite; }
+#view-plan[hidden] .plan-intro h1.is-active,
+#view-plan[hidden] .focus-live::before,
+#view-plan[hidden] .plan-hero .focus-board.is-active::after,
+#view-plan[hidden] .plan-hero .focus-board.is-active .focus-main h2::before,
+#view-plan[hidden] .plan-hero .focus-progress > span::after { animation-play-state: paused; }
+@keyframes focus-heading-breathe {
+  0%, 100% { text-shadow: 0 0 0 rgb(31 183 166 / 0); }
+  50% { text-shadow: 0 0 30px rgb(31 183 166 / .24); }
+}
+@keyframes focus-radar { 0% { transform: scale(.46); opacity: .55; } 100% { transform: scale(1.5); opacity: 0; } }
+@keyframes focus-live-blink { 50% { opacity: .35; transform: scale(.72); } }
+@keyframes focus-sweep { 0%, 55% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+@keyframes focus-progress-glint { to { transform: translateX(100%); } }
+@media (max-width: 680px) {
+  .focus-title { gap: 9px; }
+  .focus-live { width: 30px; height: 30px; flex-basis: 30px; }
+  .focus-live::after { inset: 11px; }
+  .plan-hero .focus-meta { flex-wrap: wrap; }
+  .plan-hero .focus-progress { margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-title h1.is-active,
+  .focus-live::before,
+  .plan-hero .focus-board.is-active::after,
+  .plan-hero .focus-board.is-active .focus-main h2::before,
+  .plan-hero .focus-progress > span::after { animation: none; }
+  .plan-hero .focus-board.is-active::after { transform: translateX(0); opacity: .2; }
 }
