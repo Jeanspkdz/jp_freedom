@@ -5,6 +5,12 @@ states. The desktop site blocklist is shared and can be edited from Android or
 the Chrome extension. Chrome applies that list during focus blocks. Evening
 restriction never blocks desktop browsing.
 
+## Initial desktop release
+
+The first Chrome release is installed manually for personal use. Planned block
+dates and times use each device's local clock; for this release, the phone and
+computer are expected to use the same time zone.
+
 ## Snapshot contract
 
 `GET /v1/snapshot` returns `{ revision, updatedAt, snapshot }`. Android writes
@@ -30,6 +36,23 @@ While Chrome is open, the service worker polls the snapshot API once per minute
 and refreshes immediately on startup. This receives Android changes, including
 Finished blocks, without requiring the management page to remain open. If the
 API is unavailable, Chrome keeps enforcing its last valid cached snapshot.
+
+Chrome requires an internet connection to edit the shared list. While offline,
+it continues enforcing the last synchronized list. During a focus block,
+selected sites cannot be removed from either client, but additional sites may
+be added and take effect immediately. Outside a block, the list can be edited
+freely. The custom domain field should show an example such as `example.com`;
+entries also cover their subdomains.
+
+Until the extension receives its first valid snapshot, it does not block
+browsing and shows that synchronization is not active.
+
+The extension opens a full management page when clicked. That page shows the
+shared domain list, current block and its planned end time, and synchronization
+status. A blocked page shows the activity and planned end time; it has no bypass
+control. Marking the block Finished on Android releases it when the extension
+receives the updated snapshot. Blocking applies to top-level page navigation,
+not embedded content on unrelated sites.
 
 Every route except `/health` requires `Authorization: Bearer <SYNC_API_TOKEN>`.
 The token is supplied to the Neon Function at deploy time and entered into each
