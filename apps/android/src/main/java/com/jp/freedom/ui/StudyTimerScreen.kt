@@ -35,6 +35,8 @@ fun StudyTimerScreen(
     session: StudyTimerSession?, pendingReview: StudyTimerSession?,
     profiles: List<SavedAccessProfile>, installedApps: List<LaunchableApp>,
     onCreateProfile: (String, Set<String>) -> Unit,
+    onUpdateProfile: (SavedAccessProfile) -> Unit,
+    onDeleteProfile: (String) -> Unit,
     onBack: () -> Unit, onStart: (Duration, SavedAccessProfile?) -> Unit, onStop: () -> Unit,
     onReview: (String, CompletionStatus, String, String) -> Unit,
     onEndBreak: (String) -> Unit,
@@ -43,6 +45,7 @@ fun StudyTimerScreen(
     var customMinutes by remember { mutableStateOf("") }
     var selectedProfileId by remember { mutableStateOf<String?>(null) }
     var creatingProfile by remember { mutableStateOf(false) }
+    var editingProfileId by remember { mutableStateOf<String?>(null) }
     var profileName by remember { mutableStateOf("") }
     var selectedPackages by remember { mutableStateOf(emptySet<String>()) }
     var task by remember(pendingReview?.id) { mutableStateOf(pendingReview?.taskName.orEmpty()) }
@@ -101,8 +104,20 @@ fun StudyTimerScreen(
                     OutlinedButton(onClick = { selectedProfileId = option.id }, modifier = Modifier.fillMaxWidth()) {
                         Text((if (selectedProfileId == option.id) "✓ " else "") + option.name)
                     }
+                    OutlinedButton(onClick = {
+                        editingProfileId = option.id
+                        profileName = option.name
+                        selectedPackages = option.packages
+                        creatingProfile = true
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Edit ${option.name}") }
+                    OutlinedButton(onClick = { onDeleteProfile(option.id) }, modifier = Modifier.fillMaxWidth()) { Text("Delete ${option.name}") }
                 }
-                OutlinedButton(onClick = { creatingProfile = !creatingProfile }, modifier = Modifier.fillMaxWidth()) { Text("Create access profile") }
+                OutlinedButton(onClick = {
+                    editingProfileId = null
+                    profileName = ""
+                    selectedPackages = emptySet()
+                    creatingProfile = !creatingProfile
+                }, modifier = Modifier.fillMaxWidth()) { Text("Create access profile") }
                 if (creatingProfile) {
                     OutlinedTextField(profileName, { profileName = it }, label = { Text("Profile name") }, modifier = Modifier.fillMaxWidth())
                     installedApps.forEach { app ->
@@ -113,9 +128,12 @@ fun StudyTimerScreen(
                         )
                     }
                     Button(onClick = {
-                        onCreateProfile(profileName.trim(), selectedPackages)
+                        val editingId = editingProfileId
+                        if (editingId == null) onCreateProfile(profileName.trim(), selectedPackages)
+                        else onUpdateProfile(SavedAccessProfile(editingId, profileName.trim(), selectedPackages))
                         profileName = ""
                         selectedPackages = emptySet()
+                        editingProfileId = null
                         creatingProfile = false
                     }, enabled = profileName.isNotBlank()) { Text("Save profile") }
                 }

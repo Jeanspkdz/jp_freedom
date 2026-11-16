@@ -70,6 +70,11 @@ class FocusRepository(context: Context) : StudySessionStore {
 
     fun saveAccessProfile(profile: SavedAccessProfile) {
         require(profile.name.isNotBlank())
+        require(activeStudySession()?.profileId != profile.id) { "Profile is used by an active session" }
+        writeAccessProfile(profile)
+    }
+
+    private fun writeAccessProfile(profile: SavedAccessProfile) {
         database.writableDatabase.insertWithOnConflict("access_profiles", null, ContentValues().apply {
             put("id", profile.id)
             put("name", profile.name.trim())
@@ -77,16 +82,29 @@ class FocusRepository(context: Context) : StudySessionStore {
         }, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
-    fun reconcileAccessProfiles(installedPackages: Set<String>): List<SavedAccessProfile> =
-        accessProfiles().map { profile ->
+    fun deleteAccessProfile(profileId: String): Boolean {
+        if (activeStudySession()?.profileId == profileId) return false
+        return database.writableDatabase.delete("access_profiles", "id = ?", arrayOf(profileId)) > 0
+    }
+
+    fun reconcileAccessProfiles(installedPackages: Set<String>): List<SavedAccessProfile> {
+        activeStudySession()?.let { session ->
+            val current = session.allowedPackages?.intersect(installedPackages)
+            if (current != session.allowedPackages) {
+                saveStudySession(session.copy(allowedPackages = current))
+                markDirty(database.writableDatabase, listOf("activeStudySession"))
+            }
+        }
+        return accessProfiles().map { profile ->
             val current = profile.copy(packages = profile.packages intersect installedPackages)
-            if (current != profile) saveAccessProfile(current)
+            if (current != profile) writeAccessProfile(current)
             current
         }
+    }
 
     fun removePackageFromProfiles(packageName: String) {
         accessProfiles().forEach { profile ->
-            if (packageName in profile.packages) saveAccessProfile(profile.copy(packages = profile.packages - packageName))
+            if (packageName in profile.packages) writeAccessProfile(profile.copy(packages = profile.packages - packageName))
         }
         activeStudySession()?.let { session ->
             if (packageName in session.allowedPackages.orEmpty()) {
