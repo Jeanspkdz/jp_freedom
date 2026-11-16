@@ -968,6 +968,10 @@ class FocusRepository(context: Context) : StudySessionStore {
                 addColumnIfMissing(db, "study_sessions", "profile_name", "TEXT NOT NULL DEFAULT 'Essentials only'")
                 addColumnIfMissing(db, "study_sessions", "allowed_packages", "TEXT")
             }
+            if (oldVersion < 12) {
+                // Planned blocks no longer select phone access. Keep their scheduling data intact.
+                db.execSQL("UPDATE $TABLE_BLOCKS SET $COLUMN_ACCESS_PROFILE = 'ESSENTIALS_ONLY' WHERE $COLUMN_ACCESS_PROFILE != 'ESSENTIALS_ONLY'")
+            }
         }
 
         private fun addColumnIfMissing(db: SQLiteDatabase, table: String, column: String, definition: String) {
@@ -1060,7 +1064,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 11
+            private const val DATABASE_VERSION = 12
         }
     }
 
