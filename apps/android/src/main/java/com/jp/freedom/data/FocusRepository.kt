@@ -1064,7 +1064,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 12
+            private const val DATABASE_VERSION = 20
         }
     }
 
