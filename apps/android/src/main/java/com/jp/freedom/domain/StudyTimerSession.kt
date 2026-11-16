@@ -94,7 +94,11 @@ object StudyTimerPolicy {
         DailyReview(
             date = date,
             sessions = sessions.filter { it.startedAt.atZone(zone).toLocalDate() == date }.sortedBy { it.startedAt },
-            actualMinutes = sessions.filter { it.startedAt.atZone(zone).toLocalDate() == date }.sumOf { it.actualMillis } / 60_000,
+            actualMinutes = sessions.filter { it.startedAt.atZone(zone).toLocalDate() == date }
+                .groupBy { it.id.removeSuffix("-phone-copy") }
+                .values.sumOf { versions ->
+                    (versions.firstOrNull { !it.id.endsWith("-phone-copy") } ?: versions.first()).actualMillis
+                } / 60_000,
             targetMinutes = targetMinutes,
             plannedBlocks = blocks.filter { it.date == date }.sortedBy { it.startTime },
         )

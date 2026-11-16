@@ -608,6 +608,92 @@ test('stopping a shared timer in Chrome releases it and keeps the shared review 
   assert.match(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
 });
 
+test('Chrome queues an offline stop and publishes it after reconnecting', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const active = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [],
+    activeStudySession: { id: 'phone-session-offline-stop', taskName: 'Read chapter', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' },
+    pendingStudyReviewSessionId: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: active, lastSnapshotRevision: 1 });
+  let online = false;
+  const writes = [];
+  const management = await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (!online) throw new TypeError('offline');
+      if (options.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        writes.push(body.snapshot);
+        return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot: active }) };
+    },
+  });
+
+  assert.equal(harness.nodes.get('stop-session').disabled, false);
+  await harness.nodes.get('stop-session').listeners.get('click')();
+  assert.equal(harness.storage.lastValidSnapshot.activeStudySession, null);
+  assert.equal(harness.storage.pendingSessionStop.id, 'phone-session-offline-stop');
+  assert.match(harness.nodes.get('session-start-status').textContent, /stop pending/i);
+
+  online = true;
+  await management.sync();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].activeStudySession, null);
+  assert.equal(writes[0].pendingStudyReviewSessionId, 'phone-session-offline-stop');
+  assert.equal(harness.storage.pendingSessionStop, null);
+});
+
+test('an expired offline Chrome start is synced as history without becoming active on Android', async () => {
+  const now = new Date('2026-11-05T11:30:00.000Z');
+  const pending = { id: 'chrome-expired-offline', taskName: 'Study session', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' };
+  const empty = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null, studyHistory: [] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: { ...empty, activeStudySession: pending }, lastSnapshotRevision: 1, pendingSessionStart: pending });
+  let published;
+  await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') {
+        published = JSON.parse(options.body).snapshot;
+        return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: published }) };
+      }
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot: empty }) };
+    },
+  });
+
+  assert.equal(published.activeStudySession, null);
+  assert.equal(published.pendingStudyReviewSessionId ?? null, null);
+  assert.equal(published.studyHistory[0].id, pending.id);
+  assert.equal(published.studyHistory[0].endedAt, pending.endsAt);
+  assert.equal(published.studyHistory[0].state, 'PENDING_REVIEW');
+  assert.equal(harness.storage.pendingSessionStart, null);
+});
+
+test('Chrome lets the user choose which imported history version to keep', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const server = { id: 'same-id', taskName: 'Server version', startedAt: '2026-11-05T10:00:00.000Z', endedAt: '2026-11-05T11:00:00.000Z', durationMillis: 3600000, actualMillis: 3600000, accessProfile: 'ESSENTIALS_ONLY', state: 'REVIEWED', completionStatus: 'FINISHED' };
+  const phone = { ...server, id: 'same-id-phone-copy', taskName: 'Phone copy · Phone version' };
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null, studyHistory: [server, phone], fieldConflicts: [{ path: 'studyHistory.same-id', remoteValue: 'same-id', localValue: 'same-id-phone-copy' }] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  let published;
+  await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') {
+        published = JSON.parse(options.body).snapshot;
+        return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: published }) };
+      }
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot }) };
+    },
+  });
+  harness.nodes.get('field-conflict-choice').value = 'local';
+  await harness.nodes.get('resolve-field-conflict').listeners.get('click')();
+
+  assert.deepEqual(published.studyHistory.map(session => session.id), ['same-id-phone-copy']);
+  assert.deepEqual(published.fieldConflicts, []);
+});
+
 test('connection status distinguishes browser enforcement from confirmed phone receipt', async () => {
   const now = new Date('2026-11-05T10:30:00.000Z');
   const session = {

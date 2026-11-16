@@ -174,6 +174,26 @@ test('the revisioned sync contract imports, retains, and explicitly clears revie
   assert.deepEqual(afterClear.snapshot.desktopBlockedDomains, emptySnapshot.desktopBlockedDomains);
 });
 
+test('the revisioned sync contract records an expired offline start without an active restriction', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const endedSession = {
+    id: 'chrome-expired-offline', taskName: 'Study session', durationMillis: 3_600_000,
+    accessProfile: 'ESSENTIALS_ONLY', startedAt: '2026-11-05T10:00:00.000Z', endedAt: '2026-11-05T11:00:00.000Z',
+    actualMillis: 3_600_000, state: 'PENDING_REVIEW', completionStatus: null,
+  };
+
+  const response = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot: { ...emptySnapshot, activeStudySession: null, studyHistory: [endedSession] } },
+  }));
+
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.snapshot.activeStudySession, null);
+  assert.equal(result.snapshot.pendingStudyReviewSessionId ?? null, null);
+  assert.deepEqual(result.snapshot.studyHistory, [endedSession]);
+});
+
 test('the revisioned sync contract rejects a session whose end does not follow its start', async () => {
   const api = createSyncApi({ store: fakeStore(), token });
   const response = await api(request('/v1/snapshot', {

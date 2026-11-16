@@ -45,6 +45,19 @@ class StudyTimerPolicyTest {
         assertEquals("Math", summary.sessions.single().taskName)
     }
 
+    @Test fun unresolvedImportedHistoryConflictCountsOnlyOneCompetingSession() {
+        val startedAt = Instant.parse("2026-11-10T12:00:00Z")
+        val sessions = listOf(
+            reviewed("same-id", startedAt, 60, "Server version", CompletionStatus.FINISHED, "", ""),
+            reviewed("same-id-phone-copy", startedAt, 60, "Phone version", CompletionStatus.FINISHED, "", ""),
+        )
+
+        val summary = StudyTimerPolicy.dailyReview(LocalDate.of(2026, 11, 10), ZoneId.of("UTC"), 180, sessions, emptyList())
+
+        assertEquals(60, summary.actualMinutes)
+        assertEquals(2, summary.sessions.size)
+    }
+
     private fun reviewed(id: String, startedAt: Instant, actualMinutes: Long, task: String, status: CompletionStatus, note: String, remaining: String) =
         StudyTimerSession(id, task, 3_600_000, AccessProfile.ESSENTIALS_ONLY, startedAt, startedAt.plusSeconds(3600), actualMinutes * 60_000,
             StudySessionState.REVIEWED, status, note, remaining)

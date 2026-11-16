@@ -3,7 +3,7 @@ import { getActiveStudySession, getCurrentAndNext } from './policy.js';
 import { readSnapshot, snapshotEndpoint, validSnapshotResponse } from './sync-client.js';
 import { isValidDomain } from './domain.js';
 
-const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync', 'lastSnapshotRevision', 'pendingSessionStart'];
+const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync', 'lastSnapshotRevision', 'pendingSessionStart', 'pendingSessionStop'];
 const DEFAULT_SYNC_API_URL = 'https://br-floral-block-bddjl0rs-jpfreedomsync.compute.c-8.us-east-2.aws.neon.tech/';
 const DEFAULT_DESKTOP_DOMAINS = ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com'];
 const COMMON_DOMAINS = [...DEFAULT_DESKTOP_DOMAINS, 'youtube.com', 'web.whatsapp.com'];
@@ -47,6 +47,11 @@ function withFieldValue(snapshot, conflict, value) {
     return { ...result, blocks: snapshot.blocks.map(block => block.id !== id ? block : {
       ...block, [field]: value === '<null>' ? null : value,
     }) };
+  }
+  if (conflict.path.startsWith('studyHistory.')) {
+    const keepId = String(value);
+    const rejectedId = conflict.remoteValue === keepId ? conflict.localValue : conflict.remoteValue;
+    return { ...result, studyHistory: (snapshot.studyHistory ?? []).filter(session => session.id !== rejectedId) };
   }
   return result;
 }
@@ -172,7 +177,7 @@ function render(documentRef, state, now) {
   const stopButton = documentRef.getElementById('stop-session');
   if (stopButton) {
     stopButton.hidden = !sharedSessionPending;
-    stopButton.disabled = !state.connected || !state.online || state.saving;
+    stopButton.disabled = !state.connected || state.saving;
   }
   const startStatus = documentRef.getElementById('session-start-status');
   if (startStatus) startStatus.textContent = state.sessionMessage
@@ -221,9 +226,13 @@ function render(documentRef, state, now) {
   const fieldChoice = documentRef.getElementById('field-conflict-choice');
   if (fieldChoice && fieldConflicts.length) {
     const conflict = fieldConflicts[0];
+    const historyById = new Map((snapshot?.studyHistory ?? []).map(session => [session.id, session]));
+    const label = (source, id) => conflict.path.startsWith('studyHistory.')
+      ? `${source === 'remote' ? 'Synced history' : 'Phone history'}: ${historyById.get(id)?.taskName ?? id}`
+      : `${source === 'remote' ? 'Synced value' : 'This device'}: ${id}`;
     fieldChoice.replaceChildren?.(...[
-      ['remote', `Synced value: ${conflict.remoteValue}`],
-      ['local', `This device: ${conflict.localValue}`],
+      ['remote', label('remote', conflict.remoteValue)],
+      ['local', label('local', conflict.localValue)],
     ].map(([source, label]) => {
       const option = documentRef.createElement('option');
       option.value = source;
@@ -357,6 +366,7 @@ export async function initializeManagement({
     saving: false,
     blocklistMessage: null,
     pendingSessionStart: saved.pendingSessionStart ?? null,
+    pendingSessionStop: saved.pendingSessionStop ?? null,
   };
   const views = ['plan', 'sites', 'connection'];
   const showView = selected => {
@@ -564,80 +574,55 @@ export async function initializeManagement({
   });
   documentRef.getElementById('stop-session').addEventListener('click', async () => {
     const session = state.snapshot?.activeStudySession;
-    if (!session || !state.connected || !state.online || state.saving) return;
-    state.saving = true;
-    state.sessionMessage = null;
-    show();
-    try {
-      const endpoint = snapshotEndpoint(state.apiUrl);
-      let base = state.snapshot;
-      let revision = state.revision;
-      let snapshot = {
-        ...base,
-        activeStudySession: null,
-        pendingStudyReviewSessionId: base.pendingStudyReviewSessionId ?? session.id,
-      };
-      let response = await fetchImpl(endpoint, {
-        method: 'PUT',
-        headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expectedRevision: revision, snapshot }),
-        cache: 'no-store', credentials: 'omit', redirect: 'error',
-      });
-      if (response.status === 409) {
-        const latest = await readLatest();
-        if (!latest.snapshot.activeStudySession
-          && latest.snapshot.pendingStudyReviewSessionId === session.id) {
-          response = null;
-          base = latest.snapshot;
-          revision = latest.revision;
-        } else if (latest.snapshot.activeStudySession?.id === session.id) {
-          base = latest.snapshot;
-          revision = latest.revision;
-          snapshot = { ...base, activeStudySession: null, pendingStudyReviewSessionId: base.pendingStudyReviewSessionId ?? session.id };
-          response = await fetchImpl(endpoint, {
-            method: 'PUT',
-            headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ expectedRevision: revision, snapshot }),
-            cache: 'no-store', credentials: 'omit', redirect: 'error',
-          });
-        } else {
-          base = latest.snapshot;
-          state.sessionMessage = latest.snapshot.pendingStudyReviewSessionId
-            ? 'Finish the pending phone review before starting another session.'
-            : 'The shared study session changed. Sync and check the current timer.';
-          state.snapshot = latest.snapshot;
-          state.revision = latest.revision;
-          await chromeApi.storage.local.set({ lastValidSnapshot: latest.snapshot, lastSnapshotRevision: latest.revision });
-          await updateRules();
-          return;
-        }
-      }
-      let payload;
-      if (response === null) payload = { snapshot: base, revision };
-      else {
-        if (!response.ok) throw new Error(`Could not stop the study session (HTTP ${response.status}).`);
-        payload = await response.json();
-      }
-      if (!validSnapshotResponse({ ...payload, updatedAt: payload.updatedAt ?? now().toISOString() })) {
-        throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
-      }
-      state.snapshot = payload.snapshot;
-      state.revision = payload.revision;
-      state.lastSuccessfulSync = now().toISOString();
-      state.online = true;
-      state.error = null;
-      await chromeApi.storage.local.set({ lastValidSnapshot: payload.snapshot, lastSuccessfulSync: state.lastSuccessfulSync, lastSnapshotRevision: payload.revision });
-      await updateRules();
-      await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
-    } catch (cause) {
-      state.error = cause?.message || 'Could not stop the study session.';
-      state.sessionMessage = state.error;
-      await updateRules();
-    } finally {
-      state.saving = false;
-      show();
-    }
+    if (!session || !state.connected || state.saving) return;
+    state.pendingSessionStop = session;
+    state.snapshot = {
+      ...state.snapshot,
+      activeStudySession: null,
+      pendingStudyReviewSessionId: state.snapshot.pendingStudyReviewSessionId ?? session.id,
+    };
+    state.sessionMessage = 'Study session stop pending. It will sync when Chrome reconnects.';
+    await chromeApi.storage.local.set({ lastValidSnapshot: state.snapshot, pendingSessionStop: session });
+    await updateRules();
+    await sync();
   });
+  const persistSessionStop = async (payload) => {
+    state.snapshot = payload.snapshot;
+    state.revision = payload.revision;
+    state.pendingSessionStop = null;
+    state.lastSuccessfulSync = now().toISOString();
+    state.online = true;
+    state.error = null;
+    state.sessionMessage = null;
+    await chromeApi.storage.local.set({
+      lastValidSnapshot: payload.snapshot, lastSuccessfulSync: state.lastSuccessfulSync,
+      lastSnapshotRevision: payload.revision, pendingSessionStop: null,
+    });
+  };
+  const publishSessionStop = async (remote) => {
+    const pending = state.pendingSessionStop;
+    if (!pending) return remote;
+    if (!remote.snapshot.activeStudySession && remote.snapshot.pendingStudyReviewSessionId === pending.id) {
+      state.pendingSessionStop = null;
+      await chromeApi.storage.local.set({ pendingSessionStop: null });
+      return remote;
+    }
+    if (remote.snapshot.activeStudySession?.id !== pending.id) {
+      throw new Error('The shared study session changed before the pending stop synced.');
+    }
+    const snapshot = {
+      ...remote.snapshot,
+      activeStudySession: null,
+      pendingStudyReviewSessionId: remote.snapshot.pendingStudyReviewSessionId ?? pending.id,
+    };
+    const response = await fetchImpl(snapshotEndpoint(state.apiUrl), {
+      method: 'PUT', headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expectedRevision: remote.revision, snapshot }),
+      cache: 'no-store', credentials: 'omit', redirect: 'error',
+    });
+    if (!response.ok) throw new Error(`Could not sync the pending study session stop (HTTP ${response.status}).`);
+    return response.json();
+  };
   const persistDomainIntent = async (domain, included, initialDomains = state.displayedDomains) => {
     if (!state.connected || !state.online || !state.snapshot || state.saving) return;
     const current = getCurrentAndNext(state.snapshot, now()).current;
@@ -755,9 +740,39 @@ export async function initializeManagement({
     show();
     try {
       let payload = await readSnapshot(state.apiUrl, state.apiToken, fetchImpl);
+      if (state.pendingSessionStop) {
+        payload = await publishSessionStop(payload);
+        if (!validSnapshotResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+        await persistSessionStop(payload);
+      }
       if (state.pendingSessionStart) {
         const pending = state.pendingSessionStart;
         if (Date.parse(pending.endsAt) <= now().getTime()) {
+          const durationMillis = Date.parse(pending.endsAt) - Date.parse(pending.startedAt);
+          const ended = {
+            id: pending.id,
+            taskName: pending.taskName,
+            durationMillis,
+            accessProfile: pending.accessProfile,
+            startedAt: pending.startedAt,
+            endedAt: pending.endsAt,
+            actualMillis: durationMillis,
+            state: 'PENDING_REVIEW',
+            completionStatus: null,
+            note: '', remaining: '', breakStartedAt: null, breakDurationMillis: 0, nextTask: '',
+          };
+          const snapshot = {
+            ...payload.snapshot,
+            studyHistory: [...(payload.snapshot.studyHistory ?? []).filter(item => item.id !== ended.id), ended],
+          };
+          const response = await fetchImpl(snapshotEndpoint(state.apiUrl), {
+            method: 'PUT', headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expectedRevision: payload.revision, snapshot }),
+            cache: 'no-store', credentials: 'omit', redirect: 'error',
+          });
+          if (!response.ok) throw new Error(`Could not record the expired study session (HTTP ${response.status}).`);
+          payload = await response.json();
+          if (!validSnapshotResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
           state.pendingSessionStart = null;
           await chromeApi.storage.local.set({ pendingSessionStart: null });
         } else if (payload.snapshot.activeStudySession && payload.snapshot.activeStudySession.id !== pending.id) {

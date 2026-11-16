@@ -228,6 +228,8 @@ object SyncSnapshotReconciler {
             val phoneSession = localById.getValue(id)
             if (serverSession == phoneSession || "studyHistory.import" !in pendingPaths) return@mapNotNull null
             val forkId = "${id.take(68)}-phone-copy"
+            val conflictPath = "studyHistory.$id"
+            fieldConflicts[conflictPath] = SyncFieldConflict(conflictPath, id, forkId)
             phoneSession.copy(id = forkId, taskName = "Phone copy · ${phoneSession.taskName}")
         }
         return (merged + conflictAlternates).distinctBy(StudyTimerSession::id).sortedByDescending(StudyTimerSession::startedAt)

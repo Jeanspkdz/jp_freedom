@@ -196,6 +196,7 @@ class SyncSnapshotTest {
         assertEquals("Server version", result.snapshot.studyHistory.first { it.id == "same-id" }.taskName)
         assertEquals("Phone copy · Phone version", result.snapshot.studyHistory.first { it.id == "same-id-phone-copy" }.taskName)
         assertEquals(setOf("studyHistory.same-id"), result.conflictedPaths)
+        assertEquals(listOf(SyncFieldConflict("studyHistory.same-id", "same-id", "same-id-phone-copy")), result.fieldConflicts)
 
         val repeatedImport = SyncSnapshotReconciler.merge(result.snapshot, result.snapshot, emptySet())
         assertEquals(4, repeatedImport.snapshot.studyHistory.size)
