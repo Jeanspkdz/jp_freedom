@@ -5,7 +5,7 @@ Terms for the personal, open-source system that coordinates blocking across an A
 ## Language
 
 **Access profile**:
-A named choice of apps and websites allowed on the Android phone during a focus session. The initial choices allow essentials only; essentials plus ChatGPT; or essentials plus ChatGPT and Google Search.
+A saved list of apps allowed on the Android phone during a study timer session. Users can create named access profiles from currently installed apps; the fixed Essentials profile applies when none is chosen.
 _Avoid_: Phone blocklist
 
 **Desktop site blocklist**:
