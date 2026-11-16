@@ -73,6 +73,7 @@ fun FocusApp(
     initialBlockedReason: BlockedReason?,
     blockedRequestVersion: Int,
     openSessionReviewVersion: Int,
+    openSessionTimerVersion: Int,
     openDailyReviewVersion: Int,
     requestedDailyReviewDate: String?,
 ) {
@@ -117,6 +118,7 @@ fun FocusApp(
             val started = withContext(Dispatchers.IO) { studyTimerController.start(duration, resolved) }
             if (started != null) {
                 timerStartError = null
+                com.jp.freedom.enforcement.StudySessionNotifier.showActive(context, started)
                 PolicyAlarmScheduler.scheduleNext(context)
                 PolicyAlarmScheduler.broadcastRecheck(context)
                 page = AppPage.STUDY_TIMER
@@ -202,6 +204,16 @@ fun FocusApp(
         }
     }
 
+    LaunchedEffect(openSessionTimerVersion, stateLoaded) {
+        if (openSessionTimerVersion > 0 && stateLoaded) {
+            page = when {
+                pendingReview != null -> AppPage.SESSION_REVIEW
+                studySession != null -> AppPage.STUDY_TIMER
+                else -> AppPage.PLANNER
+            }
+        }
+    }
+
     LaunchedEffect(openDailyReviewVersion, stateLoaded, requestedDailyReviewDate) {
         if (openDailyReviewVersion > 0 && stateLoaded) {
             dailyReviewDate = requestedDailyReviewDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()
@@ -257,6 +269,8 @@ fun FocusApp(
             blocks = allBlocks.filter { it.date == selectedDate },
             allBlocks = allBlocks,
             studySessions = studySessions,
+            activeStudySession = studySession,
+            pendingSessionReview = pendingReview,
             settings = focusSettings,
             restrictionActive = restrictionActive,
             hasSyncKey = syncConfiguration.hasWriteToken,
@@ -419,6 +433,20 @@ fun FocusApp(
                     PolicyAlarmScheduler.scheduleNext(context)
                     PolicyAlarmScheduler.broadcastRecheck(context)
                     page = AppPage.SESSION_REVIEW
+                }
+            },
+            onResumeSession = {
+                scope.launch {
+                    val resumed = withContext(Dispatchers.IO) { studyTimerController.resumePendingReview() }
+                    if (resumed != null) {
+                        studySession = resumed
+                        pendingReview = null
+                        com.jp.freedom.enforcement.StudySessionNotifier.showActive(context, resumed)
+                        page = AppPage.STUDY_TIMER
+                        PolicyAlarmScheduler.scheduleNext(context)
+                        PolicyAlarmScheduler.broadcastRecheck(context)
+                        refreshVersion++
+                    }
                 }
             },
             onReview = { task, status, note, remaining ->

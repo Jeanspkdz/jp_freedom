@@ -24,6 +24,7 @@ class MainActivity : ComponentActivity() {
     private var blockedReason by mutableStateOf<BlockedReason?>(null)
     private var blockedRequestVersion by mutableIntStateOf(0)
     private var openSessionReviewVersion by mutableIntStateOf(0)
+    private var openSessionTimerVersion by mutableIntStateOf(0)
     private var openDailyReviewVersion by mutableIntStateOf(0)
     private var requestedDailyReviewDate by mutableStateOf<String?>(null)
 
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
         com.jp.freedom.enforcement.DailyReviewReminder.schedule(this)
         blockedReason = BlockedReason.fromIntentId(intent.getStringExtra(EXTRA_BLOCKED_REASON))
         if (intent.getBooleanExtra(com.jp.freedom.enforcement.StudySessionNotifier.EXTRA_OPEN_SESSION_REVIEW, false)) openSessionReviewVersion++
+        if (intent.getBooleanExtra(com.jp.freedom.enforcement.StudySessionNotifier.EXTRA_OPEN_SESSION_TIMER, false)) openSessionTimerVersion++
         requestedDailyReviewDate = intent.getStringExtra(com.jp.freedom.enforcement.DailyReviewReminder.EXTRA_DATE)
         if (requestedDailyReviewDate != null) openDailyReviewVersion++
         setContent {
@@ -48,6 +50,7 @@ class MainActivity : ComponentActivity() {
                     initialBlockedReason = blockedReason,
                     blockedRequestVersion = blockedRequestVersion,
                     openSessionReviewVersion = openSessionReviewVersion,
+                    openSessionTimerVersion = openSessionTimerVersion,
                     openDailyReviewVersion = openDailyReviewVersion,
                     requestedDailyReviewDate = requestedDailyReviewDate,
                 )
@@ -70,6 +73,7 @@ class MainActivity : ComponentActivity() {
         blockedReason = BlockedReason.fromIntentId(intent.getStringExtra(EXTRA_BLOCKED_REASON))
         if (blockedReason != null) blockedRequestVersion++
         if (intent.getBooleanExtra(com.jp.freedom.enforcement.StudySessionNotifier.EXTRA_OPEN_SESSION_REVIEW, false)) openSessionReviewVersion++
+        if (intent.getBooleanExtra(com.jp.freedom.enforcement.StudySessionNotifier.EXTRA_OPEN_SESSION_TIMER, false)) openSessionTimerVersion++
         requestedDailyReviewDate = intent.getStringExtra(com.jp.freedom.enforcement.DailyReviewReminder.EXTRA_DATE)
         if (requestedDailyReviewDate != null) openDailyReviewVersion++
     }
