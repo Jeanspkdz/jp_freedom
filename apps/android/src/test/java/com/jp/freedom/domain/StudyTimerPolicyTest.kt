@@ -13,7 +13,7 @@ import java.time.ZonedDateTime
 
 class StudyTimerPolicyTest {
     @Test
-    fun aDelayedChromeSessionStartsWithOnlyItsOriginalRemainingDurationAndEssentialsProfile() {
+    fun aDelayedChromeSessionPreservesItsLegacyProfileUntilItEnds() {
         val startedAt = Instant.parse("2026-11-05T10:00:00Z")
         val endsAt = Instant.parse("2026-11-05T11:00:00Z")
         val shared = SharedStudySession(
@@ -29,7 +29,7 @@ class StudyTimerPolicyTest {
         assertEquals(startedAt, received.startedAt)
         assertEquals(Duration.ofHours(1).toMillis(), received.durationMillis)
         assertEquals(Duration.ofMinutes(15), StudyTimerPolicy.remaining(received, Instant.parse("2026-11-05T10:45:00Z")))
-        assertEquals(AccessProfile.ESSENTIALS_ONLY, received.accessProfile)
+        assertEquals(AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH, received.accessProfile)
         assertEquals(StudySessionState.ACTIVE, received.state)
     }
 
