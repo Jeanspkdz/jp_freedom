@@ -12,6 +12,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StudyTimerControllerTest {
+    @Test fun savedProfileSelectionAndEssentialsFallbackStayWithTheSession() {
+        val store = MemorySessionStore()
+        val controller = controller(store, "2026-11-10T12:00:00Z")
+        val custom = SavedAccessProfile("reading", "Reading", setOf("reader.app"))
+
+        val started = controller.start(Duration.ofMinutes(60), custom)
+        assertEquals("reading", started?.profileId)
+        assertEquals("Reading", started?.profileName)
+        assertEquals(setOf("reader.app"), store.activeStudySession()?.allowedPackages)
+        assertNull(controller.start(Duration.ofMinutes(30), null as SavedAccessProfile?))
+
+        controller.stop()
+        controller.review("Reading", CompletionStatus.FINISHED, "")
+        controller.endBreak("Next task")
+        val essentials = controller.start(Duration.ofMinutes(30), null as SavedAccessProfile?)
+        assertEquals(null, essentials?.profileId)
+        assertEquals(emptySet<String>(), essentials?.allowedPackages)
+    }
     @Test fun startingStoppingNotificationReviewAndStartingAgainFollowTheSessionFlow() {
         val store = MemorySessionStore()
         val started = controller(store, "2026-11-10T12:00:00Z").start(Duration.ofMinutes(90), AccessProfile.ESSENTIALS_ONLY)

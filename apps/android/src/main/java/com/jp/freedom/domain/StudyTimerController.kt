@@ -39,6 +39,13 @@ class StudyTimerController(
         return StudyTimerSession.start("", duration, profile, Instant.now(clock)).takeIf(store::startStudySession)
     }
 
+    fun start(duration: Duration, profile: SavedAccessProfile?): StudyTimerSession? {
+        if (!canStartAnother()) return null
+        val session = StudyTimerSession.start("", duration, AccessProfile.ESSENTIALS_ONLY, Instant.now(clock))
+            .copy(profileId = profile?.id, profileName = profile?.name ?: "Essentials only", allowedPackages = profile?.packages ?: emptySet())
+        return session.takeIf(store::startStudySession)
+    }
+
     fun stop(): StudyTimerSession? = store.activeStudySession()?.let {
         StudyTimerPolicy.finishIfDue(it, Instant.now(clock)) ?: StudyTimerPolicy.stop(it, Instant.now(clock))
     }?.takeIf(store::finishStudySession)

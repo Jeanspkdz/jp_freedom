@@ -17,6 +17,18 @@ import org.junit.Test
 
 class SyncSnapshotCodecTest {
     @Test
+    fun chosenProfileAndAllowedAppsSurviveSharedSessionRoundTrip() {
+        val snapshot = SyncSnapshot(
+            settings = FocusSettings(), desktopBlockedDomains = emptyList(), blocks = emptyList(),
+            activeStudySession = SharedStudySession(
+                "phone-1", "Reading", Instant.parse("2026-11-05T10:00:00Z"),
+                Instant.parse("2026-11-05T11:00:00Z"), AccessProfile.ESSENTIALS_ONLY,
+                "profile-1", "Reading apps", setOf("reader.app", "com.android.settings"),
+            ),
+        )
+        assertEquals(snapshot, SyncSnapshotCodec.decode(SyncSnapshotCodec.encode(snapshot)))
+    }
+    @Test
     fun optionalBlockNoteSurvivesSnapshotRoundTrip() {
         val snapshot = SyncSnapshot(
             settings = FocusSettings(),

@@ -14,6 +14,7 @@ data class FocusPolicyState(
     val activeBlock: PlannedBlock?,
     // Planned blocks schedule work; their legacy serialized profile is not a phone choice.
     val accessProfile: AccessProfile? = activeBlock?.let { AccessProfile.ESSENTIALS_ONLY },
+    val allowedPackageSnapshot: Set<String>? = null,
 )
 
 object FocusPolicy {
@@ -27,7 +28,7 @@ object FocusPolicy {
             StudyTimerPolicy.finishBreakIfDue(studySession, now.atZone(java.time.ZoneId.systemDefault()).toInstant()) == null
         ) return FocusPolicyState(null, null)
         if (studySession?.state == StudySessionState.ACTIVE && StudyTimerPolicy.finishIfDue(studySession, now.atZone(java.time.ZoneId.systemDefault()).toInstant()) == null) {
-            return FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, studySession.accessProfile)
+            return FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, studySession.accessProfile, studySession.allowedPackages)
         }
         val eveningRestriction = DayPlanPolicy.shouldRestrictEvening(
             now = now,
@@ -59,6 +60,7 @@ object FocusPolicy {
         val allowed = (essentialPackages + ownPackage).toMutableSet()
         defaultInputMethodPackage?.takeIf(String::isNotBlank)?.let(allowed::add)
         if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return allowed
+        state.allowedPackageSnapshot?.let { return allowed + it }
 
         val profile = state.accessProfile
         when (profile) {

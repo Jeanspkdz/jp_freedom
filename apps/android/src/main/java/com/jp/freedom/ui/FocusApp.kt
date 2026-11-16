@@ -26,6 +26,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.jp.freedom.data.FocusRepository
+import com.jp.freedom.data.InstalledAppInventory
+import com.jp.freedom.domain.SavedAccessProfile
 import com.jp.freedom.data.PendingSyncState
 import com.jp.freedom.data.SyncStatus
 import com.jp.freedom.domain.BlockValidation
@@ -99,10 +101,13 @@ fun FocusApp(
     var dailyReviewDate by remember { mutableStateOf(requestedDailyReviewDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()) }
     var dailyReviewReminderTime by remember { mutableStateOf(com.jp.freedom.enforcement.DailyReviewReminder.time(context).toString()) }
     val studyTimerController = remember(repository) { StudyTimerController(repository) }
-    var queuedTimerStart by remember { mutableStateOf<Pair<Duration, AccessProfile>?>(null) }
-    fun persistTimerStart(duration: Duration, profile: AccessProfile) {
+    var queuedTimerStart by remember { mutableStateOf<Pair<Duration, SavedAccessProfile?>?>(null) }
+    fun persistTimerStart(duration: Duration, profile: SavedAccessProfile?) {
         scope.launch {
-            val started = withContext(Dispatchers.IO) { studyTimerController.start(duration, profile) }
+            val started = withContext(Dispatchers.IO) {
+                val current = repository.reconcileAccessProfiles(InstalledAppInventory.list(context).map { it.packageName }.toSet())
+                studyTimerController.start(duration, profile?.let { selected -> current.firstOrNull { it.id == selected.id } })
+            }
             if (started != null) {
                 PolicyAlarmScheduler.scheduleNext(context)
                 PolicyAlarmScheduler.broadcastRecheck(context)
@@ -118,7 +123,7 @@ fun FocusApp(
         queuedTimerStart?.let { (duration, profile) -> persistTimerStart(duration, profile) }
         queuedTimerStart = null
     }
-    val startTimer: (Duration, AccessProfile) -> Unit = { duration, profile ->
+    val startTimer: (Duration, SavedAccessProfile?) -> Unit = { duration, profile ->
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             queuedTimerStart = duration to profile
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -376,6 +381,14 @@ fun FocusApp(
         AppPage.STUDY_TIMER, AppPage.SESSION_REVIEW -> StudyTimerScreen(
             session = studySession,
             pendingReview = pendingReview,
+            profiles = remember(refreshVersion, activityResumeVersion) {
+                repository.reconcileAccessProfiles(InstalledAppInventory.list(context).map { it.packageName }.toSet())
+            },
+            installedApps = remember(activityResumeVersion) { InstalledAppInventory.list(context) },
+            onCreateProfile = { name, packages ->
+                repository.saveAccessProfile(SavedAccessProfile(java.util.UUID.randomUUID().toString(), name, packages))
+                refreshVersion++
+            },
             onBack = { page = AppPage.PLANNER },
             onStart = startTimer,
             onStop = {
