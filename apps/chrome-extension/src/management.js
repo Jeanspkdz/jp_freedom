@@ -763,6 +763,9 @@ export async function initializeManagement({
           };
           const snapshot = {
             ...payload.snapshot,
+            activeStudySession: payload.snapshot.activeStudySession?.id === pending.id ? null : payload.snapshot.activeStudySession,
+            phoneReceivedStudySessionId: payload.snapshot.activeStudySession?.id === pending.id
+              ? null : payload.snapshot.phoneReceivedStudySessionId,
             studyHistory: [...(payload.snapshot.studyHistory ?? []).filter(item => item.id !== ended.id), ended],
           };
           const response = await fetchImpl(snapshotEndpoint(state.apiUrl), {

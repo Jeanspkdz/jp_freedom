@@ -649,6 +649,7 @@ test('an expired offline Chrome start is synced as history without becoming acti
   const now = new Date('2026-11-05T11:30:00.000Z');
   const pending = { id: 'chrome-expired-offline', taskName: 'Study session', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' };
   const empty = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null, studyHistory: [] };
+  const remote = { ...empty, activeStudySession: pending, phoneReceivedStudySessionId: pending.id };
   const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: { ...empty, activeStudySession: pending }, lastSnapshotRevision: 1, pendingSessionStart: pending });
   let published;
   await initializeManagement({
@@ -658,7 +659,7 @@ test('an expired offline Chrome start is synced as history without becoming acti
         published = JSON.parse(options.body).snapshot;
         return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: published }) };
       }
-      return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot: empty }) };
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot: remote }) };
     },
   });
 
