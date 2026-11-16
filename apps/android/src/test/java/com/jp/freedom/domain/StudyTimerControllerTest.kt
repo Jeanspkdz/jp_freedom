@@ -48,6 +48,31 @@ class StudyTimerControllerTest {
         assertEquals(StudySessionState.REVIEWED, controller.endBreak("Read biology" )?.state)
         assertTrue(controller.canStartAnother())
     }
+    @Test fun returningToAStoppedSessionRestoresItsOriginalDeadline() {
+        val store = MemorySessionStore()
+        val timer = controller(store, "2026-11-10T12:00:00Z")
+        val started = timer.start(Duration.ofMinutes(90), AccessProfile.ESSENTIALS_ONLY)!!
+        val review = controller(store, "2026-11-10T12:20:00Z")
+        review.stop()
+
+        val resumed = review.resumePendingReview()
+
+        assertEquals(started.id, resumed?.id)
+        assertEquals(StudySessionState.ACTIVE, store.activeStudySession()?.state)
+        assertEquals(Duration.ofMinutes(70), StudyTimerPolicy.remaining(resumed!!, Instant.parse("2026-11-10T12:20:00Z")))
+        assertEquals(StudyTimerDestination.TIMER, review.destination())
+        assertTrue(review.canStartAnother().not())
+    }
+
+    @Test fun expiredSessionsCannotReturnToAnOngoingTimer() {
+        val store = MemorySessionStore()
+        controller(store, "2026-11-10T12:00:00Z").start(Duration.ofMinutes(20), AccessProfile.ESSENTIALS_ONLY)
+        val review = controller(store, "2026-11-10T12:20:00Z")
+        review.finishIfDue()
+
+        assertNull(review.resumePendingReview())
+        assertEquals(StudyTimerDestination.REVIEW, review.destination())
+    }
     private fun controller(store: MemorySessionStore, now: String) = StudyTimerController(
         store,
         Clock.fixed(Instant.parse(now), ZoneOffset.UTC),

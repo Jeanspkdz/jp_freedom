@@ -43,6 +43,16 @@ class StudyTimerController(
         StudyTimerPolicy.finishIfDue(it, Instant.now(clock)) ?: StudyTimerPolicy.stop(it, Instant.now(clock))
     }?.takeIf(store::finishStudySession)
 
+    fun resumePendingReview(): StudyTimerSession? {
+        val review = store.pendingStudyReview() ?: return null
+        val now = Instant.now(clock)
+        if (StudyTimerPolicy.remaining(review, now).isZero) return null
+        return review.copy(
+            endedAt = null,
+            actualMillis = 0,
+            state = StudySessionState.ACTIVE,
+        ).also(store::saveStudySession)
+    }
     fun finishIfDue(): StudyTimerSession? = store.activeStudySession()?.let {
         StudyTimerPolicy.finishIfDue(it, Instant.now(clock))
     }?.takeIf(store::finishStudySession)
