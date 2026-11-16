@@ -29,7 +29,15 @@ lists are intentional and stay empty.
 Snapshots contain `version: 1`, `settings.requiredBlockCount`,
 `settings.eveningCutoff` (`21:00`, `22:00`, or `23:00`),
 `desktopBlockedDomains`, and dated blocks with their profile, status, and
-optional note. They also contain `activeStudySession`, either null or an
+optional note. They also contain `studyHistory`, the reviewed Android timer
+sessions with their original times, elapsed duration, and review fields. The
+first sync imports existing Android history by session ID; distinct records
+from both sides are retained, repeated syncs do not duplicate them, and an ID
+collision keeps the server record plus a phone copy with explicit keep-phone or
+keep-server choices in Android's daily review. Android's
+explicit Clear study history action removes only reviewed timer sessions from
+the shared snapshot; plans and desktop site settings are preserved. Snapshots
+also contain `activeStudySession`, either null or an
 Android-started timer with its task, access profile, and absolute `startedAt`
 and `endsAt` instants. The session's original times are retained during sync;
 Chrome blocks selected desktop sites only between those instants. The initial
