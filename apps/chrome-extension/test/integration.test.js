@@ -686,6 +686,42 @@ test('Chrome clears a queued stop after Android has reviewed the same session', 
   assert.match(harness.nodes.get('sync-state').textContent, /synced/i);
 });
 
+test('Chrome clears a queued stop after Android clears reviewed history', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const pending = {
+    id: 'phone-session-cleared-review', taskName: 'Read chapter',
+    startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z',
+    accessProfile: 'ESSENTIALS_ONLY',
+  };
+  const remote = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null,
+    pendingStudyReviewSessionId: null, studyHistory: [],
+  };
+  const harness = createHarness({
+    apiUrl: 'https://sync.example', apiToken: 'token',
+    lastValidSnapshot: { ...remote, pendingStudyReviewSessionId: pending.id },
+    lastSnapshotRevision: 1, pendingSessionStop: pending,
+  });
+  const requests = [];
+  const management = await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      requests.push(options);
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: remote }) };
+    },
+  });
+
+  await management.sync();
+
+  assert.equal(harness.storage.pendingSessionStop, null);
+  assert.equal(harness.storage.lastValidSnapshot.pendingStudyReviewSessionId, null);
+  assert.deepEqual(harness.storage.lastValidSnapshot.studyHistory, []);
+  assert.equal(requests.some(request => request.method === 'PUT'), false);
+  assert.doesNotMatch(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+  assert.match(harness.nodes.get('sync-state').textContent, /synced/i);
+});
+
 test('an expired offline Chrome start remains locked for Android review', async () => {
   const now = new Date('2026-11-05T11:30:00.000Z');
   const pending = { id: 'chrome-expired-offline', taskName: 'Study session', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' };

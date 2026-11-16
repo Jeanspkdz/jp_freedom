@@ -608,8 +608,7 @@ export async function initializeManagement({
       return remote;
     }
     if (!remote.snapshot.activeStudySession
-      && !remote.snapshot.pendingStudyReviewSessionId
-      && remote.snapshot.studyHistory?.some(session => session.id === pending.id && session.state === 'REVIEWED')) {
+      && !remote.snapshot.pendingStudyReviewSessionId) {
       state.pendingSessionStop = null;
       await chromeApi.storage.local.set({ pendingSessionStop: null });
       return remote;
