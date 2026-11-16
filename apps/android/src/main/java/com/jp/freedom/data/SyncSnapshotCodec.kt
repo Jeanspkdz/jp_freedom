@@ -6,6 +6,8 @@ import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.SyncSnapshot
 import com.jp.freedom.domain.SharedStudySession
+import com.jp.freedom.domain.StudyTimerSession
+import com.jp.freedom.domain.StudySessionState
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -51,6 +53,26 @@ object SyncSnapshotCodec {
         } ?: JSONObject.NULL)
         put("phoneReceivedStudySessionId", snapshot.phoneReceivedStudySessionId ?: JSONObject.NULL)
         put("pendingStudyReviewSessionId", snapshot.pendingStudyReviewSessionId ?: JSONObject.NULL)
+        put("studyHistory", JSONArray().apply {
+            snapshot.studyHistory.forEach { session ->
+                put(JSONObject().apply {
+                    put("id", session.id)
+                    put("taskName", session.taskName)
+                    put("durationMillis", session.durationMillis)
+                    put("accessProfile", session.accessProfile.name)
+                    put("startedAt", session.startedAt.toString())
+                    put("endedAt", session.endedAt?.toString() ?: JSONObject.NULL)
+                    put("actualMillis", session.actualMillis)
+                    put("state", session.state.name)
+                    put("completionStatus", session.completionStatus?.name ?: JSONObject.NULL)
+                    put("note", session.note)
+                    put("remaining", session.remaining)
+                    put("breakStartedAt", session.breakStartedAt?.toString() ?: JSONObject.NULL)
+                    put("breakDurationMillis", session.breakDurationMillis)
+                    put("nextTask", session.nextTask)
+                })
+            }
+        })
     }
 
     fun decode(snapshot: JSONObject): SyncSnapshot {
@@ -96,7 +118,37 @@ object SyncSnapshotCodec {
             .takeIf { it.isNotEmpty() && it != "null" }
         val pendingReviewId = snapshot.optString("pendingStudyReviewSessionId", "")
             .takeIf { it.isNotEmpty() && it != "null" }
-        return SyncSnapshot(settings, domains, blocks, session, receivedSessionId, pendingReviewId)
+        val historyJson = snapshot.optJSONArray("studyHistory") ?: JSONArray()
+        val history = buildList {
+            for (index in 0 until historyJson.length()) {
+                val entry = historyJson.getJSONObject(index)
+                add(StudyTimerSession(
+                    id = entry.getString("id"),
+                    taskName = entry.optString("taskName"),
+                    durationMillis = entry.optLong("durationMillis"),
+                    accessProfile = AccessProfile.valueOf(entry.getString("accessProfile")),
+                    startedAt = Instant.parse(entry.getString("startedAt")),
+                    endedAt = entry.optString("endedAt").takeIf { it.isNotBlank() && it != "null" }?.let(Instant::parse),
+                    actualMillis = entry.optLong("actualMillis"),
+                    state = StudySessionState.valueOf(entry.getString("state")),
+                    completionStatus = entry.optString("completionStatus").takeIf { it.isNotBlank() && it != "null" }?.let(CompletionStatus::valueOf),
+                    note = entry.optString("note"),
+                    remaining = entry.optString("remaining"),
+                    breakStartedAt = entry.optString("breakStartedAt").takeIf { it.isNotBlank() && it != "null" }?.let(Instant::parse),
+                    breakDurationMillis = entry.optLong("breakDurationMillis"),
+                    nextTask = entry.optString("nextTask"),
+                ))
+            }
+        }
+        return SyncSnapshot(
+            settings = settings,
+            desktopBlockedDomains = domains,
+            blocks = blocks,
+            activeStudySession = session,
+            phoneReceivedStudySessionId = receivedSessionId,
+            pendingStudyReviewSessionId = pendingReviewId,
+            studyHistory = history,
+        )
     }
 
     private fun LocalTime.apiTime() = String.format(Locale.ROOT, "%02d:%02d", hour, minute)

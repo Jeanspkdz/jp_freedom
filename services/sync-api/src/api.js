@@ -14,6 +14,7 @@ export const DEFAULT_SNAPSHOT = Object.freeze({
   activeStudySession: null,
   phoneReceivedStudySessionId: null,
   pendingStudyReviewSessionId: null,
+  studyHistory: Object.freeze([]),
 });
 
 const accessProfiles = new Set([
@@ -22,6 +23,7 @@ const accessProfiles = new Set([
   'ESSENTIALS_WITH_CHATGPT_AND_SEARCH',
 ]);
 const completionStatuses = new Set(['NOT_STARTED', 'FINISHED', 'PARTLY_DONE', 'NOT_DONE']);
+const studySessionStates = new Set(['ACTIVE', 'PENDING_REVIEW', 'BREAKING', 'REVIEWED']);
 const supportedCutoffs = new Set(['21:00', '22:00', '23:00']);
 const domainPattern = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const blockIdPattern = /^[A-Za-z0-9_-]{1,80}$/;
@@ -98,6 +100,34 @@ export function validateSnapshot(snapshot) {
   if (pendingReviewId !== undefined && pendingReviewId !== null
     && (typeof pendingReviewId !== 'string' || pendingReviewId.length === 0 || pendingReviewId.length > 80)) {
     return 'invalid_pending_study_review';
+  }
+
+  const studyHistory = snapshot.studyHistory ?? [];
+  if (!Array.isArray(studyHistory) || studyHistory.length > 10000) return 'invalid_study_history';
+  const historyIds = new Set();
+  for (const entry of studyHistory) {
+    const startedAt = typeof entry?.startedAt === 'string' ? Date.parse(entry.startedAt) : NaN;
+    const endedAt = entry?.endedAt == null ? null : Date.parse(entry.endedAt);
+    const breakStartedAt = entry?.breakStartedAt == null ? null : Date.parse(entry.breakStartedAt);
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)
+      || typeof entry.id !== 'string' || entry.id.length === 0 || entry.id.length > 80
+      || historyIds.has(entry.id)
+      || typeof entry.taskName !== 'string' || entry.taskName.length > 200
+      || !Number.isSafeInteger(entry.durationMillis) || entry.durationMillis < 0
+      || !accessProfiles.has(entry.accessProfile)
+      || !Number.isFinite(startedAt)
+      || (endedAt !== null && (!Number.isFinite(endedAt) || endedAt < startedAt))
+      || !Number.isSafeInteger(entry.actualMillis) || entry.actualMillis < 0
+      || !studySessionStates.has(entry.state)
+      || (entry.completionStatus !== null && entry.completionStatus !== undefined && !completionStatuses.has(entry.completionStatus))
+      || typeof (entry.note ?? '') !== 'string' || (entry.note ?? '').length > 2000
+      || typeof (entry.remaining ?? '') !== 'string' || (entry.remaining ?? '').length > 2000
+      || (breakStartedAt !== null && !Number.isFinite(breakStartedAt))
+      || !Number.isSafeInteger(entry.breakDurationMillis ?? 0) || (entry.breakDurationMillis ?? 0) < 0
+      || typeof (entry.nextTask ?? '') !== 'string' || (entry.nextTask ?? '').length > 200) {
+      return 'invalid_study_history';
+    }
+    historyIds.add(entry.id);
   }
 
   const ids = new Set();

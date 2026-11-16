@@ -2,6 +2,7 @@ package com.jp.freedom.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,7 +21,7 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DailyReviewScreen(review: DailyReview, onBack: () -> Unit) {
+fun DailyReviewScreen(review: DailyReview, onBack: () -> Unit, onResolveImportConflict: (String, Boolean) -> Unit) {
     Scaffold(topBar = { TopAppBar(title = { Text("Study review · ${review.date.format(DateTimeFormatter.ofPattern("MMM d"))}") }) }) { padding ->
         LazyColumn(Modifier.padding(padding).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
@@ -35,6 +36,13 @@ fun DailyReviewScreen(review: DailyReview, onBack: () -> Unit) {
                     Text("${session.completionStatus?.label() ?: "Review pending"} · ${session.actualMillis / 60_000} min")
                     if (session.note.isNotBlank()) Text("Note: ${session.note}")
                     if (session.remaining.isNotBlank()) Text("Remaining: ${session.remaining}")
+                    if (session.id.endsWith("-phone-copy")) {
+                        Text("This imported phone version conflicts with the server session.", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { onResolveImportConflict(session.id, true) }) { Text("Keep phone version") }
+                            OutlinedButton(onClick = { onResolveImportConflict(session.id, false) }) { Text("Keep server version") }
+                        }
+                    }
                 }
             }
             item { Text("Planned blocks", style = MaterialTheme.typography.titleMedium) }

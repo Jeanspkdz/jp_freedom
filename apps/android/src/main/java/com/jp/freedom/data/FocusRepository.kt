@@ -64,13 +64,24 @@ class FocusRepository(context: Context) : StudySessionStore {
 
     override fun pendingStudyReview(): StudyTimerSession? = readStudySession(database.readableDatabase, "state = ?", arrayOf(StudySessionState.PENDING_REVIEW.name))
 
-    fun studySessions(): List<StudyTimerSession> = database.readableDatabase.query(
+    fun studySessions(): List<StudyTimerSession> = readStudySessions(database.readableDatabase)
+
+    private fun readStudyHistory(db: SQLiteDatabase): List<StudyTimerSession> = db.query(
+        "study_sessions", null, "state = ?", arrayOf(StudySessionState.REVIEWED.name), null, null, "started_at DESC",
+    ).use { cursor -> buildList {
+        while (cursor.moveToNext()) {
+            val sessionId = cursor.getString(cursor.getColumnIndexOrThrow("id"))
+            readStudySession(db, "id = ?", arrayOf(sessionId))?.let(::add)
+        }
+    } }
+
+    private fun readStudySessions(db: SQLiteDatabase): List<StudyTimerSession> = db.query(
         "study_sessions", null, null, null, null, null, "started_at DESC",
     ).use { cursor -> buildList {
         while (cursor.moveToNext()) {
             val id = cursor.getColumnIndexOrThrow("id")
             val sessionId = cursor.getString(id)
-            readStudySession(database.readableDatabase, "id = ?", arrayOf(sessionId))?.let(::add)
+            readStudySession(db, "id = ?", arrayOf(sessionId))?.let(::add)
         }
     } }
 
@@ -87,8 +98,32 @@ class FocusRepository(context: Context) : StudySessionStore {
         }
         val db = database.writableDatabase
         db.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        markDirty(db, listOf("studyHistory.${session.id}"))
         if (session.state == StudySessionState.BREAKING || session.state == StudySessionState.REVIEWED) {
             markDirty(db, listOf("pendingStudyReviewSessionId"))
+        }
+        scheduleSync()
+    }
+
+    /** Clears timer history and reviews without modifying plans or site settings. */
+    fun clearStudyHistory() {
+        val db = database.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("study_sessions", "state = ?", arrayOf(StudySessionState.REVIEWED.name))
+            markDirty(db, listOf("studyHistory.clear"))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        scheduleSync()
+    }
+
+    fun deleteStudyHistoryEntry(id: String) {
+        val db = database.writableDatabase
+        val deleted = db.delete("study_sessions", "id = ? AND state = ?", arrayOf(id, StudySessionState.REVIEWED.name))
+        if (deleted == 1) {
+            markDirty(db, listOf("studyHistory.$id.deleted"))
             scheduleSync()
         }
     }
@@ -467,6 +502,7 @@ class FocusRepository(context: Context) : StudySessionStore {
             "state = ?",
             arrayOf(StudySessionState.PENDING_REVIEW.name),
         )?.id,
+        studyHistory = readStudyHistory(db),
     )
 
     private fun readReceivedSessionId(db: SQLiteDatabase): String? = db.query(
@@ -564,6 +600,22 @@ class FocusRepository(context: Context) : StudySessionStore {
         snapshot.phoneReceivedStudySessionId?.let { receivedId ->
             db.update(TABLE_SYNC_STATE, ContentValues().apply { put(COLUMN_RECEIVED_SESSION_ID, receivedId) }, "$COLUMN_SETTINGS_ID = 1", null)
         }
+        db.delete("study_sessions", "state = ?", arrayOf(StudySessionState.REVIEWED.name))
+        snapshot.studyHistory.forEach { session -> saveSessionRow(db, session) }
+    }
+
+    private fun saveSessionRow(db: SQLiteDatabase, session: StudyTimerSession) {
+        val values = ContentValues().apply {
+            put("id", session.id); put("task_name", session.taskName); put("duration_ms", session.durationMillis)
+            put("access_profile", session.accessProfile.name); put("started_at", session.startedAt.toEpochMilli())
+            session.endedAt?.let { put("ended_at", it.toEpochMilli()) } ?: putNull("ended_at")
+            put("actual_ms", session.actualMillis); put("state", session.state.name)
+            session.completionStatus?.let { put("completion_status", it.name) } ?: putNull("completion_status")
+            put("note", session.note); put("remaining", session.remaining)
+            session.breakStartedAt?.let { put("break_started_at", it.toEpochMilli()) } ?: putNull("break_started_at")
+            put("break_duration_ms", session.breakDurationMillis); put("next_task", session.nextTask)
+        }
+        db.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     private fun queryBlocks(db: SQLiteDatabase, selection: String?, selectionArgs: Array<String>?): List<PlannedBlock> =
@@ -692,7 +744,16 @@ class FocusRepository(context: Context) : StudySessionStore {
                 addColumnIfMissing(db, "study_sessions", "break_duration_ms", "INTEGER NOT NULL DEFAULT 0")
                 addColumnIfMissing(db, "study_sessions", "next_task", "TEXT NOT NULL DEFAULT ''")
             }
-            if (oldVersion < 8) addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_RECEIVED_SESSION_ID, "TEXT")
+            if (oldVersion < 8) {
+                db.insertWithOnConflict(
+                    TABLE_SYNC_CHANGES,
+                    null,
+                    ContentValues().apply { put(COLUMN_PATH, "studyHistory.import") },
+                    SQLiteDatabase.CONFLICT_REPLACE,
+                )
+                db.execSQL("UPDATE $TABLE_SYNC_STATE SET $COLUMN_GENERATION = $COLUMN_GENERATION + 1, $COLUMN_PENDING = 1, $COLUMN_STATUS = 'PENDING' WHERE $COLUMN_SETTINGS_ID = 1")
+            }
+            if (oldVersion < 9) addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_RECEIVED_SESSION_ID, "TEXT")
         }
 
         private fun addColumnIfMissing(db: SQLiteDatabase, table: String, column: String, definition: String) {
@@ -778,7 +839,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 8
+            private const val DATABASE_VERSION = 9
         }
     }
 

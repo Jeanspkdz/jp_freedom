@@ -37,6 +37,7 @@ data class SyncSnapshot(
     val activeStudySession: SharedStudySession? = null,
     val phoneReceivedStudySessionId: String? = null,
     val pendingStudyReviewSessionId: String? = null,
+    val studyHistory: List<StudyTimerSession> = emptyList(),
 )
 
 data class SharedStudySession(
@@ -145,9 +146,44 @@ object SyncSnapshotReconciler {
                     remote.pendingStudyReviewSessionId,
                     local.pendingStudyReviewSessionId,
                 ),
+                studyHistory = mergeStudyHistory(remote.studyHistory, local.studyHistory, pendingPaths, conflicts),
             ),
             conflictedPaths = conflicts,
         )
+    }
+
+    private fun mergeStudyHistory(
+        remote: List<StudyTimerSession>,
+        local: List<StudyTimerSession>,
+        pendingPaths: Set<String>,
+        conflicts: MutableSet<String>,
+    ): List<StudyTimerSession> {
+        if ("studyHistory.clear" in pendingPaths) return emptyList()
+        val localById = local.associateBy(StudyTimerSession::id)
+        val remoteById = remote.associateBy(StudyTimerSession::id)
+        val merged = (remoteById.keys + localById.keys).mapNotNull { id ->
+            if ("studyHistory.$id.deleted" in pendingPaths) return@mapNotNull null
+            val serverSession = remoteById[id]
+            val phoneSession = localById[id]
+            if (serverSession != null && phoneSession != null && serverSession != phoneSession) {
+                conflicts += "studyHistory.$id"
+            }
+            when {
+                serverSession == null -> phoneSession
+                phoneSession == null -> serverSession
+                serverSession != phoneSession && "studyHistory.import" in pendingPaths -> serverSession
+                "studyHistory.$id" in pendingPaths -> phoneSession
+                else -> serverSession
+            }
+        }
+        val conflictAlternates = (remoteById.keys intersect localById.keys).mapNotNull { id ->
+            val serverSession = remoteById.getValue(id)
+            val phoneSession = localById.getValue(id)
+            if (serverSession == phoneSession || "studyHistory.import" !in pendingPaths) return@mapNotNull null
+            val forkId = "${id.take(68)}-phone-copy"
+            phoneSession.copy(id = forkId, taskName = "Phone copy · ${phoneSession.taskName}")
+        }
+        return (merged + conflictAlternates).distinctBy(StudyTimerSession::id).sortedByDescending(StudyTimerSession::startedAt)
     }
 
     private fun mergeBlock(

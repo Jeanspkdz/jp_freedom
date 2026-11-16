@@ -116,6 +116,35 @@ test('the revisioned sync contract preserves an Android-started session for Chro
   assert.deepEqual((await api(request('/v1/snapshot')).then(response => response.json())).snapshot.activeStudySession, snapshot.activeStudySession);
 });
 
+test('the revisioned sync contract imports, retains, and explicitly clears reviewed study history', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const reviewedSession = {
+    id: 'history-1', taskName: 'Read chapter four', durationMillis: 3600000,
+    accessProfile: 'ESSENTIALS_ONLY', startedAt: '2026-11-05T10:00:00Z',
+    endedAt: '2026-11-05T11:00:00Z', actualMillis: 3600000, state: 'REVIEWED',
+    completionStatus: 'FINISHED', note: 'Good progress', remaining: '',
+    breakStartedAt: null, breakDurationMillis: 0, nextTask: '',
+  };
+  const imported = { ...emptySnapshot, studyHistory: [reviewedSession] };
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot: imported },
+  }));
+  assert.equal(write.status, 200);
+  const firstRead = await api(request('/v1/snapshot')).then(response => response.json());
+  assert.deepEqual(firstRead.snapshot.studyHistory, [reviewedSession]);
+
+  const cleared = { ...firstRead.snapshot, studyHistory: [] };
+  const clearWrite = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: firstRead.revision, snapshot: cleared },
+  }));
+  assert.equal(clearWrite.status, 200);
+  const afterClear = await api(request('/v1/snapshot')).then(response => response.json());
+  assert.deepEqual(afterClear.snapshot.studyHistory, []);
+  assert.deepEqual(afterClear.snapshot.blocks, emptySnapshot.blocks);
+  assert.deepEqual(afterClear.snapshot.desktopBlockedDomains, emptySnapshot.desktopBlockedDomains);
+});
+
 test('the revisioned sync contract rejects a session whose end does not follow its start', async () => {
   const api = createSyncApi({ store: fakeStore(), token });
   const response = await api(request('/v1/snapshot', {

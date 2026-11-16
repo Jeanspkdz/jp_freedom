@@ -5,6 +5,7 @@ import java.time.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
 
 class SyncSnapshotTest {
     @Test
@@ -126,4 +127,70 @@ class SyncSnapshotTest {
         assertEquals(local, result.snapshot)
         assertTrue(result.conflictedPaths.isEmpty())
     }
+
+    @Test
+    fun firstHistoryImportKeepsPhoneAndServerSessionsAndReportsConflictingValues() {
+        val phoneSession = historySession("same-id", "Phone version")
+        val serverSession = historySession("same-id", "Server version")
+        val phoneOnly = historySession("phone-only", "Phone only")
+        val serverOnly = historySession("server-only", "Server only")
+
+        val result = SyncSnapshotReconciler.merge(
+            remote = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, emptyList(), studyHistory = listOf(serverSession, serverOnly)),
+            local = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, emptyList(), studyHistory = listOf(phoneSession, phoneOnly)),
+            pendingPaths = setOf("studyHistory.import"),
+        )
+
+        assertEquals(setOf("same-id", "same-id-phone-copy", "phone-only", "server-only"), result.snapshot.studyHistory.map { it.id }.toSet())
+        assertEquals("Server version", result.snapshot.studyHistory.first { it.id == "same-id" }.taskName)
+        assertEquals("Phone copy · Phone version", result.snapshot.studyHistory.first { it.id == "same-id-phone-copy" }.taskName)
+        assertEquals(setOf("studyHistory.same-id"), result.conflictedPaths)
+
+        val repeatedImport = SyncSnapshotReconciler.merge(result.snapshot, result.snapshot, emptySet())
+        assertEquals(4, repeatedImport.snapshot.studyHistory.size)
+        assertEquals(4, repeatedImport.snapshot.studyHistory.map { it.id }.toSet().size)
+    }
+
+    @Test
+    fun explicitHistoryClearDoesNotChangePlansOrDesktopSites() {
+        val block = PlannedBlock("plan-1", LocalDate.of(2026, 11, 5), "Study", LocalTime.of(9, 0), LocalTime.of(10, 0))
+        val remote = SyncSnapshot(FocusSettings(), listOf("reddit.com"), listOf(block), studyHistory = listOf(historySession("session", "Study")))
+        val local = remote.copy(studyHistory = emptyList())
+
+        val result = SyncSnapshotReconciler.merge(remote, local, setOf("studyHistory.clear"))
+
+        assertTrue(result.snapshot.studyHistory.isEmpty())
+        assertEquals(listOf(block), result.snapshot.blocks)
+        assertEquals(listOf("reddit.com"), result.snapshot.desktopBlockedDomains)
+    }
+
+    @Test
+    fun choosingOneVersionOfAnImportConflictRemovesOnlyTheRejectedSession() {
+        val server = historySession("same-id", "Server version")
+        val phone = historySession("same-id", "Phone version")
+        val imported = SyncSnapshotReconciler.merge(
+            SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, emptyList(), studyHistory = listOf(server)),
+            SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, emptyList(), studyHistory = listOf(phone)),
+            setOf("studyHistory.import"),
+        ).snapshot
+
+        val keepPhone = SyncSnapshotReconciler.merge(
+            imported,
+            imported.copy(studyHistory = imported.studyHistory.filterNot { it.id == "same-id" }),
+            setOf("studyHistory.same-id.deleted"),
+        )
+        assertEquals(listOf("same-id-phone-copy"), keepPhone.snapshot.studyHistory.map { it.id })
+    }
+
+    private fun historySession(id: String, task: String) = StudyTimerSession(
+        id = id,
+        taskName = task,
+        durationMillis = 3_600_000,
+        accessProfile = AccessProfile.ESSENTIALS_ONLY,
+        startedAt = Instant.parse("2026-11-05T10:00:00Z"),
+        endedAt = Instant.parse("2026-11-05T11:00:00Z"),
+        actualMillis = 3_600_000,
+        state = StudySessionState.REVIEWED,
+        completionStatus = CompletionStatus.FINISHED,
+    )
 }
