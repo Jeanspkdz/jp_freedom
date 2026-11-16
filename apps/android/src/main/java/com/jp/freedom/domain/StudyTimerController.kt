@@ -37,15 +37,22 @@ class StudyTimerController(
     fun canMaintainProfile(profileId: String): Boolean =
         store.activeStudySession()?.profileId != profileId
 
-    fun start(duration: Duration, profile: AccessProfile): StudyTimerSession? {
+    fun start(duration: Duration, profile: AccessProfile, focusAreaId: String? = null): StudyTimerSession? {
         if (!canStartAnother()) return null
-        return StudyTimerSession.start("", duration, profile, Instant.now(clock)).takeIf(store::startStudySession)
+        return StudyTimerSession.start("", duration, profile, Instant.now(clock))
+            .copy(focusAreaId = focusAreaId)
+            .takeIf(store::startStudySession)
     }
 
-    fun start(duration: Duration, profile: SavedAccessProfile?): StudyTimerSession? {
+    fun start(duration: Duration, profile: SavedAccessProfile?, focusAreaId: String? = null): StudyTimerSession? {
         if (!canStartAnother()) return null
         val session = StudyTimerSession.start("", duration, AccessProfile.ESSENTIALS_ONLY, Instant.now(clock))
-            .copy(profileId = profile?.id, profileName = profile?.name ?: "Essentials only", allowedPackages = profile?.packages ?: emptySet())
+            .copy(
+                profileId = profile?.id,
+                profileName = profile?.name ?: "Essentials only",
+                allowedPackages = profile?.packages ?: emptySet(),
+                focusAreaId = focusAreaId,
+            )
         return session.takeIf(store::startStudySession)
     }
 
@@ -63,13 +70,14 @@ class StudyTimerController(
             state = StudySessionState.ACTIVE,
         ).also(store::saveStudySession)
     }
+
     fun finishIfDue(): StudyTimerSession? = store.activeStudySession()?.let {
         StudyTimerPolicy.finishIfDue(it, Instant.now(clock))
     }?.takeIf(store::finishStudySession)
 
-    fun review(taskName: String, status: CompletionStatus, note: String, remaining: String = "", breakDuration: Duration = Duration.ofMinutes(15)): StudyTimerSession? =
+    fun review(taskName: String, outcome: SessionOutcome, note: String, breakDuration: Duration = Duration.ofMinutes(15)): StudyTimerSession? =
         store.pendingStudyReview()?.let {
-            StudyTimerPolicy.review(it, taskName, status, note, remaining).copy(
+            StudyTimerPolicy.review(it, taskName, outcome, note).copy(
                 state = StudySessionState.BREAKING,
                 breakStartedAt = Instant.now(clock),
                 breakDurationMillis = breakDuration.toMillis(),

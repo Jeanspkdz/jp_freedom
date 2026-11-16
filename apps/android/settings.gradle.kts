@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "JP Freedom"
+rootProject.name = "Dimky"
 

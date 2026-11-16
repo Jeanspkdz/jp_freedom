@@ -35,9 +35,9 @@ data class FocusSettings(
 }
 
 enum class AccessProfile(val title: String) {
-    ESSENTIALS_ONLY("Essentials only"),
-    ESSENTIALS_WITH_CHATGPT("Essentials + ChatGPT"),
-    ESSENTIALS_WITH_CHATGPT_AND_SEARCH("Essentials + ChatGPT + Google Search"),
+    ESSENTIALS_ONLY("Solo esenciales"),
+    ESSENTIALS_WITH_CHATGPT("Esenciales y ChatGPT"),
+    ESSENTIALS_WITH_CHATGPT_AND_SEARCH("Esenciales, ChatGPT y Google Search"),
 }
 
 enum class CompletionStatus {

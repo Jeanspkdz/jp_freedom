@@ -5,16 +5,28 @@ export async function initializeBlockedPage({
   documentRef = globalThis.document,
   now = () => new Date(),
 } = {}) {
-  const { lastValidSnapshot } = await chromeApi.storage.local.get(['lastValidSnapshot']);
+  const { lastValidSnapshot, blockedVariant } = await chromeApi.storage.local.get(['lastValidSnapshot', 'blockedVariant']);
   const currentTime = now();
   const session = getActiveStudySession(lastValidSnapshot, currentTime);
   const block = session ? null : getCurrentAndNext(lastValidSnapshot, currentTime).current;
   documentRef.getElementById('blocked-activity').textContent = session?.taskName ?? block?.name ?? 'No active focus block';
   const plannedEnd = documentRef.getElementById('blocked-end');
-  plannedEnd.hidden = !session && !block;
+  const endRow = documentRef.getElementById('blocked-end-row');
+  if (endRow) endRow.hidden = !session && !block;
+  else plannedEnd.hidden = !session && !block;
   plannedEnd.textContent = session
-    ? `Planned end: ${new Date(session.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
-    : block ? `Planned end: ${block.endTime}` : '';
+    ? new Date(session.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : block ? block.endTime : '';
+  const variant = documentRef.getElementById('blocked-variant');
+  const scene = documentRef.getElementById('blocked-scene');
+  if (variant && scene) {
+    variant.value = blockedVariant === 'water' ? 'water' : 'particles';
+    scene.src = variant.value === 'water' ? 'water-puddle.html' : 'focus-terrain.html?blocked';
+    variant.addEventListener('change', async () => {
+      scene.src = variant.value === 'water' ? 'water-puddle.html' : 'focus-terrain.html?blocked';
+      await chromeApi.storage.local.set({ blockedVariant: variant.value });
+    });
+  }
 }
 
 if (globalThis.document && globalThis.chrome) void initializeBlockedPage();

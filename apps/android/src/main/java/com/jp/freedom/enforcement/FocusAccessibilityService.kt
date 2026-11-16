@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import com.jp.freedom.MainActivity
@@ -19,7 +20,7 @@ import java.time.LocalDateTime
 class FocusAccessibilityService : AccessibilityService() {
     private val repository by lazy { FocusRepository(applicationContext) }
     private var foregroundPackage: String? = null
-    private var blockScreenIsOpen = false
+    private val blockScreenLaunchGate = BlockScreenLaunchGate()
 
     private val policyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) = enforceCurrentPolicy()
@@ -44,9 +45,6 @@ class FocusAccessibilityService : AccessibilityService() {
 
         val packageName = event.packageName?.toString() ?: return
         foregroundPackage = packageName
-        if (packageName == this.packageName) {
-            blockScreenIsOpen = false
-        }
         enforceCurrentPolicy()
     }
 
@@ -75,7 +73,7 @@ class FocusAccessibilityService : AccessibilityService() {
         )
         val policyReason = policy.blockedReason
         if (policyReason == null) {
-            blockScreenIsOpen = false
+            blockScreenLaunchGate.reset()
             return
         }
 
@@ -91,13 +89,9 @@ class FocusAccessibilityService : AccessibilityService() {
             siteFilterRunning = siteFilterRunning,
             defaultInputMethodPackage = defaultInputMethodPackage(),
         )
-        if (packageName in allowedPackages || packageName == "com.android.systemui" || packageName == "android") {
-            blockScreenIsOpen = false
-            return
-        }
-        if (blockScreenIsOpen) return
+        val packagesAllowedDuringFocus = allowedPackages + setOf("com.android.systemui", "android")
+        if (!blockScreenLaunchGate.shouldLaunch(packageName, packagesAllowedDuringFocus, SystemClock.elapsedRealtime())) return
 
-        blockScreenIsOpen = true
         startActivity(
             Intent(this, MainActivity::class.java).apply {
                 putExtra(MainActivity.EXTRA_BLOCKED_REASON, reason.toIntentId())

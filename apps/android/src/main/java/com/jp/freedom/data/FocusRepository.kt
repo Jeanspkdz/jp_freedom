@@ -12,6 +12,8 @@ import com.jp.freedom.domain.DEFAULT_DESKTOP_BLOCKED_DOMAINS
 import com.jp.freedom.domain.DayPlanPolicy
 import com.jp.freedom.domain.DesktopSiteBlocklist
 import com.jp.freedom.domain.FocusSettings
+import com.jp.freedom.domain.FocusArea
+import com.jp.freedom.domain.FocusAreaPolicy
 import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.SyncSnapshot
 import com.jp.freedom.domain.SharedStudySession
@@ -150,6 +152,31 @@ class FocusRepository(context: Context) : StudySessionStore {
         }
     } }
 
+    fun focusAreas(): List<FocusArea> = database.readableDatabase.query(
+        "focus_areas", arrayOf("id", "name"), null, null, null, null, "position ASC",
+    ).use { cursor -> buildList {
+        while (cursor.moveToNext()) add(FocusArea(cursor.getString(0), cursor.getString(1)))
+    } }
+
+    fun saveFocusAreas(areas: List<FocusArea>) {
+        val cleaned = FocusAreaPolicy.prepare(areas)
+        val db = database.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("focus_areas", null, null)
+            cleaned.forEachIndexed { index, area ->
+                db.insertOrThrow("focus_areas", null, ContentValues().apply {
+                    put("id", area.id)
+                    put("name", area.name)
+                    put("position", index)
+                })
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     override fun saveStudySession(session: StudyTimerSession) {
         val values = ContentValues().apply {
             put("id", session.id); put("task_name", session.taskName); put("duration_ms", session.durationMillis)
@@ -159,10 +186,11 @@ class FocusRepository(context: Context) : StudySessionStore {
             put("allowed_packages", session.allowedPackages?.let { JSONArray(it.sorted()).toString() })
             session.endedAt?.let { put("ended_at", it.toEpochMilli()) } ?: putNull("ended_at")
             put("actual_ms", session.actualMillis); put("state", session.state.name)
-            session.completionStatus?.let { put("completion_status", it.name) } ?: putNull("completion_status")
+            session.outcome?.let { put("completion_status", it.name) } ?: putNull("completion_status")
             put("note", session.note); put("remaining", session.remaining)
             session.breakStartedAt?.let { put("break_started_at", it.toEpochMilli()) } ?: putNull("break_started_at")
             put("break_duration_ms", session.breakDurationMillis); put("next_task", session.nextTask)
+            session.focusAreaId?.let { put("focus_area_id", it) } ?: putNull("focus_area_id")
         }
         val db = database.writableDatabase
         db.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
@@ -255,12 +283,19 @@ class FocusRepository(context: Context) : StudySessionStore {
                 endedAt = cursor.getColumnIndexOrThrow("ended_at").let { if (cursor.isNull(it)) null else Instant.ofEpochMilli(cursor.getLong(it)) },
                 actualMillis = cursor.getLong(cursor.getColumnIndexOrThrow("actual_ms")),
                 state = StudySessionState.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("state"))),
-                completionStatus = cursor.getColumnIndexOrThrow("completion_status").let { if (cursor.isNull(it)) null else CompletionStatus.valueOf(cursor.getString(it)) },
+                outcome = cursor.getColumnIndexOrThrow("completion_status").let { index ->
+                    if (cursor.isNull(index)) null else when (cursor.getString(index)) {
+                        "FINISHED" -> com.jp.freedom.domain.SessionOutcome.FINISHED
+                        "NOT_FINISHED", "NOT_DONE", "PARTLY_DONE" -> com.jp.freedom.domain.SessionOutcome.NOT_FINISHED
+                        else -> null
+                    }
+                },
                 note = cursor.getString(cursor.getColumnIndexOrThrow("note")) ?: "",
                 remaining = cursor.getString(cursor.getColumnIndexOrThrow("remaining")) ?: "",
                 breakStartedAt = cursor.getColumnIndexOrThrow("break_started_at").let { if (cursor.isNull(it)) null else Instant.ofEpochMilli(cursor.getLong(it)) },
                 breakDurationMillis = cursor.getLong(cursor.getColumnIndexOrThrow("break_duration_ms")),
                 nextTask = cursor.getString(cursor.getColumnIndexOrThrow("next_task")) ?: "",
+                focusAreaId = cursor.getColumnIndexOrThrow("focus_area_id").let { if (cursor.isNull(it)) null else cursor.getString(it) },
             )
         }
 
@@ -885,6 +920,7 @@ class FocusRepository(context: Context) : StudySessionStore {
             insertInitialSyncState(db)
             createStudySessionTable(db)
             createAccessProfileTable(db)
+            createFocusAreaTable(db)
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -972,7 +1008,65 @@ class FocusRepository(context: Context) : StudySessionStore {
                 // Planned blocks no longer select phone access. Keep their scheduling data intact.
                 db.execSQL("UPDATE $TABLE_BLOCKS SET $COLUMN_ACCESS_PROFILE = 'ESSENTIALS_ONLY' WHERE $COLUMN_ACCESS_PROFILE != 'ESSENTIALS_ONLY'")
             }
+            if (oldVersion < 19) {
+                addColumnIfMissing(db, "study_sessions", "focus_area_id", "TEXT")
+                createFocusAreaTable(db)
+            }
+            if (oldVersion < 20) migrateFocusAreaTable(db)
         }
+
+        private fun migrateFocusAreaTable(db: SQLiteDatabase) {
+            val areaColumns = tableColumns(db, "focus_areas")
+            val currentColumns = setOf("id", "name", "position")
+            if (areaColumns.containsAll(currentColumns)) return
+
+            val existingAreas = if ("name" in areaColumns) {
+                db.query("focus_areas", arrayOf("name"), null, null, null, null, "rowid ASC").use { cursor ->
+                    buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+                }
+            } else emptyList()
+
+            val sessionColumns = tableColumns(db, "study_sessions")
+            val existingSessionAreas = if (sessionColumns.containsAll(setOf("id", "focus_area", "focus_area_id"))) {
+                db.query(
+                    "study_sessions", arrayOf("id", "focus_area"),
+                    "focus_area IS NOT NULL AND focus_area_id IS NULL", null, null, null, null,
+                ).use { cursor ->
+                    buildList { while (cursor.moveToNext()) add(cursor.getString(0) to cursor.getString(1)) }
+                }
+            } else emptyList()
+
+            if (areaColumns.isNotEmpty()) db.execSQL("ALTER TABLE focus_areas RENAME TO focus_areas_legacy")
+            createFocusAreaTable(db)
+
+            val idsByName = mutableMapOf<String, String>()
+            existingAreas.forEachIndexed { index, name ->
+                val id = java.util.UUID.randomUUID().toString()
+                idsByName[name] = id
+                db.insertOrThrow("focus_areas", null, ContentValues().apply {
+                    put("id", id)
+                    put("name", name)
+                    put("position", index)
+                })
+            }
+
+            existingSessionAreas.forEach { (sessionId, areaName) ->
+                idsByName[areaName]?.let { areaId ->
+                    db.update(
+                        "study_sessions", ContentValues().apply { put("focus_area_id", areaId) },
+                        "id = ? AND focus_area_id IS NULL", arrayOf(sessionId),
+                    )
+                }
+            }
+
+            if (areaColumns.isNotEmpty()) db.execSQL("DROP TABLE focus_areas_legacy")
+        }
+
+        private fun tableColumns(db: SQLiteDatabase, table: String): Set<String> =
+            db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+                val nameColumn = cursor.getColumnIndexOrThrow("name")
+                buildSet { while (cursor.moveToNext()) add(cursor.getString(nameColumn)) }
+            }
 
         private fun addColumnIfMissing(db: SQLiteDatabase, table: String, column: String, definition: String) {
             val exists = db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
@@ -991,11 +1085,16 @@ class FocusRepository(context: Context) : StudySessionStore {
                 actual_ms INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL,
                 completion_status TEXT, note TEXT NOT NULL DEFAULT '', remaining TEXT NOT NULL DEFAULT '',
                 break_started_at INTEGER, break_duration_ms INTEGER NOT NULL DEFAULT 0, next_task TEXT NOT NULL DEFAULT '',
-                profile_id TEXT, profile_name TEXT NOT NULL DEFAULT 'Essentials only', allowed_packages TEXT)""")
+                profile_id TEXT, profile_name TEXT NOT NULL DEFAULT 'Essentials only', allowed_packages TEXT,
+                focus_area_id TEXT)""")
         }
 
         private fun createAccessProfileTable(db: SQLiteDatabase) {
             db.execSQL("CREATE TABLE IF NOT EXISTS access_profiles (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, packages TEXT NOT NULL)")
+
+        private fun createFocusAreaTable(db: SQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS focus_areas (
+                id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, position INTEGER NOT NULL)""")
         }
 
         private fun createPlanTables(db: SQLiteDatabase) {

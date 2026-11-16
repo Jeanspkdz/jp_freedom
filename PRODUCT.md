@@ -16,11 +16,15 @@ Una persona que quiere mejorar sus hábitos de estudio y reducir distracciones e
 
 ## Product Purpose
 
-JP Freedom ayuda al usuario a planificar cada día y cumplir bloques de enfoque en Android, y aplica bloqueos de sitios seleccionados en Chrome durante esos bloques. Si no planifica el día siguiente antes de la hora elegida, restringe el uso del teléfono hasta completar el mínimo de bloques configurado. El éxito significa que la planificación y el bloqueo entre dispositivos apoyan una rutina de estudio que el usuario puede sostener.
+Dimky ayuda al usuario a planificar cada día y cumplir bloques de enfoque en Android. Chrome bloquea los sitios seleccionados durante bloques planificados y sesiones de estudio con temporizador. El usuario puede iniciar una sesión con duración elegida desde Chrome; Android aplica las restricciones del teléfono cuando recibe esa sesión. Si no planifica el día siguiente antes de la hora elegida, restringe el uso del teléfono hasta completar el mínimo de bloques configurado. El éxito significa que la planificación y el bloqueo entre dispositivos apoyan una rutina de estudio que el usuario puede sostener.
 
 ## Positioning
 
-Una alternativa personal y de código abierto a Freedom, centrada en planificar cada día como rutina y aplicar los bloqueos según el plan. Android es la fuente de verdad para planes, ajustes y estados de finalización; la extensión de Chrome aplica el bloqueo de sitios de escritorio compartido y permite editar esa lista.
+Dimky es una app personal y de código abierto para planificar cada día como rutina y aplicar bloqueos según el plan. Android es la fuente de verdad para planes, ajustes y estados de finalización; la extensión de Chrome aplica el bloqueo de sitios de escritorio compartido y permite editar esa lista.
+
+## Brand Commitments
+
+- Conservar una apariencia medio oscura y la familia cromática actual; dar más viveza e intensidad a los colores existentes sin reemplazarlos por otra paleta.
 
 ## Operating Context
 
@@ -28,8 +32,9 @@ Una alternativa personal y de código abierto a Freedom, centrada en planificar 
 - Cada bloque tiene una actividad, horas de inicio y fin, y un modo de bloqueo del celular.
 - El usuario marca los bloques como Finalizado, Parcial o No realizado. Marcar Finalizado termina el bloqueo activo de ese bloque.
 - El domingo es libre de bloques. El domingo por la noche se debe planificar el lunes.
-- La extensión de Chrome sincroniza planes y estados para aplicar el bloqueo de sitios durante bloques de enfoque; no aplica la restricción nocturna.
+- La extensión de Chrome sincroniza planes y sesiones para aplicar el bloqueo de sitios durante bloques planificados y temporizadores de estudio; no aplica la restricción nocturna.
 - Android y Chrome sincronizan una lista compartida de sitios bloqueados. La extensión puede editar esa lista, pero solo Android puede editar planes, ajustes y estados de finalización.
+- Chrome permite elegir cualquier duración e iniciar una sesión de estudio compartida. Android usa el perfil Solo esenciales para las sesiones iniciadas desde Chrome. La creación de bloques, las revisiones, los demás ajustes y los permisos del teléfono permanecen en Android.
 - La primera distribución de Android y Chrome es personal y de instalación manual. La sincronización usa una API conectada a Neon y es de un solo usuario; no hay cuentas multiusuario.
 - Los dispositivos usan su hora local y, en la entrega inicial, se espera que compartan zona horaria.
 
@@ -42,7 +47,7 @@ Una alternativa personal y de código abierto a Freedom, centrada en planificar 
 - Los bloques no pueden superponerse. No se requiere duración mínima ni descripción de resultado.
 - La planificación y la decisión de restricción deben funcionar sin internet en el teléfono.
 - Chrome necesita internet para editar la lista compartida y sincronizar cambios; sin conexión conserva y aplica la última lista sincronizada válida.
-- Chrome no restringe la navegación por la noche. El bloqueo de escritorio se aplica a la navegación de nivel superior durante bloques de enfoque.
+- Chrome no restringe la navegación por la noche. El bloqueo de escritorio se aplica a la navegación de nivel superior durante bloques planificados y sesiones de estudio con temporizador.
 - Hasta recibir una primera instantánea válida, la extensión no bloquea sitios y muestra que la sincronización no está activa.
 - La extensión envía recordatorios de planificación cuando falta el plan requerido y Chrome está abierto; el recordatorio no restringe la navegación.
 - El usuario gestiona por separado el administrador del dispositivo que ayuda a evitar la desinstalación o desactivación del bloqueo.
@@ -55,6 +60,7 @@ Una alternativa personal y de código abierto a Freedom, centrada en planificar 
 - La especificación aprobada está en el issue #1 de GitHub y desglosada en sus tickets secundarios.
 - El glosario del repositorio registra el vocabulario actual del producto en `GLOSSARY.md`.
 - El contrato operativo de la extensión y la sincronización está en `docs/sync-and-extension.md`.
+- El comportamiento acordado para el temporizador de Chrome está en `docs/specs/chrome-study-session.md`.
 - No se han proporcionado testimonios, benchmarks, diseños, ni otros materiales de marca. No inventarlos.
 
 ## Product Principles

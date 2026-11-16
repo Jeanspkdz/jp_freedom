@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "JP Freedom",
+  "name": "Dimky",
   "version": "1.0.0",
   "description": "Sync focus plans and block selected desktop sites during focus blocks.",
   "minimum_chrome_version": "111",
@@ -20,7 +20,7 @@
     }
   },
   "options_ui": { "page": "management.html", "open_in_tab": true },
-  "sandbox": { "pages": ["focus-terrain.html"] },
+  "sandbox": { "pages": ["focus-terrain.html", "water-puddle.html"] },
   "declarative_net_request": {
     "rule_resources": [{ "id": "base", "enabled": true, "path": "rules.json" }]
   }
