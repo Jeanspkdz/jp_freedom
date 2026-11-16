@@ -77,6 +77,8 @@ fun PlannerScreen(
     blocks: List<PlannedBlock>,
     allBlocks: List<PlannedBlock>,
     studySessions: List<StudyTimerSession>,
+    activeStudySession: StudyTimerSession?,
+    pendingSessionReview: StudyTimerSession?,
     settings: FocusSettings,
     restrictionActive: Boolean,
     hasSyncKey: Boolean,
@@ -140,6 +142,8 @@ fun PlannerScreen(
         bottomBar = {
             PlannerBottomBar(
                 onOpenStudyTimer = onOpenStudyTimer,
+                activeStudySession = activeStudySession,
+                pendingSessionReview = pendingSessionReview,
             )
         },
         containerColor = MaterialTheme.colorScheme.background,
@@ -482,6 +486,8 @@ private fun RestrictionBanner(
 @Composable
 private fun PlannerBottomBar(
     onOpenStudyTimer: () -> Unit,
+    activeStudySession: StudyTimerSession?,
+    pendingSessionReview: StudyTimerSession?,
 ) {
     Button(
         onClick = onOpenStudyTimer,
@@ -495,7 +501,15 @@ private fun PlannerBottomBar(
     ) {
         Icon(Icons.Outlined.School, contentDescription = null)
         Spacer(Modifier.width(10.dp))
-        Text("Iniciar sesión", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        Text(
+            when {
+                pendingSessionReview != null -> "Revisar sesión"
+                activeStudySession != null -> "Ver sesión en curso"
+                else -> "Iniciar sesión"
+            },
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 

@@ -240,6 +240,8 @@ fun FocusApp(
             blocks = allBlocks.filter { it.date == selectedDate },
             allBlocks = allBlocks,
             studySessions = studySessions,
+            activeStudySession = studySession,
+            pendingSessionReview = pendingReview,
             settings = focusSettings,
             restrictionActive = restrictionActive,
             hasSyncKey = syncConfiguration.hasWriteToken,
