@@ -146,6 +146,11 @@ function render(documentRef, state, now) {
   if (startControls) startControls.hidden = active;
   const startButton = documentRef.getElementById('start-session');
   if (startButton) startButton.disabled = !snapshot || !state.connected || !state.online || state.saving || sharedSessionPending || Boolean(snapshot.pendingStudyReviewSessionId);
+  const stopButton = documentRef.getElementById('stop-session');
+  if (stopButton) {
+    stopButton.hidden = !sharedSessionPending;
+    stopButton.disabled = !state.connected || !state.online || state.saving;
+  }
   const startStatus = documentRef.getElementById('session-start-status');
   if (startStatus) startStatus.textContent = state.sessionMessage
     ?? (!snapshot || !state.connected || !state.online ? 'Sync before starting a study session.'
@@ -415,6 +420,82 @@ export async function initializeManagement({
       state.snapshot = previousSnapshot;
       await chromeApi.storage.local.set({ lastValidSnapshot: previousSnapshot, lastSnapshotRevision: state.revision });
       state.error = cause?.message || 'Could not start the study session.';
+      state.sessionMessage = state.error;
+      await updateRules();
+    } finally {
+      state.saving = false;
+      show();
+    }
+  });
+  documentRef.getElementById('stop-session').addEventListener('click', async () => {
+    const session = state.snapshot?.activeStudySession;
+    if (!session || !state.connected || !state.online || state.saving) return;
+    state.saving = true;
+    state.sessionMessage = null;
+    show();
+    try {
+      const endpoint = snapshotEndpoint(state.apiUrl);
+      let base = state.snapshot;
+      let revision = state.revision;
+      let snapshot = {
+        ...base,
+        activeStudySession: null,
+        pendingStudyReviewSessionId: base.pendingStudyReviewSessionId ?? session.id,
+      };
+      let response = await fetchImpl(endpoint, {
+        method: 'PUT',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: revision, snapshot }),
+        cache: 'no-store', credentials: 'omit', redirect: 'error',
+      });
+      if (response.status === 409) {
+        const latest = await readLatest();
+        if (!latest.snapshot.activeStudySession
+          && latest.snapshot.pendingStudyReviewSessionId === session.id) {
+          response = null;
+          base = latest.snapshot;
+          revision = latest.revision;
+        } else if (latest.snapshot.activeStudySession?.id === session.id) {
+          base = latest.snapshot;
+          revision = latest.revision;
+          snapshot = { ...base, activeStudySession: null, pendingStudyReviewSessionId: base.pendingStudyReviewSessionId ?? session.id };
+          response = await fetchImpl(endpoint, {
+            method: 'PUT',
+            headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expectedRevision: revision, snapshot }),
+            cache: 'no-store', credentials: 'omit', redirect: 'error',
+          });
+        } else {
+          base = latest.snapshot;
+          state.sessionMessage = latest.snapshot.pendingStudyReviewSessionId
+            ? 'Finish the pending phone review before starting another session.'
+            : 'The shared study session changed. Sync and check the current timer.';
+          state.snapshot = latest.snapshot;
+          state.revision = latest.revision;
+          await chromeApi.storage.local.set({ lastValidSnapshot: latest.snapshot, lastSnapshotRevision: latest.revision });
+          await updateRules();
+          return;
+        }
+      }
+      let payload;
+      if (response === null) payload = { snapshot: base, revision };
+      else {
+        if (!response.ok) throw new Error(`Could not stop the study session (HTTP ${response.status}).`);
+        payload = await response.json();
+      }
+      if (!validSnapshotResponse({ ...payload, updatedAt: payload.updatedAt ?? now().toISOString() })) {
+        throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+      }
+      state.snapshot = payload.snapshot;
+      state.revision = payload.revision;
+      state.lastSuccessfulSync = now().toISOString();
+      state.online = true;
+      state.error = null;
+      await chromeApi.storage.local.set({ lastValidSnapshot: payload.snapshot, lastSuccessfulSync: state.lastSuccessfulSync, lastSnapshotRevision: payload.revision });
+      await updateRules();
+      await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
+    } catch (cause) {
+      state.error = cause?.message || 'Could not stop the study session.';
       state.sessionMessage = state.error;
       await updateRules();
     } finally {

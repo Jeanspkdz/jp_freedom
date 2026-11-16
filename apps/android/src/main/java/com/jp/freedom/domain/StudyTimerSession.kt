@@ -42,6 +42,16 @@ object StudyTimerPolicy {
 
     fun stop(session: StudyTimerSession, now: Instant): StudyTimerSession = finish(session, now)
 
+    fun stopForSharedReview(
+        session: StudyTimerSession,
+        pendingStudyReviewSessionId: String?,
+        now: Instant,
+    ): StudyTimerSession? = if (session.state == StudySessionState.ACTIVE && session.id == pendingStudyReviewSessionId) {
+        finish(session, now)
+    } else {
+        null
+    }
+
     fun breakRemaining(session: StudyTimerSession, now: Instant): Duration {
         val startedAt = session.breakStartedAt ?: return Duration.ZERO
         return Duration.ofMillis((session.breakDurationMillis - Duration.between(startedAt, now).toMillis()).coerceAtLeast(0))

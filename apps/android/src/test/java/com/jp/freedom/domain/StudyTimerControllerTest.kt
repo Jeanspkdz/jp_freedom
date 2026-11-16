@@ -48,6 +48,28 @@ class StudyTimerControllerTest {
         assertEquals(StudySessionState.REVIEWED, controller.endBreak("Read biology" )?.state)
         assertTrue(controller.canStartAnother())
     }
+
+    @Test fun aSharedStopReleasesTheMatchingPhoneSessionAndLeavesItAwaitingReview() {
+        val active = StudyTimerSession(
+            id = "phone-session-1",
+            taskName = "Read chapter four",
+            durationMillis = Duration.ofMinutes(60).toMillis(),
+            accessProfile = AccessProfile.ESSENTIALS_ONLY,
+            startedAt = Instant.parse("2026-11-10T12:00:00Z"),
+        )
+
+        val stopped = StudyTimerPolicy.stopForSharedReview(
+            active,
+            pendingStudyReviewSessionId = "phone-session-1",
+            now = Instant.parse("2026-11-10T12:20:00Z"),
+        )
+
+        assertEquals(StudySessionState.PENDING_REVIEW, stopped?.state)
+        assertEquals(20 * 60_000L, stopped?.actualMillis)
+        assertEquals(Instant.parse("2026-11-10T12:20:00Z"), stopped?.endedAt)
+        assertFalse(StudyTimerPolicy.canStartAnother(stopped))
+        assertNull(StudyTimerPolicy.stopForSharedReview(active, "another-session", Instant.parse("2026-11-10T12:20:00Z")))
+    }
     private fun controller(store: MemorySessionStore, now: String) = StudyTimerController(
         store,
         Clock.fixed(Instant.parse(now), ZoneOffset.UTC),

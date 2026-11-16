@@ -497,6 +497,43 @@ test('Chrome does not start a second session while the phone has a pending revie
   assert.equal(writes, 0);
 });
 
+test('stopping a shared timer in Chrome releases it and keeps the shared review gate', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const active = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: {
+      id: 'phone-session-stop', taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z', endsAt: '2026-11-05T11:15:00.000Z', accessProfile: 'ESSENTIALS_ONLY',
+    },
+    pendingStudyReviewSessionId: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: active, lastSnapshotRevision: 1 });
+  const requests = [];
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options) => {
+      requests.push(options);
+      if (options.method === 'GET') return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot: active }) };
+      const body = JSON.parse(options.body);
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+    },
+  });
+
+  await harness.nodes.get('stop-session').listeners.get('click')();
+
+  const update = requests.find(request => request.method === 'PUT');
+  assert.ok(update);
+  const stopped = JSON.parse(update.body).snapshot;
+  assert.equal(stopped.activeStudySession, null);
+  assert.equal(stopped.pendingStudyReviewSessionId, 'phone-session-stop');
+  assert.equal(harness.storage.lastValidSnapshot.pendingStudyReviewSessionId, 'phone-session-stop');
+  assert.match(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+});
+
 test('connection status distinguishes browser enforcement from confirmed phone receipt', async () => {
   const now = new Date('2026-11-05T10:30:00.000Z');
   const session = {
@@ -792,6 +829,39 @@ test('the background worker lifts timer rules when Android syncs an early stop',
   }), now);
 
   assert.deepEqual(harness.rules, []);
+});
+
+test('the background worker publishes automatic expiry and preserves the session review gate', async () => {
+  const now = new Date('2026-11-05T11:15:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [{ id: 'planned', date: '2026-11-05', name: 'Study', startTime: '06:00', endTime: '07:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+    activeStudySession: {
+      id: 'phone-session-expiring', taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z', endsAt: now.toISOString(), accessProfile: 'ESSENTIALS_ONLY',
+    },
+    pendingStudyReviewSessionId: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastSnapshotRevision: 4 });
+  const requests = [];
+  await refreshRemoteSnapshot(harness.chromeApi, async (_url, options) => {
+    requests.push(options);
+    if (options.method === 'GET') return { ok: true, json: async () => ({ revision: 4, updatedAt: null, snapshot }) };
+    const body = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ revision: 5, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+  }, now);
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].method, 'PUT');
+  const published = JSON.parse(requests[1].body).snapshot;
+  assert.equal(published.activeStudySession, null);
+  assert.equal(published.pendingStudyReviewSessionId, 'phone-session-expiring');
+  assert.deepEqual(published.blocks, snapshot.blocks);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+  assert.equal(harness.storage.lastValidSnapshot.activeStudySession, null);
+  assert.equal(harness.storage.lastSnapshotRevision, 5);
 });
 
 test('the background worker polls for Android completion and releases rules with the management page closed', async () => {

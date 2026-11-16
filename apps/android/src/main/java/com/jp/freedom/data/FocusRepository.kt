@@ -406,14 +406,25 @@ class FocusRepository(context: Context) : StudySessionStore {
             if (readSyncState(db).generation != expectedGeneration) return false
             replaceSnapshot(db, snapshot)
             if (snapshot.activeStudySession == null) {
-                val chromeSession = readStudySession(
+                val activeSession = readStudySession(
                     db,
                     "state = ?",
                     arrayOf(StudySessionState.ACTIVE.name),
-                )?.takeIf { it.id.startsWith("chrome-") }
-                chromeSession?.let { active ->
-                    saveStudySession(StudyTimerPolicy.finishIfDue(active, Instant.now()) ?: StudyTimerPolicy.stop(active, Instant.now()))
-                    markDirty(db, listOf("activeStudySession", "pendingStudyReviewSessionId"))
+                )
+                val now = Instant.now()
+                activeSession?.let { active ->
+                    val sharedStop = StudyTimerPolicy.stopForSharedReview(
+                        active,
+                        snapshot.pendingStudyReviewSessionId,
+                        now,
+                    )
+                    val ended = sharedStop ?: active.takeIf { it.id.startsWith("chrome-") }?.let {
+                        StudyTimerPolicy.finishIfDue(it, now) ?: StudyTimerPolicy.stop(it, now)
+                    }
+                    ended?.let {
+                        saveStudySession(it)
+                        markDirty(db, listOf("activeStudySession", "pendingStudyReviewSessionId"))
+                    }
                 }
             }
             snapshot.activeStudySession?.let { shared ->
