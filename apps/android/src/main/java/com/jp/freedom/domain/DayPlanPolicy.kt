@@ -53,6 +53,8 @@ data class PlannedBlock(
     val name: String,
     val startTime: LocalTime,
     val endTime: LocalTime,
+    // Legacy sync/storage field. Planned blocks no longer choose Android access;
+    // keep it until the cross-device block schema is migrated.
     val accessProfile: AccessProfile = AccessProfile.ESSENTIALS_ONLY,
     val completionStatus: CompletionStatus = CompletionStatus.NOT_STARTED,
     val note: String? = null,
