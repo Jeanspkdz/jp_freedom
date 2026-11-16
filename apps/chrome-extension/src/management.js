@@ -773,6 +773,7 @@ export async function initializeManagement({
             activeStudySession: payload.snapshot.activeStudySession?.id === pending.id ? null : payload.snapshot.activeStudySession,
             phoneReceivedStudySessionId: payload.snapshot.activeStudySession?.id === pending.id
               ? null : payload.snapshot.phoneReceivedStudySessionId,
+            pendingStudyReviewSessionId: payload.snapshot.pendingStudyReviewSessionId ?? ended.id,
             studyHistory: [...(payload.snapshot.studyHistory ?? []).filter(item => item.id !== ended.id), ended],
           };
           const response = await fetchImpl(snapshotEndpoint(state.apiUrl), {

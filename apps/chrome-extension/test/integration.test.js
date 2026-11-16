@@ -686,7 +686,7 @@ test('Chrome clears a queued stop after Android has reviewed the same session', 
   assert.match(harness.nodes.get('sync-state').textContent, /synced/i);
 });
 
-test('an expired offline Chrome start is synced as history without becoming active on Android', async () => {
+test('an expired offline Chrome start remains locked for Android review', async () => {
   const now = new Date('2026-11-05T11:30:00.000Z');
   const pending = { id: 'chrome-expired-offline', taskName: 'Study session', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' };
   const empty = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null, studyHistory: [] };
@@ -705,11 +705,13 @@ test('an expired offline Chrome start is synced as history without becoming acti
   });
 
   assert.equal(published.activeStudySession, null);
-  assert.equal(published.pendingStudyReviewSessionId ?? null, null);
+  assert.equal(published.pendingStudyReviewSessionId, pending.id);
   assert.equal(published.studyHistory[0].id, pending.id);
   assert.equal(published.studyHistory[0].endedAt, pending.endsAt);
   assert.equal(published.studyHistory[0].state, 'PENDING_REVIEW');
   assert.equal(harness.storage.pendingSessionStart, null);
+  assert.equal(harness.nodes.get('start-session').disabled, true);
+  assert.match(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
 });
 
 test('Chrome lets the user choose which imported history version to keep', async () => {
