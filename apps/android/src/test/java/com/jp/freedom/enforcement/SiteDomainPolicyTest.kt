@@ -14,7 +14,9 @@ class SiteDomainPolicyTest {
         val withoutChrome = FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, AccessProfile.ESSENTIALS_ONLY, emptySet())
         val withChrome = withoutChrome.copy(allowedPackageSnapshot = setOf("com.android.chrome"))
         assertFalse(SiteDomainPolicy.isAllowed("example.com", withoutChrome))
-        assertTrue(SiteDomainPolicy.isAllowed("example.com", withChrome))
+        assertFalse(SiteDomainPolicy.isAllowed("example.com", withChrome))
+        assertTrue(SiteDomainPolicy.isAllowed("chatgpt.com", withChrome))
+        assertTrue(SiteDomainPolicy.isAllowed("www.google.com", withChrome))
     }
     private val activeBlock = PlannedBlock(
         id = "focus",

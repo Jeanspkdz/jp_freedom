@@ -169,6 +169,7 @@ object SyncSnapshotReconciler {
             && local.activeStudySession != null
             && remote.activeStudySession.id in competingStartIds
             && local.activeStudySession.id in competingStartIds
+        if (competingStartConflict) conflicts += "activeStudySession"
 
         return SnapshotMergeResult(
             snapshot = SyncSnapshot(

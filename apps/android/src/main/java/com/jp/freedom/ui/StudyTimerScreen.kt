@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +35,7 @@ import java.time.Instant
 fun StudyTimerScreen(
     session: StudyTimerSession?, pendingReview: StudyTimerSession?,
     profiles: List<SavedAccessProfile>, installedApps: List<LaunchableApp>,
+    startError: String?,
     onCreateProfile: (String, Set<String>) -> Unit,
     onUpdateProfile: (SavedAccessProfile) -> Unit,
     onDeleteProfile: (String) -> Unit,
@@ -44,6 +46,7 @@ fun StudyTimerScreen(
     var minutes by remember { mutableIntStateOf(60) }
     var customMinutes by remember { mutableStateOf("") }
     var selectedProfileId by remember { mutableStateOf<String?>(null) }
+    var confirmingStart by remember { mutableStateOf(false) }
     var creatingProfile by remember { mutableStateOf(false) }
     var editingProfileId by remember { mutableStateOf<String?>(null) }
     var profileName by remember { mutableStateOf("") }
@@ -53,6 +56,19 @@ fun StudyTimerScreen(
     var remaining by remember(pendingReview?.id) { mutableStateOf(pendingReview?.remaining.orEmpty()) }
     var status by remember(pendingReview?.id) { mutableStateOf<CompletionStatus?>(null) }
     var nextTask by remember(session?.id) { mutableStateOf("") }
+    if (confirmingStart) {
+        val chosen = profiles.firstOrNull { it.id == selectedProfileId }
+        AlertDialog(
+            onDismissRequest = { confirmingStart = false },
+            title = { Text("Start study timer?") },
+            text = { Text(if (selectedProfileId != null && chosen == null) "That access profile is no longer available. Choose another profile." else "${chosen?.name ?: "Essentials only"} cannot be changed during this session.") },
+            confirmButton = { Button(onClick = {
+                confirmingStart = false
+                onStart(Duration.ofMinutes((customMinutes.toIntOrNull() ?: minutes).coerceIn(1, 720).toLong()), chosen)
+            }, enabled = selectedProfileId == null || chosen != null) { Text("Start timer") } },
+            dismissButton = { OutlinedButton(onClick = { confirmingStart = false }) { Text("Change profile") } },
+        )
+    }
     Scaffold(topBar = { TopAppBar(title = { Text(if (pendingReview != null) "Review session" else "Study timer") }) }) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             if (pendingReview != null) {
@@ -137,11 +153,11 @@ fun StudyTimerScreen(
                         creatingProfile = false
                     }, enabled = profileName.isNotBlank()) { Text("Save profile") }
                 }
-                Text("You cannot change your access profile during this session.")
+                if (startError != null) Text(startError, color = MaterialTheme.colorScheme.error)
                 if (profiles.firstOrNull { it.id == selectedProfileId }?.packages?.contains("com.android.chrome") == true) {
-                    Text("This profile allows Chrome and its websites during your session.")
+                    Text("This profile allows Chrome for approved study sites during your session.")
                 }
-                Button(onClick = { onStart(Duration.ofMinutes((customMinutes.toIntOrNull() ?: minutes).coerceIn(1, 720).toLong()), profiles.firstOrNull { it.id == selectedProfileId }) }, modifier = Modifier.fillMaxWidth()) { Text("Start timer") }
+                Button(onClick = { confirmingStart = true }, modifier = Modifier.fillMaxWidth()) { Text("Start timer") }
                 OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
             }
         }
