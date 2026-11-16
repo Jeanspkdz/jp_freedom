@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -70,7 +72,9 @@ fun SettingsScreen(
     exactAlarmsAllowed: Boolean,
     siteFilterEnabled: Boolean,
     dailyReviewReminderTime: String,
+    studyHistoryCount: Int,
     onDailyReviewReminderTimeChange: (String) -> Unit,
+    onClearStudyHistory: () -> Unit,
     onBack: () -> Unit,
     onSettingsChange: (FocusSettings) -> Unit,
     onDesktopDomainsChange: (List<String>) -> Unit,
@@ -85,6 +89,7 @@ fun SettingsScreen(
     var newDomain by rememberSaveable { mutableStateOf("") }
     var reminderDraft by rememberSaveable(dailyReviewReminderTime) { mutableStateOf(dailyReviewReminderTime) }
     var formError by remember { mutableStateOf<String?>(null) }
+    var confirmHistoryClear by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -105,6 +110,17 @@ fun SettingsScreen(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { contentPadding ->
+        if (confirmHistoryClear) {
+            AlertDialog(
+                onDismissRequest = { confirmHistoryClear = false },
+                title = { Text("Clear study history?") },
+                text = { Text("This removes synced study sessions and reviews from this phone and the shared record. Plans and blocked websites stay unchanged.") },
+                confirmButton = {
+                    TextButton(onClick = { confirmHistoryClear = false; onClearStudyHistory() }) { Text("Clear history") }
+                },
+                dismissButton = { TextButton(onClick = { confirmHistoryClear = false }) { Text("Cancel") } },
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -207,7 +223,25 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("02", "Phone protection")
+                SectionHeading("02", "Study history")
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("$studyHistoryCount reviewed sessions on this phone", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Study history stays available in reviews until you clear it.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedButton(onClick = { confirmHistoryClear = true }, enabled = studyHistoryCount > 0, modifier = Modifier.fillMaxWidth()) {
+                            Text("Clear study history")
+                        }
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionHeading("03", "Phone protection")
                 PermissionCard(
                     icon = Icons.Outlined.AppBlocking,
                     title = "Website filter in Chrome",
@@ -272,7 +306,7 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("03", "Daily review reminder")
+                SectionHeading("04", "Daily review reminder")
                 Text("Choose when the phone reminds you to review today's timer sessions. Default: 9:00 PM.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(
                     value = reminderDraft,
@@ -285,7 +319,7 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("04", "Sync with Chrome")
+                SectionHeading("05", "Sync with Chrome")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),

@@ -304,9 +304,16 @@ fun FocusApp(
             exactAlarmsAllowed = exactAlarmsAllowed,
             siteFilterEnabled = siteFilterEnabled,
             dailyReviewReminderTime = dailyReviewReminderTime,
+            studyHistoryCount = studySessions.count { it.state == com.jp.freedom.domain.StudySessionState.REVIEWED },
             onDailyReviewReminderTimeChange = { value ->
                 dailyReviewReminderTime = value
                 runCatching { com.jp.freedom.enforcement.DailyReviewReminder.saveTime(context, java.time.LocalTime.parse(value)) }
+            },
+            onClearStudyHistory = {
+                scope.launch {
+                    withContext(Dispatchers.IO) { repository.clearStudyHistory() }
+                    refreshVersion++
+                }
             },
             onBack = { page = AppPage.PLANNER },
             onSettingsChange = { updated ->
@@ -413,6 +420,15 @@ fun FocusApp(
                 studySessions, allBlocks,
             ),
             onBack = { page = AppPage.PLANNER },
+            onResolveImportConflict = { phoneCopyId, keepPhoneVersion ->
+                val serverId = phoneCopyId.removeSuffix("-phone-copy")
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        repository.deleteStudyHistoryEntry(if (keepPhoneVersion) serverId else phoneCopyId)
+                    }
+                    refreshVersion++
+                }
+            },
         )
 
         AppPage.BLOCKED -> BlockedScreen(

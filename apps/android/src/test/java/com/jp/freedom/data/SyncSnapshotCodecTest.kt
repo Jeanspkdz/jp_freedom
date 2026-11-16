@@ -5,6 +5,9 @@ import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.SyncSnapshot
 import com.jp.freedom.domain.SharedStudySession
 import com.jp.freedom.domain.AccessProfile
+import com.jp.freedom.domain.StudyTimerSession
+import com.jp.freedom.domain.StudySessionState
+import com.jp.freedom.domain.CompletionStatus
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -68,6 +71,21 @@ class SyncSnapshotCodecTest {
                 accessProfile = AccessProfile.ESSENTIALS_ONLY,
             ),
         )
+
+        assertEquals(snapshot, SyncSnapshotCodec.decode(SyncSnapshotCodec.encode(snapshot)))
+    }
+
+    @Test
+    fun reviewedStudyHistoryAndReviewFieldsSurviveTheSyncContract() {
+        val session = StudyTimerSession(
+            id = "history-1", taskName = "Read chapter four", durationMillis = 3_600_000,
+            accessProfile = AccessProfile.ESSENTIALS_ONLY,
+            startedAt = Instant.parse("2026-11-05T10:00:00Z"),
+            endedAt = Instant.parse("2026-11-05T11:00:00Z"), actualMillis = 3_600_000,
+            state = StudySessionState.REVIEWED, completionStatus = CompletionStatus.FINISHED,
+            note = "Good progress", remaining = "Exercise five", nextTask = "Read chapter five",
+        )
+        val snapshot = SyncSnapshot(FocusSettings(), listOf("reddit.com"), emptyList(), studyHistory = listOf(session))
 
         assertEquals(snapshot, SyncSnapshotCodec.decode(SyncSnapshotCodec.encode(snapshot)))
     }
