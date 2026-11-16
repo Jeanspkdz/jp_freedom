@@ -393,6 +393,20 @@ fun FocusApp(
                     page = AppPage.SESSION_REVIEW
                 }
             },
+            onResumeSession = {
+                scope.launch {
+                    val resumed = withContext(Dispatchers.IO) { studyTimerController.resumePendingReview() }
+                    if (resumed != null) {
+                        studySession = resumed
+                        pendingReview = null
+                        com.jp.freedom.enforcement.StudySessionNotifier.showActive(context, resumed)
+                        page = AppPage.STUDY_TIMER
+                        PolicyAlarmScheduler.scheduleNext(context)
+                        PolicyAlarmScheduler.broadcastRecheck(context)
+                        refreshVersion++
+                    }
+                }
+            },
             onReview = { task, status, note, remaining ->
                 scope.launch {
                     val reviewed = withContext(Dispatchers.IO) {
