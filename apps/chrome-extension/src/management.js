@@ -191,10 +191,11 @@ function render(documentRef, state, now) {
   const startButton = documentRef.getElementById('start-session');
   if (startButton) startButton.disabled = !snapshot || !state.connected || state.saving || sharedSessionPending || Boolean(snapshot.pendingStudyReviewSessionId) || candidates.length > 1;
   const selectedDuration = Number(documentRef.getElementById('session-duration')?.value);
+  const customDurationSelected = !documentRef.getElementById('session-duration')?.hidden;
   for (const duration of [25, 30, 45, 60]) {
-    documentRef.getElementById(`duration-${duration}`)?.setAttribute?.('aria-pressed', String(!state.customDurationSelected && selectedDuration === duration));
+    documentRef.getElementById(`duration-${duration}`)?.setAttribute?.('aria-pressed', String(!customDurationSelected && selectedDuration === duration));
   }
-  documentRef.getElementById('duration-custom')?.setAttribute?.('aria-pressed', String(state.customDurationSelected));
+  documentRef.getElementById('duration-custom')?.setAttribute?.('aria-pressed', String(customDurationSelected));
   const stopButton = documentRef.getElementById('stop-session');
   if (stopButton) {
     stopButton.hidden = !sharedSessionPending;
@@ -395,7 +396,6 @@ export async function initializeManagement({
     blocklistMessage: null,
     pendingSessionStart: saved.pendingSessionStart ?? null,
     pendingSessionStop: saved.pendingSessionStop ?? null,
-    customDurationSelected: false,
   };
   const views = ['plan', 'sites', 'connection'];
   const showView = selected => {
@@ -415,6 +415,7 @@ export async function initializeManagement({
   documentRef.getElementById('api-url').value = state.apiUrl;
   documentRef.getElementById('api-token').value = state.apiToken;
   const durationInput = documentRef.getElementById('session-duration');
+  durationInput.hidden = true;
   if (!durationInput.value) durationInput.value = '30';
 
   const show = () => render(documentRef, state, now());
@@ -422,21 +423,18 @@ export async function initializeManagement({
     documentRef.getElementById(`duration-${duration}`).addEventListener('click', () => {
       durationInput.value = String(duration);
       durationInput.hidden = true;
-      state.customDurationSelected = false;
       state.sessionMessage = null;
       show();
     });
   }
   const customDurationButton = documentRef.getElementById('duration-custom');
   customDurationButton.addEventListener('click', () => {
-    state.customDurationSelected = true;
     durationInput.hidden = false;
     state.sessionMessage = null;
     show();
     durationInput.focus?.();
   });
   durationInput.addEventListener('input', () => {
-    state.customDurationSelected = true;
     state.sessionMessage = null;
     show();
   });
