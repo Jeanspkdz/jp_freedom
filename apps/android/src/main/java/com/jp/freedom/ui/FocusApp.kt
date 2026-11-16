@@ -67,6 +67,7 @@ fun FocusApp(
     initialBlockedReason: BlockedReason?,
     blockedRequestVersion: Int,
     openSessionReviewVersion: Int,
+    openSessionTimerVersion: Int,
     openDailyReviewVersion: Int,
     requestedDailyReviewDate: String?,
 ) {
@@ -100,6 +101,7 @@ fun FocusApp(
         scope.launch {
             val started = withContext(Dispatchers.IO) { studyTimerController.start(duration, profile) }
             if (started != null) {
+                com.jp.freedom.enforcement.StudySessionNotifier.showActive(context, started)
                 PolicyAlarmScheduler.scheduleNext(context)
                 PolicyAlarmScheduler.broadcastRecheck(context)
                 page = AppPage.STUDY_TIMER
@@ -182,6 +184,16 @@ fun FocusApp(
         if (openSessionReviewVersion > 0 && stateLoaded) {
             val destination = withContext(Dispatchers.IO) { studyTimerController.destination(openReviewRequest = true) }
             page = if (destination == StudyTimerDestination.REVIEW) AppPage.SESSION_REVIEW else AppPage.PLANNER
+        }
+    }
+
+    LaunchedEffect(openSessionTimerVersion, stateLoaded) {
+        if (openSessionTimerVersion > 0 && stateLoaded) {
+            page = when {
+                pendingReview != null -> AppPage.SESSION_REVIEW
+                studySession != null -> AppPage.STUDY_TIMER
+                else -> AppPage.PLANNER
+            }
         }
     }
 
