@@ -187,7 +187,7 @@ object SyncSnapshotReconciler {
                     remote.pendingStudyReviewSessionId,
                     local.pendingStudyReviewSessionId,
                 ),
-                studyHistory = mergeStudyHistory(remote.studyHistory, local.studyHistory, pendingPaths, conflicts),
+                studyHistory = mergeStudyHistory(remote.studyHistory, local.studyHistory, pendingPaths, conflicts, fieldConflicts),
                 sessionStartCandidates = competingStarts,
                 fieldConflicts = (remote.fieldConflicts.filterNot { conflict ->
                     "fieldConflicts.${conflict.path}.resolved" in pendingPaths || conflict.path in fieldConflicts

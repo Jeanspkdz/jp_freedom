@@ -62,5 +62,5 @@ class SiteDomainPolicyTest {
     }
 
     private fun activeState(profile: AccessProfile) =
-        FocusPolicyState(BlockedReason.FOCUS_BLOCK, activeBlock.copy(accessProfile = profile))
+        FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, profile)
 }

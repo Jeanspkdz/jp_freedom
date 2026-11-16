@@ -12,7 +12,8 @@ import java.time.LocalDateTime
 data class FocusPolicyState(
     val blockedReason: BlockedReason?,
     val activeBlock: PlannedBlock?,
-    val accessProfile: AccessProfile? = activeBlock?.accessProfile,
+    // Planned blocks schedule work; their legacy serialized profile is not a phone choice.
+    val accessProfile: AccessProfile? = activeBlock?.let { AccessProfile.ESSENTIALS_ONLY },
 )
 
 object FocusPolicy {

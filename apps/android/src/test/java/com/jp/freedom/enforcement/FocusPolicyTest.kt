@@ -29,6 +29,15 @@ class FocusPolicyTest {
     )
 
     @Test
+    fun plannedBlockDoesNotChoosePhoneAccessProfile() {
+        val legacyBlock = block.copy(accessProfile = AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH)
+        val state = FocusPolicy.evaluate(date.atTime(10, 30), listOf(legacyBlock), settings())
+
+        assertEquals(AccessProfile.ESSENTIALS_ONLY, state.accessProfile)
+        assertFalse("com.openai.chatgpt" in FocusPolicy.allowedPackages(state, "jp", setOf("phone")))
+    }
+
+    @Test
     fun blockIsActiveFromItsStartUntilItsEnd() {
         assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 0)).blockedReason)
         assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 59)).blockedReason)
@@ -199,11 +208,8 @@ class FocusPolicyTest {
     private fun evaluate(time: LocalTime, candidate: PlannedBlock = block) =
         FocusPolicy.evaluate(date.atTime(time), listOf(candidate), settings())
 
-    private fun activeState(profile: AccessProfile) = FocusPolicy.evaluate(
-        date.atTime(10, 30),
-        listOf(block.copy(accessProfile = profile)),
-        settings(),
-    )
+    private fun activeState(profile: AccessProfile) =
+        FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, profile)
 
     private fun settings(targetMinutes: Int = 180) = FocusSettings(studyHoursTargetMinutes = targetMinutes)
 }
