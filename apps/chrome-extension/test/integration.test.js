@@ -645,6 +645,47 @@ test('Chrome queues an offline stop and publishes it after reconnecting', async 
   assert.equal(harness.storage.pendingSessionStop, null);
 });
 
+test('Chrome clears a queued stop after Android has reviewed the same session', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const reviewed = {
+    id: 'phone-session-reviewed-offline-stop', taskName: 'Read chapter',
+    startedAt: '2026-11-05T10:00:00.000Z', endedAt: '2026-11-05T10:20:00.000Z',
+    durationMillis: 3_600_000, actualMillis: 1_200_000, accessProfile: 'ESSENTIALS_ONLY',
+    state: 'REVIEWED', completionStatus: 'FINISHED', note: '', remaining: '',
+  };
+  const pending = {
+    id: reviewed.id, taskName: reviewed.taskName,
+    startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z',
+    accessProfile: 'ESSENTIALS_ONLY',
+  };
+  const remote = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null,
+    pendingStudyReviewSessionId: null, studyHistory: [reviewed],
+  };
+  const harness = createHarness({
+    apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: remote,
+    lastSnapshotRevision: 1, pendingSessionStop: pending,
+  });
+  const requests = [];
+  const management = await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      requests.push(options);
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: remote }) };
+    },
+  });
+
+  await management.sync();
+
+  assert.equal(harness.storage.pendingSessionStop, null);
+  assert.equal(harness.storage.lastValidSnapshot.pendingStudyReviewSessionId, null);
+  assert.deepEqual(harness.storage.lastValidSnapshot.studyHistory, [reviewed]);
+  assert.equal(requests.some(request => request.method === 'PUT'), false);
+  assert.doesNotMatch(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+  assert.match(harness.nodes.get('sync-state').textContent, /synced/i);
+});
+
 test('an expired offline Chrome start is synced as history without becoming active on Android', async () => {
   const now = new Date('2026-11-05T11:30:00.000Z');
   const pending = { id: 'chrome-expired-offline', taskName: 'Study session', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' };

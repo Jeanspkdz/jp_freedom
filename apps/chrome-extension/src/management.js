@@ -607,6 +607,13 @@ export async function initializeManagement({
       await chromeApi.storage.local.set({ pendingSessionStop: null });
       return remote;
     }
+    if (!remote.snapshot.activeStudySession
+      && !remote.snapshot.pendingStudyReviewSessionId
+      && remote.snapshot.studyHistory?.some(session => session.id === pending.id && session.state === 'REVIEWED')) {
+      state.pendingSessionStop = null;
+      await chromeApi.storage.local.set({ pendingSessionStop: null });
+      return remote;
+    }
     if (remote.snapshot.activeStudySession?.id !== pending.id) {
       throw new Error('The shared study session changed before the pending stop synced.');
     }
