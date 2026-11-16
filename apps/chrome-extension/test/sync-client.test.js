@@ -20,3 +20,19 @@ test('sync snapshots accept bare domains and reject URL values', () => {
     snapshot: { ...validResponse.snapshot, desktopBlockedDomains: ['https://example.com/path'] },
   }), false);
 });
+
+test('sync snapshots accept an Android-started session with absolute start and end instants', () => {
+  const activeStudySession = {
+    id: 'session-1', taskName: 'Study',
+    startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z',
+    accessProfile: 'ESSENTIALS_ONLY',
+  };
+  assert.equal(validSnapshotResponse({
+    ...validResponse,
+    snapshot: { ...validResponse.snapshot, activeStudySession },
+  }), true);
+  assert.equal(validSnapshotResponse({
+    ...validResponse,
+    snapshot: { ...validResponse.snapshot, activeStudySession: { ...activeStudySession, endsAt: 'invalid' } },
+  }), false);
+});

@@ -34,6 +34,15 @@ data class SyncSnapshot(
     val settings: FocusSettings,
     val desktopBlockedDomains: List<String>,
     val blocks: List<PlannedBlock>,
+    val activeStudySession: SharedStudySession? = null,
+)
+
+data class SharedStudySession(
+    val id: String,
+    val taskName: String,
+    val startedAt: java.time.Instant,
+    val endsAt: java.time.Instant,
+    val accessProfile: AccessProfile,
 )
 
 data class SnapshotMergeResult(
@@ -115,7 +124,16 @@ object SyncSnapshotReconciler {
         }.sortedWith(compareBy<PlannedBlock>({ it.date }, { it.startTime }, { it.id }))
 
         return SnapshotMergeResult(
-            snapshot = SyncSnapshot(settings, domains, blocks),
+            snapshot = SyncSnapshot(
+                settings = settings,
+                desktopBlockedDomains = domains,
+                blocks = blocks,
+                activeStudySession = choose(
+                    "activeStudySession",
+                    remote.activeStudySession,
+                    local.activeStudySession,
+                ),
+            ),
             conflictedPaths = conflicts,
         )
     }

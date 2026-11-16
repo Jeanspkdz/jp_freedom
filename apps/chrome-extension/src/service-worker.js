@@ -45,6 +45,13 @@ function nextBoundary(snapshot, now) {
       if (boundary > now.getTime()) boundaries.push(boundary);
     }
   }
+  const session = snapshot.activeStudySession;
+  if (session) {
+    for (const value of [session.startedAt, session.endsAt]) {
+      const boundary = Date.parse(value);
+      if (Number.isFinite(boundary) && boundary > now.getTime()) boundaries.push(boundary);
+    }
+  }
   return boundaries.length ? Math.min(...boundaries) : null;
 }
 

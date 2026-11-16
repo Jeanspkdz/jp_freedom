@@ -29,8 +29,12 @@ lists are intentional and stay empty.
 Snapshots contain `version: 1`, `settings.requiredBlockCount`,
 `settings.eveningCutoff` (`21:00`, `22:00`, or `23:00`),
 `desktopBlockedDomains`, and dated blocks with their profile, status, and
-optional note. The initial desktop list selects Facebook, Instagram, TikTok, X,
-and Reddit. YouTube and WhatsApp Web are available unless selected by the user.
+optional note. They also contain `activeStudySession`, either null or an
+Android-started timer with its task, access profile, and absolute `startedAt`
+and `endsAt` instants. The session's original times are retained during sync;
+Chrome blocks selected desktop sites only between those instants. The initial
+desktop list selects Facebook, Instagram, TikTok, X, and Reddit. YouTube and
+WhatsApp Web are available unless selected by the user.
 
 While Chrome is open, the service worker polls the snapshot API once per minute
 and refreshes immediately on startup. This receives Android changes, including
@@ -48,11 +52,13 @@ Until the extension receives its first valid snapshot, it does not block
 browsing and shows that synchronization is not active.
 
 The extension opens a full management page when clicked. That page shows the
-shared domain list, current block and its planned end time, and synchronization
-status. A blocked page shows the activity and planned end time; it has no bypass
-control. Marking the block Finished on Android releases it when the extension
+shared domain list, current planned block or Android study timer, its end time
+and remaining time, and synchronization status. A blocked page shows the
+activity and planned end time; it has no bypass control. Marking a planned block
+Finished or ending a timer on Android releases its rules when the extension
 receives the updated snapshot. Blocking applies to top-level page navigation,
-not embedded content on unrelated sites.
+not embedded content on unrelated sites. Android access profiles and evening
+restrictions remain phone-only.
 
 Every route except `/health` requires `Authorization: Bearer <SYNC_API_TOKEN>`.
 The token is supplied to the Neon Function at deploy time and entered into each

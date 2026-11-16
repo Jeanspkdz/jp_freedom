@@ -1,5 +1,5 @@
 import { applySnapshotRules } from './enforcement.js';
-import { getCurrentAndNext } from './policy.js';
+import { getActiveStudySession, getCurrentAndNext } from './policy.js';
 import { readSnapshot, snapshotEndpoint, validSnapshotResponse } from './sync-client.js';
 import { isValidDomain } from './domain.js';
 
@@ -63,14 +63,17 @@ function renderFocusMeter(documentRef, current, now) {
     return;
   }
 
-  let start = planTimeInSeconds(current.startTime);
-  let end = planTimeInSeconds(current.endTime);
-  let currentTime = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-  if (end <= start) end += 24 * 3600;
-  if (currentTime < start && end > 24 * 3600) currentTime += 24 * 3600;
-  const duration = end - start;
+  const start = current.studySession ? Date.parse(current.startedAt) / 1000 : planTimeInSeconds(current.startTime);
+  const end = current.studySession ? Date.parse(current.endsAt) / 1000 : planTimeInSeconds(current.endTime);
+  let currentTime = current.studySession
+    ? now.getTime() / 1000
+    : now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  let adjustedEnd = end;
+  if (!current.studySession && end <= start) adjustedEnd += 24 * 3600;
+  if (!current.studySession && currentTime < start && adjustedEnd > 24 * 3600) currentTime += 24 * 3600;
+  const duration = adjustedEnd - start;
   const elapsed = Math.min(Math.max(currentTime - start, 0), duration);
-  const secondsLeft = Math.max(end - currentTime, 0);
+  const secondsLeft = Math.max(adjustedEnd - currentTime, 0);
   const percent = duration > 0 ? elapsed / duration * 100 : 0;
   remainingValue.textContent = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
   remaining.hidden = false;
@@ -132,7 +135,11 @@ function render(documentRef, state, now) {
   const errorMessage = documentRef.getElementById('sync-error');
   const currentBlock = documentRef.getElementById('current-block');
   const plannedEnd = documentRef.getElementById('planned-end');
-  const current = snapshot ? getCurrentAndNext(snapshot, now).current : null;
+  const session = snapshot ? getActiveStudySession(snapshot, now) : null;
+  const plannedBlock = snapshot ? getCurrentAndNext(snapshot, now).current : null;
+  const current = session
+    ? { id: session.id, name: session.taskName, studySession: true, startedAt: session.startedAt, endsAt: session.endsAt }
+    : plannedBlock;
   const active = Boolean(current);
   documentRef.getElementById('focus-heading').textContent = active ? 'In focus' : 'Focus plan';
   documentRef.getElementById('focus-heading').classList?.toggle('is-active', active);
@@ -190,11 +197,13 @@ function render(documentRef, state, now) {
     return;
   }
 
-  protection.textContent = 'Protection is active when a focus block is scheduled.';
+  protection.textContent = 'Protection is active during a study session or scheduled focus block.';
   sync.textContent = error || !connected ? 'Offline. Using cached plan.' : 'Synced. Using latest plan.';
   currentBlock.textContent = current?.name ?? 'No active focus block';
   plannedEnd.hidden = !current;
-  plannedEnd.textContent = current ? `Planned end: ${current.endTime}` : '';
+  plannedEnd.textContent = !current ? '' : current.studySession
+    ? `Planned end: ${new Date(current.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+    : `Planned end: ${current.endTime}`;
 }
 
 function ensureCustomCheckbox(documentRef, state, domain) {

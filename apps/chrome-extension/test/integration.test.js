@@ -400,6 +400,35 @@ test('a successful sync shows the active block and planned end, saves the snapsh
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['facebook.com', 'youtube.com']);
 });
 
+test('an Android timer snapshot shows its original end and remaining time while installing desktop blocks', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: {
+      id: 'phone-session-1',
+      taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z',
+      endsAt: '2026-11-05T11:15:00.000Z',
+      accessProfile: 'ESSENTIALS_ONLY',
+    },
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async () => ({ ok: true, json: async () => ({ revision: 3, updatedAt: now.toISOString(), snapshot }) }),
+  });
+
+  assert.equal(harness.nodes.get('current-block').textContent, 'Read chapter four');
+  assert.equal(harness.nodes.get('planned-end').textContent, `Planned end: ${new Date(snapshot.activeStudySession.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`);
+  assert.equal(harness.nodes.get('focus-remaining-value').textContent, '45:00');
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+});
+
 test('management shows the full plan for today and tomorrow from the synced snapshot', async () => {
   const now = new Date(2026, 10, 6, 10, 30);
   const snapshot = {
@@ -544,6 +573,28 @@ test('the blocked page shows the active activity and planned end without a bypas
   assert.equal(harness.nodes.has('bypass'), false);
 });
 
+test('the blocked page explains an Android-started session and its planned end without a bypass', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: {
+      id: 'phone-session-1', taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z', endsAt: '2026-11-05T11:15:00.000Z',
+      accessProfile: 'ESSENTIALS_ONLY',
+    },
+  };
+  const harness = createHarness({ lastValidSnapshot: snapshot });
+
+  await initializeBlockedPage({ ...harness, now: () => now });
+
+  assert.equal(harness.nodes.get('blocked-activity').textContent, 'Read chapter four');
+  assert.equal(harness.nodes.get('blocked-end').textContent, `Planned end: ${new Date(snapshot.activeStudySession.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`);
+  assert.equal(harness.nodes.has('bypass'), false);
+});
+
 test('an invalid newer snapshot does not replace the last valid cached plan', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -591,6 +642,56 @@ test('offline enforcement refreshes its dynamic rules at the cached block bounda
   await refreshFocusState(harness.chromeApi, new Date(2026, 10, 5, 10, 0));
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['youtube.com']);
   assert.equal(harness.alarms.get('focus-state-refresh').when, new Date(2026, 10, 5, 11, 0).getTime());
+});
+
+test('a synced Android timer installs site rules in the background until its absolute end', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com', 'youtube.com'],
+    blocks: [],
+    activeStudySession: {
+      id: 'phone-session-1', taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z', endsAt: '2026-11-05T11:15:00.000Z',
+      accessProfile: 'ESSENTIALS_ONLY',
+    },
+  };
+  const harness = createHarness({ lastValidSnapshot: snapshot });
+
+  await refreshFocusState(harness.chromeApi, now);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com', 'youtube.com']);
+  assert.equal(harness.alarms.get('focus-state-refresh').when, Date.parse(snapshot.activeStudySession.endsAt));
+
+  await refreshFocusState(harness.chromeApi, new Date(snapshot.activeStudySession.endsAt));
+  assert.deepEqual(harness.rules, []);
+});
+
+test('the background worker lifts timer rules when Android syncs an early stop', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const active = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: {
+      id: 'phone-session-1', taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z', endsAt: '2026-11-05T11:15:00.000Z',
+      accessProfile: 'ESSENTIALS_ONLY',
+    },
+  };
+  const stopped = { ...active, activeStudySession: null };
+  const harness = createHarness({
+    apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: active, lastSnapshotRevision: 1,
+  });
+  await refreshFocusState(harness.chromeApi, now);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+
+  await refreshRemoteSnapshot(harness.chromeApi, async () => ({
+    ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: stopped }),
+  }), now);
+
+  assert.deepEqual(harness.rules, []);
 });
 
 test('the background worker polls for Android completion and releases rules with the management page closed', async () => {

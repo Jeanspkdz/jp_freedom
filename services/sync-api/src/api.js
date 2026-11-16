@@ -11,6 +11,7 @@ export const DEFAULT_SNAPSHOT = Object.freeze({
     'reddit.com',
   ]),
   blocks: Object.freeze([]),
+  activeStudySession: null,
 });
 
 const accessProfiles = new Set([
@@ -74,6 +75,18 @@ export function validateSnapshot(snapshot) {
     || desktopBlockedDomains.some(domain => typeof domain !== 'string' || !domainPattern.test(domain))
     || new Set(desktopBlockedDomains).size !== desktopBlockedDomains.length) return 'invalid_blocklist';
   if (!Array.isArray(blocks) || blocks.length > 1000) return 'invalid_blocks';
+  const session = snapshot.activeStudySession;
+  if (session !== undefined && session !== null) {
+    const startedAt = typeof session.startedAt === 'string' ? Date.parse(session.startedAt) : NaN;
+    const endsAt = typeof session.endsAt === 'string' ? Date.parse(session.endsAt) : NaN;
+    if (!session || typeof session !== 'object' || Array.isArray(session)
+      || typeof session.id !== 'string' || session.id.length === 0 || session.id.length > 80
+      || typeof session.taskName !== 'string' || session.taskName.length > 200
+      || !accessProfiles.has(session.accessProfile)
+      || !Number.isFinite(startedAt) || !Number.isFinite(endsAt) || startedAt >= endsAt) {
+      return 'invalid_study_session';
+    }
+  }
 
   const ids = new Set();
   const byDate = new Map();

@@ -95,6 +95,47 @@ test('a valid Android snapshot is revisioned and returned to other devices', asy
   assert.deepEqual((await read.json()).snapshot, snapshot);
 });
 
+test('the revisioned sync contract preserves an Android-started session for Chrome', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const snapshot = {
+    ...emptySnapshot,
+    activeStudySession: {
+      id: 'session-1',
+      taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z',
+      endsAt: '2026-11-05T11:15:00.000Z',
+      accessProfile: 'ESSENTIALS_ONLY',
+    },
+  };
+
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot },
+  }));
+  assert.equal(write.status, 200);
+  assert.deepEqual((await api(request('/v1/snapshot')).then(response => response.json())).snapshot.activeStudySession, snapshot.activeStudySession);
+});
+
+test('the revisioned sync contract rejects a session whose end does not follow its start', async () => {
+  const api = createSyncApi({ store: fakeStore(), token });
+  const response = await api(request('/v1/snapshot', {
+    method: 'PUT',
+    body: {
+      expectedRevision: 0,
+      snapshot: {
+        ...emptySnapshot,
+        activeStudySession: {
+          id: 'session-1', taskName: 'Study', accessProfile: 'ESSENTIALS_ONLY',
+          startedAt: '2026-11-05T11:00:00.000Z', endsAt: '2026-11-05T10:00:00.000Z',
+        },
+      },
+    },
+  }));
+
+  assert.equal(response.status, 422);
+  assert.deepEqual(await response.json(), { error: 'invalid_study_session' });
+});
+
 test('concurrent edits receive a conflict instead of overwriting newer data', async () => {
   const api = createSyncApi({ store: fakeStore(), token });
   const first = await api(request('/v1/snapshot', {

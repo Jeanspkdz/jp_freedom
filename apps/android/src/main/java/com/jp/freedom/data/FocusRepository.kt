@@ -14,6 +14,7 @@ import com.jp.freedom.domain.DesktopSiteBlocklist
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.SyncSnapshot
+import com.jp.freedom.domain.SharedStudySession
 import com.jp.freedom.domain.StudyTimerSession
 import com.jp.freedom.domain.StudySessionState
 import com.jp.freedom.domain.StudySessionStore
@@ -88,30 +89,46 @@ class FocusRepository(context: Context) : StudySessionStore {
 
     override fun startStudySession(session: StudyTimerSession): Boolean {
         val db = database.writableDatabase
+        var started = false
         db.beginTransaction()
         try {
             val existing = db.rawQuery("SELECT 1 FROM study_sessions WHERE state IN (?, ?, ?) LIMIT 1", arrayOf("ACTIVE", "PENDING_REVIEW", "BREAKING")).use { it.moveToFirst() }
             if (existing) return false
             saveStudySession(session)
+            markDirty(db, listOf("activeStudySession"))
             db.setTransactionSuccessful()
-            return true
+            started = true
         } finally {
             db.endTransaction()
         }
+        if (started) scheduleSync()
+        return started
     }
 
     override fun finishStudySession(session: StudyTimerSession): Boolean {
         val db = database.writableDatabase
-        return db.update(
-            "study_sessions",
-            ContentValues().apply {
-                put("ended_at", session.endedAt?.toEpochMilli())
-                put("actual_ms", session.actualMillis)
-                put("state", session.state.name)
-            },
-            "id = ? AND state = ?",
-            arrayOf(session.id, StudySessionState.ACTIVE.name),
-        ) == 1
+        var finished = false
+        db.beginTransaction()
+        try {
+            finished = db.update(
+                "study_sessions",
+                ContentValues().apply {
+                    put("ended_at", session.endedAt?.toEpochMilli())
+                    put("actual_ms", session.actualMillis)
+                    put("state", session.state.name)
+                },
+                "id = ? AND state = ?",
+                arrayOf(session.id, StudySessionState.ACTIVE.name),
+            ) == 1
+            if (finished) {
+                markDirty(db, listOf("activeStudySession"))
+                db.setTransactionSuccessful()
+            }
+        } finally {
+            db.endTransaction()
+        }
+        if (finished) scheduleSync()
+        return finished
     }
 
     private fun readStudySession(db: SQLiteDatabase, where: String, args: Array<String>): StudyTimerSession? =
@@ -399,6 +416,15 @@ class FocusRepository(context: Context) : StudySessionStore {
         settings = readSettings(db),
         desktopBlockedDomains = readDomains(db),
         blocks = queryBlocks(db, null, null),
+        activeStudySession = readStudySession(db, "state = ?", arrayOf(StudySessionState.ACTIVE.name))?.let { session ->
+            SharedStudySession(
+                id = session.id,
+                taskName = session.taskName,
+                startedAt = session.startedAt,
+                endsAt = session.startedAt.plusMillis(session.durationMillis),
+                accessProfile = session.accessProfile,
+            )
+        },
     )
 
     private fun readSyncState(db: SQLiteDatabase): PendingSyncState {
