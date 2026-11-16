@@ -16,12 +16,13 @@ object SiteDomainPolicy {
         if (state.blockedReason == null) return true
         if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return false
 
+        val normalized = domain.trimEnd('.').lowercase()
         if (state.allowedPackageSnapshot != null) {
-            return "com.android.chrome" in state.allowedPackageSnapshot
+            if ("com.android.chrome" !in state.allowedPackageSnapshot) return false
+            return matchesDomain(normalized, chatGptDomains) || normalized in chatGptAuthDomains || normalized in searchHosts
         }
 
         val profile = state.accessProfile ?: return false
-        val normalized = domain.trimEnd('.').lowercase()
         val chatGptAllowed = profile != AccessProfile.ESSENTIALS_ONLY
         val searchAllowed = profile == AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH
         if (chatGptAllowed &&

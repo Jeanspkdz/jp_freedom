@@ -102,13 +102,21 @@ fun FocusApp(
     var dailyReviewReminderTime by remember { mutableStateOf(com.jp.freedom.enforcement.DailyReviewReminder.time(context).toString()) }
     val studyTimerController = remember(repository) { StudyTimerController(repository) }
     var queuedTimerStart by remember { mutableStateOf<Pair<Duration, SavedAccessProfile?>?>(null) }
+    var timerStartError by remember { mutableStateOf<String?>(null) }
     fun persistTimerStart(duration: Duration, profile: SavedAccessProfile?) {
         scope.launch {
-            val started = withContext(Dispatchers.IO) {
+            val resolved = withContext(Dispatchers.IO) {
                 val current = repository.reconcileAccessProfiles(InstalledAppInventory.list(context).map { it.packageName }.toSet())
-                studyTimerController.start(duration, profile?.let { selected -> current.firstOrNull { it.id == selected.id } })
+                if (profile == null) null else current.firstOrNull { it.id == profile.id }
             }
+            if (profile != null && resolved == null) {
+                timerStartError = "That access profile is no longer available. Choose another profile."
+                refreshVersion++
+                return@launch
+            }
+            val started = withContext(Dispatchers.IO) { studyTimerController.start(duration, resolved) }
             if (started != null) {
+                timerStartError = null
                 PolicyAlarmScheduler.scheduleNext(context)
                 PolicyAlarmScheduler.broadcastRecheck(context)
                 page = AppPage.STUDY_TIMER
@@ -384,6 +392,7 @@ fun FocusApp(
             profiles = remember(refreshVersion, activityResumeVersion) {
                 repository.reconcileAccessProfiles(InstalledAppInventory.list(context).map { it.packageName }.toSet())
             },
+            startError = timerStartError,
             installedApps = remember(activityResumeVersion) { InstalledAppInventory.list(context) },
             onCreateProfile = { name, packages ->
                 repository.saveAccessProfile(SavedAccessProfile(java.util.UUID.randomUUID().toString(), name, packages))
@@ -399,7 +408,7 @@ fun FocusApp(
                 if (studyTimerController.canMaintainProfile(profileId) && repository.deleteAccessProfile(profileId)) refreshVersion++
             },
             onBack = { page = AppPage.PLANNER },
-            onStart = startTimer,
+            onStart = { duration, profile -> timerStartError = null; startTimer(duration, profile) },
             onStop = {
                 scope.launch {
                     val stopped = withContext(Dispatchers.IO) {
