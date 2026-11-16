@@ -28,6 +28,13 @@ const studySessionStates = new Set(['ACTIVE', 'PENDING_REVIEW', 'BREAKING', 'REV
 const supportedCutoffs = new Set(['21:00', '22:00', '23:00']);
 const domainPattern = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const blockIdPattern = /^[A-Za-z0-9_-]{1,80}$/;
+const packagePattern = /^[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+$/;
+function validProfileSelection(session) {
+  return (session.profileId == null || (typeof session.profileId === 'string' && session.profileId.length <= 80))
+    && (session.profileName === undefined || (typeof session.profileName === 'string' && session.profileName.length <= 200))
+    && (session.allowedPackages === undefined || (Array.isArray(session.allowedPackages) && session.allowedPackages.length <= 500
+      && session.allowedPackages.every(value => typeof value === 'string' && packagePattern.test(value))));
+}
 const corsHeaders = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET, PUT, OPTIONS',
@@ -88,6 +95,7 @@ export function validateSnapshot(snapshot) {
       || typeof session.id !== 'string' || session.id.length === 0 || session.id.length > 80
       || typeof session.taskName !== 'string' || session.taskName.length > 200
       || !accessProfiles.has(session.accessProfile)
+      || !validProfileSelection(session)
       || !Number.isFinite(startedAt) || !Number.isFinite(endsAt) || startedAt >= endsAt) {
       return 'invalid_study_session';
     }
@@ -101,6 +109,7 @@ export function validateSnapshot(snapshot) {
         || typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 80
         || typeof candidate.taskName !== 'string' || candidate.taskName.length > 200
         || !accessProfiles.has(candidate.accessProfile)
+        || !validProfileSelection(candidate)
         || !Number.isFinite(startedAt) || !Number.isFinite(endsAt) || startedAt >= endsAt;
     }) || new Set(sessionStartCandidates.map(candidate => candidate.id)).size !== sessionStartCandidates.length) {
     return 'invalid_session_start_candidates';
@@ -138,6 +147,7 @@ export function validateSnapshot(snapshot) {
       || typeof entry.taskName !== 'string' || entry.taskName.length > 200
       || !Number.isSafeInteger(entry.durationMillis) || entry.durationMillis < 0
       || !accessProfiles.has(entry.accessProfile)
+      || !validProfileSelection(entry)
       || !Number.isFinite(startedAt)
       || (endedAt !== null && (!Number.isFinite(endedAt) || endedAt < startedAt))
       || !Number.isSafeInteger(entry.actualMillis) || entry.actualMillis < 0

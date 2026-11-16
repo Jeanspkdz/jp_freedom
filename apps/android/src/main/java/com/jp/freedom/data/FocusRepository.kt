@@ -19,6 +19,7 @@ import com.jp.freedom.domain.StudyTimerSession
 import com.jp.freedom.domain.StudySessionState
 import com.jp.freedom.domain.StudySessionStore
 import com.jp.freedom.domain.StudyTimerPolicy
+import com.jp.freedom.domain.SavedAccessProfile
 import com.jp.freedom.domain.SyncFieldConflict
 import com.jp.freedom.sync.SyncScheduler
 import java.time.LocalDate
@@ -57,6 +58,48 @@ class FocusRepository(context: Context) : StudySessionStore {
     private val appContext = context.applicationContext
     private val database = FocusDatabase(appContext)
 
+    fun accessProfiles(): List<SavedAccessProfile> = database.readableDatabase.query(
+        "access_profiles", null, null, null, null, null, "name COLLATE NOCASE",
+    ).use { cursor -> buildList {
+        while (cursor.moveToNext()) add(SavedAccessProfile(
+            cursor.getString(cursor.getColumnIndexOrThrow("id")),
+            cursor.getString(cursor.getColumnIndexOrThrow("name")),
+            jsonPackages(cursor.getString(cursor.getColumnIndexOrThrow("packages"))),
+        ))
+    } }
+
+    fun saveAccessProfile(profile: SavedAccessProfile) {
+        require(profile.name.isNotBlank())
+        database.writableDatabase.insertWithOnConflict("access_profiles", null, ContentValues().apply {
+            put("id", profile.id)
+            put("name", profile.name.trim())
+            put("packages", JSONArray(profile.packages.sorted()).toString())
+        }, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun reconcileAccessProfiles(installedPackages: Set<String>): List<SavedAccessProfile> =
+        accessProfiles().map { profile ->
+            val current = profile.copy(packages = profile.packages intersect installedPackages)
+            if (current != profile) saveAccessProfile(current)
+            current
+        }
+
+    fun removePackageFromProfiles(packageName: String) {
+        accessProfiles().forEach { profile ->
+            if (packageName in profile.packages) saveAccessProfile(profile.copy(packages = profile.packages - packageName))
+        }
+        activeStudySession()?.let { session ->
+            if (packageName in session.allowedPackages.orEmpty()) {
+                saveStudySession(session.copy(allowedPackages = session.allowedPackages.orEmpty() - packageName))
+                markDirty(database.writableDatabase, listOf("activeStudySession"))
+            }
+        }
+    }
+
+    private fun jsonPackages(json: String): Set<String> = JSONArray(json).let { array ->
+        (0 until array.length()).map(array::getString).toSet()
+    }
+
     fun blocksForDate(date: LocalDate): List<PlannedBlock> =
         queryBlocks(database.readableDatabase, "date = ?", arrayOf(date.toString()))
 
@@ -93,6 +136,9 @@ class FocusRepository(context: Context) : StudySessionStore {
         val values = ContentValues().apply {
             put("id", session.id); put("task_name", session.taskName); put("duration_ms", session.durationMillis)
             put("access_profile", session.accessProfile.name); put("started_at", session.startedAt.toEpochMilli())
+            put("profile_id", session.profileId)
+            put("profile_name", session.profileName)
+            put("allowed_packages", session.allowedPackages?.let { JSONArray(it.sorted()).toString() })
             session.endedAt?.let { put("ended_at", it.toEpochMilli()) } ?: putNull("ended_at")
             put("actual_ms", session.actualMillis); put("state", session.state.name)
             session.completionStatus?.let { put("completion_status", it.name) } ?: putNull("completion_status")
@@ -184,6 +230,9 @@ class FocusRepository(context: Context) : StudySessionStore {
                 taskName = cursor.getString(cursor.getColumnIndexOrThrow("task_name")),
                 durationMillis = cursor.getLong(cursor.getColumnIndexOrThrow("duration_ms")),
                 accessProfile = AccessProfile.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("access_profile"))),
+                profileId = cursor.getColumnIndexOrThrow("profile_id").let { if (cursor.isNull(it)) null else cursor.getString(it) },
+                profileName = cursor.getString(cursor.getColumnIndexOrThrow("profile_name")),
+                allowedPackages = cursor.getColumnIndexOrThrow("allowed_packages").let { if (cursor.isNull(it)) null else jsonPackages(cursor.getString(it)) },
                 startedAt = Instant.ofEpochMilli(cursor.getLong(cursor.getColumnIndexOrThrow("started_at"))),
                 endedAt = cursor.getColumnIndexOrThrow("ended_at").let { if (cursor.isNull(it)) null else Instant.ofEpochMilli(cursor.getLong(it)) },
                 actualMillis = cursor.getLong(cursor.getColumnIndexOrThrow("actual_ms")),
@@ -580,7 +629,13 @@ class FocusRepository(context: Context) : StudySessionStore {
         buildList {
             for (index in 0 until array.length()) {
                 val item = array.getJSONObject(index)
-                add(SharedStudySession(item.getString("id"), item.getString("taskName"), Instant.parse(item.getString("startedAt")), Instant.parse(item.getString("endsAt")), AccessProfile.valueOf(item.getString("accessProfile"))))
+                add(SharedStudySession(
+                    item.getString("id"), item.getString("taskName"), Instant.parse(item.getString("startedAt")),
+                    Instant.parse(item.getString("endsAt")), AccessProfile.valueOf(item.getString("accessProfile")),
+                    item.optString("profileId").takeIf { it.isNotBlank() && it != "null" },
+                    item.optString("profileName", "Essentials only"),
+                    item.optJSONArray("allowedPackages")?.let { packages -> (0 until packages.length()).map(packages::getString).toSet() },
+                ))
             }
         }
     }
@@ -590,6 +645,9 @@ class FocusRepository(context: Context) : StudySessionStore {
             candidates.forEach { item -> put(JSONObject().apply {
                 put("id", item.id); put("taskName", item.taskName); put("startedAt", item.startedAt.toString())
                 put("endsAt", item.endsAt.toString()); put("accessProfile", item.accessProfile.name)
+                put("profileId", item.profileId ?: JSONObject.NULL)
+                put("profileName", item.profileName)
+                item.allowedPackages?.let { put("allowedPackages", JSONArray(it.sorted())) }
             }) }
         }
         db.update(TABLE_SYNC_STATE, ContentValues().apply { put(COLUMN_SESSION_CANDIDATES, array.toString()) }, "$COLUMN_SETTINGS_ID = 1", null)
@@ -610,6 +668,9 @@ class FocusRepository(context: Context) : StudySessionStore {
                 startedAt = session.startedAt,
                 endsAt = session.startedAt.plusMillis(session.durationMillis),
                 accessProfile = session.accessProfile,
+                profileId = session.profileId,
+                profileName = session.profileName,
+                allowedPackages = session.allowedPackages,
             )
         },
         phoneReceivedStudySessionId = readReceivedSessionId(db),
@@ -729,6 +790,9 @@ class FocusRepository(context: Context) : StudySessionStore {
         val values = ContentValues().apply {
             put("id", session.id); put("task_name", session.taskName); put("duration_ms", session.durationMillis)
             put("access_profile", session.accessProfile.name); put("started_at", session.startedAt.toEpochMilli())
+            put("profile_id", session.profileId)
+            put("profile_name", session.profileName)
+            put("allowed_packages", session.allowedPackages?.let { JSONArray(it.sorted()).toString() })
             session.endedAt?.let { put("ended_at", it.toEpochMilli()) } ?: putNull("ended_at")
             put("actual_ms", session.actualMillis); put("state", session.state.name)
             session.completionStatus?.let { put("completion_status", it.name) } ?: putNull("completion_status")
@@ -802,6 +866,7 @@ class FocusRepository(context: Context) : StudySessionStore {
             seedDomains(db)
             insertInitialSyncState(db)
             createStudySessionTable(db)
+            createAccessProfileTable(db)
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -879,6 +944,12 @@ class FocusRepository(context: Context) : StudySessionStore {
                 addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_FIELD_CONFLICTS, "TEXT NOT NULL DEFAULT '[]'")
                 addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_SESSION_CANDIDATES, "TEXT NOT NULL DEFAULT '[]'")
             }
+            if (oldVersion < 11) {
+                createAccessProfileTable(db)
+                addColumnIfMissing(db, "study_sessions", "profile_id", "TEXT")
+                addColumnIfMissing(db, "study_sessions", "profile_name", "TEXT NOT NULL DEFAULT 'Essentials only'")
+                addColumnIfMissing(db, "study_sessions", "allowed_packages", "TEXT")
+            }
         }
 
         private fun addColumnIfMissing(db: SQLiteDatabase, table: String, column: String, definition: String) {
@@ -897,7 +968,12 @@ class FocusRepository(context: Context) : StudySessionStore {
                 access_profile TEXT NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER,
                 actual_ms INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL,
                 completion_status TEXT, note TEXT NOT NULL DEFAULT '', remaining TEXT NOT NULL DEFAULT '',
-                break_started_at INTEGER, break_duration_ms INTEGER NOT NULL DEFAULT 0, next_task TEXT NOT NULL DEFAULT '')""")
+                break_started_at INTEGER, break_duration_ms INTEGER NOT NULL DEFAULT 0, next_task TEXT NOT NULL DEFAULT '',
+                profile_id TEXT, profile_name TEXT NOT NULL DEFAULT 'Essentials only', allowed_packages TEXT)""")
+        }
+
+        private fun createAccessProfileTable(db: SQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS access_profiles (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, packages TEXT NOT NULL)")
         }
 
         private fun createPlanTables(db: SQLiteDatabase) {
@@ -966,7 +1042,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 10
+            private const val DATABASE_VERSION = 11
         }
     }
 

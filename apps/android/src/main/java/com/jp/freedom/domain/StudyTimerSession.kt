@@ -24,6 +24,9 @@ data class StudyTimerSession(
     val breakStartedAt: Instant? = null,
     val breakDurationMillis: Long = 0,
     val nextTask: String = "",
+    val profileId: String? = null,
+    val profileName: String = "Essentials only",
+    val allowedPackages: Set<String>? = null,
 ) {
     companion object {
         fun start(taskName: String, duration: Duration, accessProfile: AccessProfile, now: Instant) =
@@ -74,6 +77,9 @@ object StudyTimerPolicy {
                 taskName = session.taskName,
                 durationMillis = durationMillis,
                 accessProfile = AccessProfile.ESSENTIALS_ONLY,
+                profileId = session.profileId,
+                profileName = session.profileName,
+                allowedPackages = session.allowedPackages,
                 startedAt = session.startedAt,
                 endedAt = session.endsAt,
                 actualMillis = durationMillis,
@@ -85,6 +91,9 @@ object StudyTimerPolicy {
                 taskName = session.taskName,
                 durationMillis = durationMillis,
                 accessProfile = AccessProfile.ESSENTIALS_ONLY,
+                profileId = session.profileId,
+                profileName = session.profileName,
+                allowedPackages = session.allowedPackages,
                 startedAt = session.startedAt,
             )
         }

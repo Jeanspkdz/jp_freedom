@@ -49,6 +49,9 @@ object SyncSnapshotCodec {
                 put("startedAt", session.startedAt.toString())
                 put("endsAt", session.endsAt.toString())
                 put("accessProfile", session.accessProfile.name)
+                put("profileId", session.profileId ?: JSONObject.NULL)
+                put("profileName", session.profileName)
+                session.allowedPackages?.let { put("allowedPackages", JSONArray(it.sorted())) }
             }
         } ?: JSONObject.NULL)
         put("sessionStartCandidates", JSONArray().apply {
@@ -59,6 +62,9 @@ object SyncSnapshotCodec {
                     put("startedAt", session.startedAt.toString())
                     put("endsAt", session.endsAt.toString())
                     put("accessProfile", session.accessProfile.name)
+                    put("profileId", session.profileId ?: JSONObject.NULL)
+                    put("profileName", session.profileName)
+                    session.allowedPackages?.let { put("allowedPackages", JSONArray(it.sorted())) }
                 })
             }
         })
@@ -80,6 +86,9 @@ object SyncSnapshotCodec {
                     put("taskName", session.taskName)
                     put("durationMillis", session.durationMillis)
                     put("accessProfile", session.accessProfile.name)
+                    put("profileId", session.profileId ?: JSONObject.NULL)
+                    put("profileName", session.profileName)
+                    session.allowedPackages?.let { put("allowedPackages", JSONArray(it.sorted())) }
                     put("startedAt", session.startedAt.toString())
                     put("endedAt", session.endedAt?.toString() ?: JSONObject.NULL)
                     put("actualMillis", session.actualMillis)
@@ -132,6 +141,9 @@ object SyncSnapshotCodec {
                 startedAt = Instant.parse(it.getString("startedAt")),
                 endsAt = Instant.parse(it.getString("endsAt")),
                 accessProfile = AccessProfile.valueOf(it.getString("accessProfile")),
+                profileId = it.optString("profileId").takeIf { id -> id.isNotBlank() && id != "null" },
+                profileName = it.optString("profileName", "Essentials only"),
+                allowedPackages = it.optJSONArray("allowedPackages")?.let { packages -> (0 until packages.length()).map(packages::getString).toSet() },
             )
         }
         val candidatesJson = snapshot.optJSONArray("sessionStartCandidates") ?: JSONArray()
@@ -144,6 +156,9 @@ object SyncSnapshotCodec {
                     startedAt = Instant.parse(item.getString("startedAt")),
                     endsAt = Instant.parse(item.getString("endsAt")),
                     accessProfile = AccessProfile.valueOf(item.getString("accessProfile")),
+                    profileId = item.optString("profileId").takeIf { id -> id.isNotBlank() && id != "null" },
+                    profileName = item.optString("profileName", "Essentials only"),
+                    allowedPackages = item.optJSONArray("allowedPackages")?.let { packages -> (0 until packages.length()).map(packages::getString).toSet() },
                 ))
             }
         }
@@ -171,6 +186,9 @@ object SyncSnapshotCodec {
                     taskName = entry.optString("taskName"),
                     durationMillis = entry.optLong("durationMillis"),
                     accessProfile = AccessProfile.valueOf(entry.getString("accessProfile")),
+                    profileId = entry.optString("profileId").takeIf { id -> id.isNotBlank() && id != "null" },
+                    profileName = entry.optString("profileName", "Essentials only"),
+                    allowedPackages = entry.optJSONArray("allowedPackages")?.let { packages -> (0 until packages.length()).map(packages::getString).toSet() },
                     startedAt = Instant.parse(entry.getString("startedAt")),
                     endedAt = entry.optString("endedAt").takeIf { it.isNotBlank() && it != "null" }?.let(Instant::parse),
                     actualMillis = entry.optLong("actualMillis"),

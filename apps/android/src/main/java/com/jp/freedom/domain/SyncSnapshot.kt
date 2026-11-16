@@ -48,6 +48,9 @@ data class SharedStudySession(
     val startedAt: java.time.Instant,
     val endsAt: java.time.Instant,
     val accessProfile: AccessProfile,
+    val profileId: String? = null,
+    val profileName: String = "Essentials only",
+    val allowedPackages: Set<String>? = null,
 )
 
 data class SnapshotMergeResult(

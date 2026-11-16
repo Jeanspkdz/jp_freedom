@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -18,6 +20,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.jp.freedom.domain.AccessProfile
+import com.jp.freedom.domain.SavedAccessProfile
+import com.jp.freedom.data.LaunchableApp
 import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.StudyTimerPolicy
 import com.jp.freedom.domain.StudyTimerSession
@@ -29,20 +33,25 @@ import java.time.Instant
 @Composable
 fun StudyTimerScreen(
     session: StudyTimerSession?, pendingReview: StudyTimerSession?,
-    onBack: () -> Unit, onStart: (Duration, AccessProfile) -> Unit, onStop: () -> Unit,
+    profiles: List<SavedAccessProfile>, installedApps: List<LaunchableApp>,
+    onCreateProfile: (String, Set<String>) -> Unit,
+    onBack: () -> Unit, onStart: (Duration, SavedAccessProfile?) -> Unit, onStop: () -> Unit,
     onReview: (String, CompletionStatus, String, String) -> Unit,
     onEndBreak: (String) -> Unit,
 ) {
     var minutes by remember { mutableIntStateOf(60) }
     var customMinutes by remember { mutableStateOf("") }
-    var profile by remember { mutableStateOf(AccessProfile.ESSENTIALS_ONLY) }
+    var selectedProfileId by remember { mutableStateOf<String?>(null) }
+    var creatingProfile by remember { mutableStateOf(false) }
+    var profileName by remember { mutableStateOf("") }
+    var selectedPackages by remember { mutableStateOf(emptySet<String>()) }
     var task by remember(pendingReview?.id) { mutableStateOf(pendingReview?.taskName.orEmpty()) }
     var note by remember(pendingReview?.id) { mutableStateOf(pendingReview?.note.orEmpty()) }
     var remaining by remember(pendingReview?.id) { mutableStateOf(pendingReview?.remaining.orEmpty()) }
     var status by remember(pendingReview?.id) { mutableStateOf<CompletionStatus?>(null) }
     var nextTask by remember(session?.id) { mutableStateOf("") }
     Scaffold(topBar = { TopAppBar(title = { Text(if (pendingReview != null) "Review session" else "Study timer") }) }) { pad ->
-        Column(Modifier.padding(pad).padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             if (pendingReview != null) {
                 Text("You studied ${pendingReview.actualMillis / 60_000} minutes", style = MaterialTheme.typography.headlineSmall)
                 OutlinedTextField(task, { task = it }, label = { Text("Task name") }, modifier = Modifier.fillMaxWidth())
@@ -66,7 +75,7 @@ fun StudyTimerScreen(
             } else if (session != null) {
                 val remainingTime = StudyTimerPolicy.remaining(session, Instant.now())
                 Text("${remainingTime.toMinutes().toString().padStart(2, '0')}:${(remainingTime.seconds % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.displayMedium)
-                Text("${session.durationMillis / 60_000} minute session · ${session.accessProfile.title}")
+                Text("${session.durationMillis / 60_000} minute session · ${session.profileName}")
                 Button(onClick = onStop, modifier = Modifier.fillMaxWidth()) { Text("Stop and review") }
                 OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to planner") }
             } else {
@@ -85,10 +94,36 @@ fun StudyTimerScreen(
                     customMinutes = input.filter(Char::isDigit)
                 }, label = { Text("Custom minutes") }, modifier = Modifier.fillMaxWidth())
                 Text("Choose phone access", style = MaterialTheme.typography.titleLarge)
-                AccessProfile.values().forEach { option ->
-                    OutlinedButton(onClick = { profile = option }, modifier = Modifier.fillMaxWidth()) { Text((if (profile == option) "✓ " else "") + option.title) }
+                OutlinedButton(onClick = { selectedProfileId = null }, modifier = Modifier.fillMaxWidth()) {
+                    Text((if (selectedProfileId == null) "✓ " else "") + "Essentials only")
                 }
-                Button(onClick = { onStart(Duration.ofMinutes((customMinutes.toIntOrNull() ?: minutes).coerceIn(1, 720).toLong()), profile) }, modifier = Modifier.fillMaxWidth()) { Text("Start timer") }
+                profiles.forEach { option ->
+                    OutlinedButton(onClick = { selectedProfileId = option.id }, modifier = Modifier.fillMaxWidth()) {
+                        Text((if (selectedProfileId == option.id) "✓ " else "") + option.name)
+                    }
+                }
+                OutlinedButton(onClick = { creatingProfile = !creatingProfile }, modifier = Modifier.fillMaxWidth()) { Text("Create access profile") }
+                if (creatingProfile) {
+                    OutlinedTextField(profileName, { profileName = it }, label = { Text("Profile name") }, modifier = Modifier.fillMaxWidth())
+                    installedApps.forEach { app ->
+                        FilterChip(
+                            selected = app.packageName in selectedPackages,
+                            onClick = { selectedPackages = if (app.packageName in selectedPackages) selectedPackages - app.packageName else selectedPackages + app.packageName },
+                            label = { Text(app.label) },
+                        )
+                    }
+                    Button(onClick = {
+                        onCreateProfile(profileName.trim(), selectedPackages)
+                        profileName = ""
+                        selectedPackages = emptySet()
+                        creatingProfile = false
+                    }, enabled = profileName.isNotBlank()) { Text("Save profile") }
+                }
+                Text("You cannot change your access profile during this session.")
+                if (profiles.firstOrNull { it.id == selectedProfileId }?.packages?.contains("com.android.chrome") == true) {
+                    Text("This profile allows Chrome and its websites during your session.")
+                }
+                Button(onClick = { onStart(Duration.ofMinutes((customMinutes.toIntOrNull() ?: minutes).coerceIn(1, 720).toLong()), profiles.firstOrNull { it.id == selectedProfileId }) }, modifier = Modifier.fillMaxWidth()) { Text("Start timer") }
                 OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
             }
         }

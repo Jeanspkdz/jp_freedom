@@ -19,6 +19,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FocusPolicyTest {
+    @Test
+    fun activeCustomProfileAllowsOnlyItsSelectedAppsAndPermanentFunctions() {
+        val state = FocusPolicyState(
+            BlockedReason.FOCUS_BLOCK, null, AccessProfile.ESSENTIALS_ONLY,
+            allowedPackageSnapshot = setOf("reading.app", "com.android.settings"),
+        )
+        assertEquals(
+            setOf("phone", "home", "keyboard", "jp", "reading.app", "com.android.settings"),
+            FocusPolicy.allowedPackages(state, "jp", setOf("phone", "home"), defaultInputMethodPackage = "keyboard"),
+        )
+        assertFalse("social.app" in FocusPolicy.allowedPackages(state, "jp", setOf("phone", "home")))
+    }
+
+    @Test
+    fun emptyCustomProfileStillAllowsOnlyPermanentFunctions() {
+        val state = FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, AccessProfile.ESSENTIALS_ONLY, emptySet())
+        assertEquals(setOf("phone", "home", "keyboard", "jp"),
+            FocusPolicy.allowedPackages(state, "jp", setOf("phone", "home"), defaultInputMethodPackage = "keyboard"))
+    }
     private val date = LocalDate.of(2026, 11, 3)
     private val block = PlannedBlock(
         id = "focus",

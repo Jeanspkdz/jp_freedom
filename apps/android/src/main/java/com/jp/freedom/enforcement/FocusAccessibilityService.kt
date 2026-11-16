@@ -123,7 +123,6 @@ class FocusAccessibilityService : AccessibilityService() {
             add("com.android.phone")
             add("com.android.vpndialogs")
             add("com.android.systemui")
-            add("com.android.settings")
             add("android")
         }
 

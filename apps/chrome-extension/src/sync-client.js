@@ -20,11 +20,19 @@ function validActiveStudySession(session) {
   if (!session || typeof session !== 'object' || Array.isArray(session)
     || typeof session.id !== 'string' || session.id.length === 0
     || typeof session.taskName !== 'string'
-    || !ACCESS_PROFILES.includes(session.accessProfile)) return false;
+    || !ACCESS_PROFILES.includes(session.accessProfile)
+    || !validProfileSelection(session)) return false;
   const startedAt = Date.parse(session.startedAt);
   const endsAt = Date.parse(session.endsAt);
   return typeof session.startedAt === 'string' && typeof session.endsAt === 'string'
     && Number.isFinite(startedAt) && Number.isFinite(endsAt) && startedAt < endsAt;
+}
+
+function validProfileSelection(session) {
+  return (session.profileId === undefined || session.profileId === null || (typeof session.profileId === 'string' && session.profileId.length <= 80))
+    && (session.profileName === undefined || (typeof session.profileName === 'string' && session.profileName.length <= 200))
+    && (session.allowedPackages === undefined || (Array.isArray(session.allowedPackages) && session.allowedPackages.length <= 500
+      && session.allowedPackages.every(value => typeof value === 'string' && /^[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+$/.test(value))));
 }
 
 function validSessionStartCandidates(candidates) {
