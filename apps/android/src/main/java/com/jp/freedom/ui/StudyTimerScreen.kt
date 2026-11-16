@@ -1,5 +1,7 @@
 package com.jp.freedom.ui
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,16 +17,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -49,6 +55,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -290,12 +300,49 @@ fun StudyTimerScreen(
                     }, modifier = Modifier.fillMaxWidth()) { Text("Crear perfil de acceso") }
                     if (creatingProfile) {
                         OutlinedTextField(profileName, { profileName = it }, label = { Text("Nombre del perfil") }, modifier = Modifier.fillMaxWidth())
-                        installedApps.forEach { app ->
-                            FilterChip(
-                                selected = app.packageName in selectedPackages,
-                                onClick = { selectedPackages = if (app.packageName in selectedPackages) selectedPackages - app.packageName else selectedPackages + app.packageName },
-                                label = { Text(app.label) },
-                            )
+                        Text(
+                            "${selectedPackages.size} apps allowed",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            installedApps.forEach { app ->
+                                val selected = app.packageName in selectedPackages
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .selectable(
+                                            selected = selected,
+                                            role = Role.Checkbox,
+                                            onClick = {
+                                                selectedPackages = if (selected) selectedPackages - app.packageName else selectedPackages + app.packageName
+                                            },
+                                        ),
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant,
+                                    ),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    ) {
+                                        InstalledAppIcon(app.packageName, app.label)
+                                        Text(
+                                            app.label,
+                                            modifier = Modifier.weight(1f),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Checkbox(checked = selected, onCheckedChange = null)
+                                    }
+                                }
+                            }
                         }
                         Button(onClick = {
                             val editingId = editingProfileId
@@ -350,6 +397,40 @@ private fun formatDuration(minutes: Int): String = when {
     minutes < 60 -> "$minutes min"
     minutes % 60 == 0 -> "${minutes / 60} h"
     else -> "${minutes / 60} h ${minutes % 60} min"
+}
+
+@Composable
+private fun InstalledAppIcon(packageName: String, label: String) {
+    val context = LocalContext.current
+    val icon = remember(packageName) {
+        runCatching {
+            val drawable = context.packageManager.getApplicationIcon(packageName)
+            val bitmap = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
+            drawable.setBounds(0, 0, bitmap.width, bitmap.height)
+            drawable.draw(Canvas(bitmap))
+            bitmap.asImageBitmap()
+        }.getOrNull()
+    }
+    if (icon != null) {
+        Image(
+            bitmap = icon,
+            contentDescription = null,
+            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)),
+        )
+    } else {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Apps,
+                contentDescription = "Icon for $label",
+                modifier = Modifier.padding(8.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 private fun formatClock(duration: Duration): String =
