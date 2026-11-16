@@ -192,8 +192,9 @@ function render(documentRef, state, now) {
   if (startButton) startButton.disabled = !snapshot || !state.connected || state.saving || sharedSessionPending || Boolean(snapshot.pendingStudyReviewSessionId) || candidates.length > 1;
   const selectedDuration = Number(documentRef.getElementById('session-duration')?.value);
   for (const duration of [25, 30, 45, 60]) {
-    documentRef.getElementById(`duration-${duration}`)?.setAttribute?.('aria-pressed', String(selectedDuration === duration));
+    documentRef.getElementById(`duration-${duration}`)?.setAttribute?.('aria-pressed', String(!state.customDurationSelected && selectedDuration === duration));
   }
+  documentRef.getElementById('duration-custom')?.setAttribute?.('aria-pressed', String(state.customDurationSelected));
   const stopButton = documentRef.getElementById('stop-session');
   if (stopButton) {
     stopButton.hidden = !sharedSessionPending;
@@ -394,6 +395,7 @@ export async function initializeManagement({
     blocklistMessage: null,
     pendingSessionStart: saved.pendingSessionStart ?? null,
     pendingSessionStop: saved.pendingSessionStop ?? null,
+    customDurationSelected: false,
   };
   const views = ['plan', 'sites', 'connection'];
   const showView = selected => {
@@ -419,10 +421,25 @@ export async function initializeManagement({
   for (const duration of [25, 30, 45, 60]) {
     documentRef.getElementById(`duration-${duration}`).addEventListener('click', () => {
       durationInput.value = String(duration);
+      durationInput.hidden = true;
+      state.customDurationSelected = false;
       state.sessionMessage = null;
       show();
     });
   }
+  const customDurationButton = documentRef.getElementById('duration-custom');
+  customDurationButton.addEventListener('click', () => {
+    state.customDurationSelected = true;
+    durationInput.hidden = false;
+    state.sessionMessage = null;
+    show();
+    durationInput.focus?.();
+  });
+  durationInput.addEventListener('input', () => {
+    state.customDurationSelected = true;
+    state.sessionMessage = null;
+    show();
+  });
   const focusClock = globalThis.setInterval(() => {
     if (documentRef.visibilityState === 'hidden') return;
     const current = state.snapshot ? getCurrentAndNext(state.snapshot, now()).current : null;

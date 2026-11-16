@@ -127,6 +127,9 @@ test('management navigation separates the plan, sites, and connection views', as
   harness.nodes.get('tab-plan').listeners.get('click')();
   assert.equal(harness.nodes.get('view-plan').hidden, false);
   assert.equal(harness.documentRef.getElementById('tomorrow-plan').hidden, false);
+  harness.nodes.get('open-connection').listeners.get('click')();
+  assert.equal(harness.nodes.get('view-plan').hidden, true);
+  assert.equal(harness.nodes.get('view-connection').hidden, false);
 });
 
 test('an unreachable local test API explains how to restore the connection', async () => {
@@ -455,14 +458,21 @@ test('starting a duration in Chrome writes one Essentials-only shared session an
     },
   });
 
-  harness.documentRef.getElementById('session-duration').value = '45';
+  await harness.nodes.get('duration-45').listeners.get('click')();
+  assert.equal(harness.nodes.get('focus-clock-minutes').textContent, '45');
+  assert.equal(harness.nodes.get('duration-45').attributes.get('aria-pressed'), 'true');
+  await harness.nodes.get('duration-custom').listeners.get('click')();
+  harness.documentRef.getElementById('session-duration').value = '75';
+  await harness.nodes.get('session-duration').listeners.get('input')();
+  assert.equal(harness.nodes.get('focus-clock-minutes').textContent, '75');
+  assert.equal(harness.nodes.get('duration-custom').attributes.get('aria-pressed'), 'true');
   await harness.nodes.get('start-session').listeners.get('click')();
 
   assert.equal(writes.length, 1);
   assert.equal(writes[0].snapshot.activeStudySession.taskName, 'Study session');
   assert.equal(writes[0].snapshot.activeStudySession.accessProfile, 'ESSENTIALS_ONLY');
   assert.equal(writes[0].snapshot.activeStudySession.startedAt, now.toISOString());
-  assert.equal(writes[0].snapshot.activeStudySession.endsAt, '2026-11-05T11:15:00.000Z');
+  assert.equal(writes[0].snapshot.activeStudySession.endsAt, '2026-11-05T11:45:00.000Z');
   assert.equal(harness.nodes.get('current-block').textContent, 'Study session');
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
   assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);

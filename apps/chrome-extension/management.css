@@ -707,6 +707,30 @@ button:disabled { border-color: var(--line-soft); background: var(--surface-vari
   color: var(--on-purple);
 }
 .session-start-controls .duration-option:hover:not(:disabled) { filter: brightness(1.12); }
+.duration-tools {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.duration-tools input { width: min(150px, 42%); min-height: 44px; }
+.session-start-controls .duration-custom {
+  min-height: 40px;
+  padding: 5px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: .88rem;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.session-start-controls .duration-custom[aria-pressed="true"] {
+  border-color: var(--purple);
+  background: var(--purple-container);
+  color: var(--on-purple-container);
+  text-decoration: none;
+}
 #start-session {
   display: inline-flex;
   min-height: 78px;
