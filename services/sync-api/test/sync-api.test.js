@@ -136,6 +136,47 @@ test('the revisioned sync contract rejects a session whose end does not follow i
   assert.deepEqual(await response.json(), { error: 'invalid_study_session' });
 });
 
+test('the revisioned sync contract carries Android phone receipt for a Chrome-started session', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const snapshot = {
+    ...emptySnapshot,
+    activeStudySession: {
+      id: 'chrome-session-1', taskName: 'Study session', accessProfile: 'ESSENTIALS_ONLY',
+      startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z',
+    },
+    phoneReceivedStudySessionId: 'chrome-session-1',
+  };
+
+  const write = await api(request('/v1/snapshot', { method: 'PUT', body: { expectedRevision: 0, snapshot } }));
+
+  assert.equal(write.status, 200);
+  assert.equal((await api(request('/v1/snapshot')).then(response => response.json())).snapshot.phoneReceivedStudySessionId, 'chrome-session-1');
+});
+
+test('the revisioned sync contract rejects an invalid phone receipt identifier', async () => {
+  const api = createSyncApi({ store: fakeStore(), token });
+  const response = await api(request('/v1/snapshot', {
+    method: 'PUT',
+    body: { expectedRevision: 0, snapshot: { ...emptySnapshot, phoneReceivedStudySessionId: 12 } },
+  }));
+
+  assert.equal(response.status, 422);
+  assert.deepEqual(await response.json(), { error: 'invalid_study_session_receipt' });
+});
+
+test('the revisioned sync contract carries an Android pending review that blocks another timer', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const snapshot = { ...emptySnapshot, pendingStudyReviewSessionId: 'phone-review-1' };
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot },
+  }));
+
+  assert.equal(write.status, 200);
+  assert.equal((await api(request('/v1/snapshot')).then(response => response.json())).snapshot.pendingStudyReviewSessionId, 'phone-review-1');
+});
+
 test('concurrent edits receive a conflict instead of overwriting newer data', async () => {
   const api = createSyncApi({ store: fakeStore(), token });
   const first = await api(request('/v1/snapshot', {

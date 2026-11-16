@@ -18,8 +18,9 @@ plans, settings, and completion states with `PUT /v1/snapshot`; Android and the
 extension can update `desktopBlockedDomains` through that same revision-checked
 route. A stale revision returns `409 revision_conflict`; the client must fetch
 the current snapshot, preserve unrelated fields and its pending edits, and
-retry instead of overwriting a newer copy. Chrome writes only
-`desktopBlockedDomains`.
+retry instead of overwriting a newer copy. Chrome writes
+`desktopBlockedDomains` and `activeStudySession`; Android echoes the received
+session ID as `phoneReceivedStudySessionId` after applying the phone policy.
 
 For a genuinely new snapshot (`revision: 0`, `updatedAt: null`) with an empty
 `desktopBlockedDomains` list, Chrome initializes the shared list with Facebook,
@@ -30,9 +31,12 @@ Snapshots contain `version: 1`, `settings.requiredBlockCount`,
 `settings.eveningCutoff` (`21:00`, `22:00`, or `23:00`),
 `desktopBlockedDomains`, and dated blocks with their profile, status, and
 optional note. They also contain `activeStudySession`, either null or an
-Android-started timer with its task, access profile, and absolute `startedAt`
-and `endsAt` instants. The session's original times are retained during sync;
-Chrome blocks selected desktop sites only between those instants. The initial
+timer with its task, access profile, and absolute `startedAt` and `endsAt`
+instants. A Chrome-started timer always uses `ESSENTIALS_ONLY`. Android keeps
+the original start and end times, applies only the remaining duration, and
+echoes the received session ID so Chrome can distinguish local browser
+enforcement from confirmed phone receipt. Chrome blocks selected desktop sites
+only between those instants. The initial
 desktop list selects Facebook, Instagram, TikTok, X, and Reddit. YouTube and
 WhatsApp Web are available unless selected by the user.
 

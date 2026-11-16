@@ -850,6 +850,12 @@ button:focus-visible, input:focus-visible, .site-row:has(input:focus-visible) {
 #sync-state { color: var(--muted); }
 #sync-state[data-state="synced"]::before { background: #83d6a8; }
 .view-panel { color: var(--on-background); }
+.session-start-controls { grid-column: 1 / -1; display: grid; gap: 8px; padding-bottom: 8px; }
+.session-start-controls label { font-size: .84rem; font-weight: 700; }
+.session-start-controls > div { display: flex; flex-wrap: wrap; gap: 10px; }
+.session-start-controls input { width: 132px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--on-surface); }
+.session-start-controls button { min-height: 44px; padding: 8px 18px; border: 0; border-radius: 8px; background: var(--accent-amber); color: var(--background); font-weight: 700; }
+#session-start-status, #phone-receipt-state { color: var(--muted); font-size: .86rem; }
 .plan-hero {
   border: 1px solid var(--line-soft);
   background: var(--surface);

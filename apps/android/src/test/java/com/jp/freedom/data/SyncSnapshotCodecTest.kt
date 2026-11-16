@@ -71,4 +71,24 @@ class SyncSnapshotCodecTest {
 
         assertEquals(snapshot, SyncSnapshotCodec.decode(SyncSnapshotCodec.encode(snapshot)))
     }
+
+    @Test
+    fun phoneReceiptForAChromeStartedSessionSurvivesTheSyncContract() {
+        val snapshot = SyncSnapshot(
+            settings = FocusSettings(),
+            desktopBlockedDomains = listOf("reddit.com"),
+            blocks = emptyList(),
+            activeStudySession = SharedStudySession(
+                id = "chrome-session-1",
+                taskName = "Study session",
+                startedAt = Instant.parse("2026-11-05T10:00:00Z"),
+                endsAt = Instant.parse("2026-11-05T11:00:00Z"),
+                accessProfile = AccessProfile.ESSENTIALS_ONLY,
+            ),
+            phoneReceivedStudySessionId = "chrome-session-1",
+            pendingStudyReviewSessionId = "phone-session-review",
+        )
+
+        assertEquals(snapshot, SyncSnapshotCodec.decode(SyncSnapshotCodec.encode(snapshot)))
+    }
 }

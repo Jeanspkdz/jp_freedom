@@ -49,6 +49,8 @@ object SyncSnapshotCodec {
                 put("accessProfile", session.accessProfile.name)
             }
         } ?: JSONObject.NULL)
+        put("phoneReceivedStudySessionId", snapshot.phoneReceivedStudySessionId ?: JSONObject.NULL)
+        put("pendingStudyReviewSessionId", snapshot.pendingStudyReviewSessionId ?: JSONObject.NULL)
     }
 
     fun decode(snapshot: JSONObject): SyncSnapshot {
@@ -90,7 +92,11 @@ object SyncSnapshotCodec {
                 accessProfile = AccessProfile.valueOf(it.getString("accessProfile")),
             )
         }
-        return SyncSnapshot(settings, domains, blocks, session)
+        val receivedSessionId = snapshot.optString("phoneReceivedStudySessionId", "")
+            .takeIf { it.isNotEmpty() && it != "null" }
+        val pendingReviewId = snapshot.optString("pendingStudyReviewSessionId", "")
+            .takeIf { it.isNotEmpty() && it != "null" }
+        return SyncSnapshot(settings, domains, blocks, session, receivedSessionId, pendingReviewId)
     }
 
     private fun LocalTime.apiTime() = String.format(Locale.ROOT, "%02d:%02d", hour, minute)

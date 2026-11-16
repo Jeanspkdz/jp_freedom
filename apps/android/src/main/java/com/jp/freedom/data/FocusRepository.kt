@@ -18,6 +18,7 @@ import com.jp.freedom.domain.SharedStudySession
 import com.jp.freedom.domain.StudyTimerSession
 import com.jp.freedom.domain.StudySessionState
 import com.jp.freedom.domain.StudySessionStore
+import com.jp.freedom.domain.StudyTimerPolicy
 import com.jp.freedom.sync.SyncScheduler
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -84,7 +85,12 @@ class FocusRepository(context: Context) : StudySessionStore {
             session.breakStartedAt?.let { put("break_started_at", it.toEpochMilli()) } ?: putNull("break_started_at")
             put("break_duration_ms", session.breakDurationMillis); put("next_task", session.nextTask)
         }
-        database.writableDatabase.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        val db = database.writableDatabase
+        db.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        if (session.state == StudySessionState.BREAKING || session.state == StudySessionState.REVIEWED) {
+            markDirty(db, listOf("pendingStudyReviewSessionId"))
+            scheduleSync()
+        }
     }
 
     override fun startStudySession(session: StudyTimerSession): Boolean {
@@ -364,6 +370,36 @@ class FocusRepository(context: Context) : StudySessionStore {
         try {
             if (readSyncState(db).generation != expectedGeneration) return false
             replaceSnapshot(db, snapshot)
+            if (snapshot.activeStudySession == null) {
+                val chromeSession = readStudySession(
+                    db,
+                    "state = ?",
+                    arrayOf(StudySessionState.ACTIVE.name),
+                )?.takeIf { it.id.startsWith("chrome-") }
+                chromeSession?.let { active ->
+                    saveStudySession(StudyTimerPolicy.finishIfDue(active, Instant.now()) ?: StudyTimerPolicy.stop(active, Instant.now()))
+                    markDirty(db, listOf("activeStudySession", "pendingStudyReviewSessionId"))
+                }
+            }
+            snapshot.activeStudySession?.let { shared ->
+                val active = readStudySession(db, "state IN (?, ?)", arrayOf(StudySessionState.ACTIVE.name, StudySessionState.BREAKING.name))
+                val pendingReview = readStudySession(db, "state = ?", arrayOf(StudySessionState.PENDING_REVIEW.name))
+                val canReceive = (active == null || active.id == shared.id)
+                    && (pendingReview == null || pendingReview.id == shared.id)
+                if (canReceive) {
+                    val received = StudyTimerPolicy.receiveSharedSession(shared, Instant.now())
+                    saveStudySession(received)
+                    val changedPaths = mutableListOf<String>()
+                    if (received.state == StudySessionState.PENDING_REVIEW) {
+                        changedPaths += listOf("activeStudySession", "pendingStudyReviewSessionId")
+                    }
+                    if (readReceivedSessionId(db) != shared.id) {
+                        db.update(TABLE_SYNC_STATE, ContentValues().apply { put(COLUMN_RECEIVED_SESSION_ID, shared.id) }, "$COLUMN_SETTINGS_ID = 1", null)
+                        changedPaths += "phoneReceivedStudySessionId"
+                    }
+                    markDirty(db, changedPaths)
+                }
+            }
             val values = ContentValues().apply {
                 put(COLUMN_REVISION, revision)
                 if (conflictResolved) put(COLUMN_STATUS, SyncStatus.CONFLICT_RESOLVED.name)
@@ -425,7 +461,23 @@ class FocusRepository(context: Context) : StudySessionStore {
                 accessProfile = session.accessProfile,
             )
         },
+        phoneReceivedStudySessionId = readReceivedSessionId(db),
+        pendingStudyReviewSessionId = readStudySession(
+            db,
+            "state = ?",
+            arrayOf(StudySessionState.PENDING_REVIEW.name),
+        )?.id,
     )
+
+    private fun readReceivedSessionId(db: SQLiteDatabase): String? = db.query(
+        TABLE_SYNC_STATE,
+        arrayOf(COLUMN_RECEIVED_SESSION_ID),
+        "$COLUMN_SETTINGS_ID = 1",
+        null,
+        null,
+        null,
+        null,
+    ).use { cursor -> if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null }
 
     private fun readSyncState(db: SQLiteDatabase): PendingSyncState {
         val metadata = db.query(
@@ -508,6 +560,9 @@ class FocusRepository(context: Context) : StudySessionStore {
         db.delete(TABLE_DESKTOP_DOMAINS, null, null)
         snapshot.desktopBlockedDomains.forEach { domain ->
             db.insert(TABLE_DESKTOP_DOMAINS, null, ContentValues().apply { put(COLUMN_DOMAIN, domain) })
+        }
+        snapshot.phoneReceivedStudySessionId?.let { receivedId ->
+            db.update(TABLE_SYNC_STATE, ContentValues().apply { put(COLUMN_RECEIVED_SESSION_ID, receivedId) }, "$COLUMN_SETTINGS_ID = 1", null)
         }
     }
 
@@ -637,6 +692,7 @@ class FocusRepository(context: Context) : StudySessionStore {
                 addColumnIfMissing(db, "study_sessions", "break_duration_ms", "INTEGER NOT NULL DEFAULT 0")
                 addColumnIfMissing(db, "study_sessions", "next_task", "TEXT NOT NULL DEFAULT ''")
             }
+            if (oldVersion < 8) addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_RECEIVED_SESSION_ID, "TEXT")
         }
 
         private fun addColumnIfMissing(db: SQLiteDatabase, table: String, column: String, definition: String) {
@@ -692,7 +748,8 @@ class FocusRepository(context: Context) : StudySessionStore {
                     $COLUMN_GENERATION INTEGER NOT NULL,
                     $COLUMN_PENDING INTEGER NOT NULL,
                     $COLUMN_STATUS TEXT NOT NULL,
-                    $COLUMN_MESSAGE TEXT
+                    $COLUMN_MESSAGE TEXT,
+                    $COLUMN_RECEIVED_SESSION_ID TEXT
                 )""".trimIndent(),
             )
             db.execSQL("CREATE TABLE IF NOT EXISTS $TABLE_SYNC_CHANGES ($COLUMN_PATH TEXT PRIMARY KEY NOT NULL)")
@@ -721,7 +778,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 7
+            private const val DATABASE_VERSION = 8
         }
     }
 
@@ -751,6 +808,7 @@ class FocusRepository(context: Context) : StudySessionStore {
         const val COLUMN_PENDING = "pending"
         const val COLUMN_STATUS = "status"
         const val COLUMN_MESSAGE = "message"
+        const val COLUMN_RECEIVED_SESSION_ID = "phone_received_session_id"
         val BLOCK_COLUMNS = arrayOf(
             COLUMN_ID,
             COLUMN_DATE,

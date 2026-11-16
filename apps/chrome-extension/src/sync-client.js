@@ -36,6 +36,8 @@ function validSnapshot(snapshot) {
     && snapshot.desktopBlockedDomains.length <= 100
     && snapshot.desktopBlockedDomains.every(isValidDomain)
     && validActiveStudySession(snapshot.activeStudySession)
+    && [snapshot.phoneReceivedStudySessionId, snapshot.pendingStudyReviewSessionId].every(value =>
+      value === undefined || value === null || (typeof value === 'string' && value.length > 0 && value.length <= 80))
     && Array.isArray(snapshot.blocks)
     && snapshot.blocks.length <= 1000
     && snapshot.blocks.every(block => typeof block.id === 'string'

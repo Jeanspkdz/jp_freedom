@@ -429,6 +429,106 @@ test('an Android timer snapshot shows its original end and remaining time while 
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
 });
 
+test('starting a duration in Chrome writes one Essentials-only shared session and blocks sites immediately', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: null,
+    phoneReceivedStudySessionId: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  const writes = [];
+
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        writes.push(body);
+        return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+
+  harness.documentRef.getElementById('session-duration').value = '45';
+  await harness.nodes.get('start-session').listeners.get('click')();
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].snapshot.activeStudySession.taskName, 'Study session');
+  assert.equal(writes[0].snapshot.activeStudySession.accessProfile, 'ESSENTIALS_ONLY');
+  assert.equal(writes[0].snapshot.activeStudySession.startedAt, now.toISOString());
+  assert.equal(writes[0].snapshot.activeStudySession.endsAt, '2026-11-05T11:15:00.000Z');
+  assert.equal(harness.nodes.get('current-block').textContent, 'Study session');
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+  assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);
+});
+
+test('Chrome does not start a second session while the phone has a pending review', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: null,
+    phoneReceivedStudySessionId: null,
+    pendingStudyReviewSessionId: 'phone-session-review',
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  let writes = 0;
+
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') writes += 1;
+      return { ok: true, json: async () => ({ revision: 3, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+
+  assert.equal(harness.nodes.get('start-session').disabled, true);
+  assert.match(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+  await harness.nodes.get('start-session').listeners.get('click')();
+  assert.equal(writes, 0);
+});
+
+test('connection status distinguishes browser enforcement from confirmed phone receipt', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const session = {
+    id: 'chrome-session-1', taskName: 'Study session', accessProfile: 'ESSENTIALS_ONLY',
+    startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z',
+  };
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: session,
+    phoneReceivedStudySessionId: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async () => ({ ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot }) }),
+  });
+  assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);
+
+  const confirmedHarness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  await initializeManagement({
+    ...confirmedHarness,
+    now: () => now,
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ revision: 3, updatedAt: now.toISOString(), snapshot: { ...snapshot, phoneReceivedStudySessionId: session.id } }),
+    }),
+  });
+  assert.match(confirmedHarness.nodes.get('phone-receipt-state').textContent, /phone received/i);
+});
+
 test('management shows the full plan for today and tomorrow from the synced snapshot', async () => {
   const now = new Date(2026, 10, 6, 10, 30);
   const snapshot = {

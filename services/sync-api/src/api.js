@@ -12,6 +12,8 @@ export const DEFAULT_SNAPSHOT = Object.freeze({
   ]),
   blocks: Object.freeze([]),
   activeStudySession: null,
+  phoneReceivedStudySessionId: null,
+  pendingStudyReviewSessionId: null,
 });
 
 const accessProfiles = new Set([
@@ -86,6 +88,16 @@ export function validateSnapshot(snapshot) {
       || !Number.isFinite(startedAt) || !Number.isFinite(endsAt) || startedAt >= endsAt) {
       return 'invalid_study_session';
     }
+  }
+  const receivedSessionId = snapshot.phoneReceivedStudySessionId;
+  if (receivedSessionId !== undefined && receivedSessionId !== null
+    && (typeof receivedSessionId !== 'string' || receivedSessionId.length === 0 || receivedSessionId.length > 80)) {
+    return 'invalid_study_session_receipt';
+  }
+  const pendingReviewId = snapshot.pendingStudyReviewSessionId;
+  if (pendingReviewId !== undefined && pendingReviewId !== null
+    && (typeof pendingReviewId !== 'string' || pendingReviewId.length === 0 || pendingReviewId.length > 80)) {
+    return 'invalid_pending_study_review';
   }
 
   const ids = new Set();

@@ -141,6 +141,29 @@ function render(documentRef, state, now) {
     ? { id: session.id, name: session.taskName, studySession: true, startedAt: session.startedAt, endsAt: session.endsAt }
     : plannedBlock;
   const active = Boolean(current);
+  const sharedSessionPending = Boolean(snapshot?.activeStudySession);
+  const startControls = documentRef.getElementById('session-start-controls');
+  if (startControls) startControls.hidden = active;
+  const startButton = documentRef.getElementById('start-session');
+  if (startButton) startButton.disabled = !snapshot || !state.connected || !state.online || state.saving || sharedSessionPending || Boolean(snapshot.pendingStudyReviewSessionId);
+  const startStatus = documentRef.getElementById('session-start-status');
+  if (startStatus) startStatus.textContent = state.sessionMessage
+    ?? (!snapshot || !state.connected || !state.online ? 'Sync before starting a study session.'
+      : snapshot.pendingStudyReviewSessionId ? 'Finish the pending phone review before starting another session.'
+        : snapshot.activeStudySession
+          ? Date.parse(snapshot.activeStudySession.endsAt) > now.getTime()
+            ? 'A study session is already active.'
+            : 'Wait for the phone to sync this session and its review before starting another.'
+          : '');
+  const receipt = documentRef.getElementById('phone-receipt-state');
+  if (receipt) {
+    const sharedSession = snapshot?.activeStudySession;
+    receipt.textContent = !sharedSession
+      ? 'No shared study session is waiting for the phone.'
+      : snapshot.phoneReceivedStudySessionId === sharedSession.id
+        ? 'Phone received this study session.'
+        : 'Chrome is blocking selected sites locally. Waiting for phone to receive this session.';
+  }
   documentRef.getElementById('focus-heading').textContent = active ? 'In focus' : 'Focus plan';
   documentRef.getElementById('focus-heading').classList?.toggle('is-active', active);
   documentRef.getElementById('focus-live').hidden = !active;
@@ -298,6 +321,107 @@ export async function initializeManagement({
     show();
   };
   const readLatest = () => readSnapshot(state.apiUrl, state.apiToken, fetchImpl);
+  documentRef.getElementById('start-session').addEventListener('click', async () => {
+    const duration = Number(documentRef.getElementById('session-duration').value);
+    if (!Number.isSafeInteger(duration) || duration <= 0) {
+      state.sessionMessage = 'Enter a positive whole number of minutes.';
+      show();
+      return;
+    }
+    if (!state.snapshot || !state.connected || !state.online || state.saving) {
+      state.sessionMessage = 'Sync before starting a study session.';
+      show();
+      return;
+    }
+    if (state.snapshot.pendingStudyReviewSessionId) {
+      state.sessionMessage = 'Finish the pending phone review before starting another session.';
+      show();
+      return;
+    }
+    if (state.snapshot.activeStudySession) {
+      state.sessionMessage = Date.parse(state.snapshot.activeStudySession.endsAt) > now().getTime()
+        ? 'A study session is already active.'
+        : 'Wait for the phone to sync this session and its review before starting another.';
+      show();
+      return;
+    }
+    const startedAt = now();
+    const session = {
+      id: `chrome-${globalThis.crypto?.randomUUID?.() ?? `${startedAt.getTime()}-${Math.random().toString(36).slice(2, 10)}`}`,
+      taskName: 'Study session',
+      startedAt: startedAt.toISOString(),
+      endsAt: new Date(startedAt.getTime() + duration * 60_000).toISOString(),
+      accessProfile: 'ESSENTIALS_ONLY',
+    };
+    const previousSnapshot = state.snapshot;
+    state.saving = true;
+    state.sessionMessage = null;
+    state.snapshot = { ...state.snapshot, activeStudySession: session, phoneReceivedStudySessionId: null };
+    show();
+    try {
+      await chromeApi.storage.local.set({ lastValidSnapshot: state.snapshot, lastSnapshotRevision: state.revision });
+      await updateRules();
+      await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
+      const endpoint = snapshotEndpoint(state.apiUrl);
+      let base = state.snapshot;
+      let revision = state.revision;
+      let snapshot = { ...base, activeStudySession: session, phoneReceivedStudySessionId: null };
+      let response = await fetchImpl(endpoint, {
+        method: 'PUT',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: revision, snapshot }),
+        cache: 'no-store', credentials: 'omit', redirect: 'error',
+      });
+      if (response.status === 409) {
+        const latest = await readLatest();
+        const remoteSession = latest.snapshot.activeStudySession;
+        if (remoteSession || latest.snapshot.pendingStudyReviewSessionId) {
+          state.snapshot = latest.snapshot;
+          state.revision = latest.revision;
+          state.sessionMessage = latest.snapshot.pendingStudyReviewSessionId
+            ? 'Finish the pending phone review before starting another session.'
+            : Date.parse(remoteSession.endsAt) > startedAt.getTime()
+              ? 'A study session is already active on a connected device.'
+              : 'Wait for the phone to sync this session and its review before starting another.';
+          await chromeApi.storage.local.set({ lastValidSnapshot: latest.snapshot, lastSnapshotRevision: latest.revision });
+          await updateRules();
+          return;
+        }
+        base = latest.snapshot;
+        revision = latest.revision;
+        snapshot = { ...base, activeStudySession: session, phoneReceivedStudySessionId: null };
+        response = await fetchImpl(endpoint, {
+          method: 'PUT',
+          headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: revision, snapshot }),
+          cache: 'no-store', credentials: 'omit', redirect: 'error',
+        });
+      }
+      if (!response.ok) throw new Error(response.status === 409
+        ? 'Another session started. Sync and check the active timer.'
+        : `Could not start the study session (HTTP ${response.status}).`);
+      const payload = await response.json();
+      if (!validSnapshotResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+      state.snapshot = payload.snapshot;
+      state.revision = payload.revision;
+      state.newEmptyBlocklist = false;
+      state.online = true;
+      state.error = null;
+      state.lastSuccessfulSync = now().toISOString();
+      await chromeApi.storage.local.set({ lastValidSnapshot: payload.snapshot, lastSuccessfulSync: state.lastSuccessfulSync, lastSnapshotRevision: payload.revision });
+      await updateRules();
+      await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
+    } catch (cause) {
+      state.snapshot = previousSnapshot;
+      await chromeApi.storage.local.set({ lastValidSnapshot: previousSnapshot, lastSnapshotRevision: state.revision });
+      state.error = cause?.message || 'Could not start the study session.';
+      state.sessionMessage = state.error;
+      await updateRules();
+    } finally {
+      state.saving = false;
+      show();
+    }
+  });
   const persistDomainIntent = async (domain, included, initialDomains = state.displayedDomains) => {
     if (!state.connected || !state.online || !state.snapshot || state.saving) return;
     const current = getCurrentAndNext(state.snapshot, now()).current;

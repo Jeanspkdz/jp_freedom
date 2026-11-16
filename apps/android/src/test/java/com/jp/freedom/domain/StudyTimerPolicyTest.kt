@@ -12,6 +12,27 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 
 class StudyTimerPolicyTest {
+    @Test
+    fun aDelayedChromeSessionStartsWithOnlyItsOriginalRemainingDurationAndEssentialsProfile() {
+        val startedAt = Instant.parse("2026-11-05T10:00:00Z")
+        val endsAt = Instant.parse("2026-11-05T11:00:00Z")
+        val shared = SharedStudySession(
+            id = "chrome-session",
+            taskName = "Study session",
+            startedAt = startedAt,
+            endsAt = endsAt,
+            accessProfile = AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH,
+        )
+
+        val received = StudyTimerPolicy.receiveSharedSession(shared, Instant.parse("2026-11-05T10:45:00Z"))
+
+        assertEquals(startedAt, received.startedAt)
+        assertEquals(Duration.ofHours(1).toMillis(), received.durationMillis)
+        assertEquals(Duration.ofMinutes(15), StudyTimerPolicy.remaining(received, Instant.parse("2026-11-05T10:45:00Z")))
+        assertEquals(AccessProfile.ESSENTIALS_ONLY, received.accessProfile)
+        assertEquals(StudySessionState.ACTIVE, received.state)
+    }
+
     @Test fun dailyReviewIncludesOnlySessionsStartedOnTheRequestedLocalDay() {
         val sessions = listOf(
             reviewed("today", Instant.parse("2026-11-10T05:00:00Z"), 90, "Math", CompletionStatus.FINISHED, "note", ""),

@@ -55,6 +55,31 @@ object StudyTimerPolicy {
 
     fun canStartAnother(session: StudyTimerSession?): Boolean = session == null || session.state == StudySessionState.REVIEWED
 
+    fun receiveSharedSession(session: SharedStudySession, now: Instant): StudyTimerSession {
+        val durationMillis = Duration.between(session.startedAt, session.endsAt).toMillis()
+        require(durationMillis > 0) { "A shared session must end after it starts." }
+        return if (session.endsAt <= now) {
+            StudyTimerSession(
+                id = session.id,
+                taskName = session.taskName,
+                durationMillis = durationMillis,
+                accessProfile = AccessProfile.ESSENTIALS_ONLY,
+                startedAt = session.startedAt,
+                endedAt = session.endsAt,
+                actualMillis = durationMillis,
+                state = StudySessionState.PENDING_REVIEW,
+            )
+        } else {
+            StudyTimerSession(
+                id = session.id,
+                taskName = session.taskName,
+                durationMillis = durationMillis,
+                accessProfile = AccessProfile.ESSENTIALS_ONLY,
+                startedAt = session.startedAt,
+            )
+        }
+    }
+
     fun dailyReview(date: LocalDate, zone: ZoneId, targetMinutes: Int, sessions: List<StudyTimerSession>, blocks: List<PlannedBlock>): DailyReview =
         DailyReview(
             date = date,

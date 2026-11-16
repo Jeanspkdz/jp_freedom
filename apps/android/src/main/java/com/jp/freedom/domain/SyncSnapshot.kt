@@ -35,6 +35,8 @@ data class SyncSnapshot(
     val desktopBlockedDomains: List<String>,
     val blocks: List<PlannedBlock>,
     val activeStudySession: SharedStudySession? = null,
+    val phoneReceivedStudySessionId: String? = null,
+    val pendingStudyReviewSessionId: String? = null,
 )
 
 data class SharedStudySession(
@@ -132,6 +134,16 @@ object SyncSnapshotReconciler {
                     "activeStudySession",
                     remote.activeStudySession,
                     local.activeStudySession,
+                ),
+                phoneReceivedStudySessionId = choose(
+                    "phoneReceivedStudySessionId",
+                    remote.phoneReceivedStudySessionId,
+                    local.phoneReceivedStudySessionId,
+                ),
+                pendingStudyReviewSessionId = choose(
+                    "pendingStudyReviewSessionId",
+                    remote.pendingStudyReviewSessionId,
+                    local.pendingStudyReviewSessionId,
                 ),
             ),
             conflictedPaths = conflicts,
