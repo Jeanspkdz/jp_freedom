@@ -76,6 +76,7 @@ fun FocusApp(
     openSessionTimerVersion: Int,
     openDailyReviewVersion: Int,
     requestedDailyReviewDate: String?,
+    showLaunchSplash: Boolean = false,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -262,6 +263,7 @@ fun FocusApp(
         }
     }
 
+    DimkySplashHost(ready = stateLoaded, enabled = showLaunchSplash) {
     when (page) {
         AppPage.PLANNER -> PlannerScreen(
             date = selectedDate,
@@ -530,6 +532,7 @@ fun FocusApp(
                 }) { Text("Keep synced value") }
             },
         )
+    }
     }
 }
 
