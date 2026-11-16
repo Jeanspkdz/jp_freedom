@@ -28,6 +28,15 @@ export function getActiveBlock(snapshot, now = new Date()) {
   return block?.id ?? null;
 }
 
+export function getActiveStudySession(snapshot, now = new Date()) {
+  const session = snapshot?.activeStudySession;
+  if (!session || typeof session.startedAt !== 'string' || typeof session.endsAt !== 'string') return null;
+  const startsAt = Date.parse(session.startedAt);
+  const endsAt = Date.parse(session.endsAt);
+  if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt) || startsAt >= endsAt) return null;
+  return startsAt <= now.getTime() && now.getTime() < endsAt ? session : null;
+}
+
 export function getNextBlock(snapshot, now = new Date()) {
   if (!snapshot) return null;
   const dateKey = localDateKey(now);

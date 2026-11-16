@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   getActiveBlock,
+  getActiveStudySession,
   getNextBlock,
   getCurrentAndNext,
   isEveningPlanIncomplete,
@@ -100,6 +101,26 @@ test('blocklist rules cover configured hosts and are empty outside a focus block
   assert.ok(rules.every(rule => rule.action.type === 'block'));
   assert.ok(rules.every(rule => rule.condition.resourceTypes.length === 1 && rule.condition.resourceTypes[0] === 'main_frame'));
   assert.deepEqual(makeDesktopBlockRules(snapshot, null), []);
+});
+
+test('an Android-started study session activates the selected site rules until its absolute end', () => {
+  const sharedSession = {
+    id: 'session-1',
+    taskName: 'Read chapter four',
+    startedAt: '2026-11-04T10:15:00.000Z',
+    endsAt: '2026-11-04T11:15:00.000Z',
+    accessProfile: 'ESSENTIALS_ONLY',
+  };
+  const shared = { ...snapshot, activeStudySession: sharedSession };
+
+  const now = new Date('2026-11-04T10:30:00.000Z');
+  assert.equal(getActiveBlock(shared, now), null);
+  assert.deepEqual(getActiveStudySession(shared, now), sharedSession);
+  assert.deepEqual(makeDesktopBlockRules(shared, getActiveStudySession(shared, now)), [
+    { id: 1, priority: 1, action: { type: 'block' }, condition: { requestDomains: ['facebook.com'], resourceTypes: ['main_frame'] } },
+    { id: 2, priority: 1, action: { type: 'block' }, condition: { requestDomains: ['youtube.com'], resourceTypes: ['main_frame'] } },
+  ]);
+  assert.deepEqual(makeDesktopBlockRules(shared, getActiveStudySession(shared, new Date('2026-11-04T11:15:00.000Z'))), []);
 });
 
 test('evening restriction without an active planned block leaves desktop browsing unblocked', () => {

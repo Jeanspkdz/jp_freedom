@@ -22,6 +22,24 @@
         <img class="hero-illustration" src="illustrations/focus-landscape.png" alt="" aria-hidden="true">
         <div class="plan-intro"><p id="today-intro-date"></p><div class="focus-title"><h1 id="focus-heading">Focus plan</h1><span id="focus-live" class="focus-live" aria-hidden="true" hidden></span></div><p id="protection-state" role="status">Checking protection…</p></div>
         <section class="focus-board" aria-labelledby="plan-heading">
+          <div id="session-start-controls" class="session-start-controls">
+            <label for="session-duration">Study duration (minutes)</label>
+            <div><input id="session-duration" type="number" min="1" step="1" value="30"><button id="start-session" type="button">Start study session</button></div>
+            <p id="session-start-status" role="status"></p>
+          </div>
+          <div id="session-conflict-state" role="status" hidden></div>
+          <div id="session-conflict-controls" hidden>
+            <label for="session-start-choice">Choose the shared study session</label>
+            <select id="session-start-choice"></select>
+            <button id="choose-session-start" type="button">Use this study session</button>
+          </div>
+          <div id="field-conflict-controls" hidden>
+            <p id="field-conflict-state" role="status"></p>
+            <label for="field-conflict-choice">Choose a value for this field</label>
+            <select id="field-conflict-choice"></select>
+            <button id="resolve-field-conflict" type="button">Use selected value</button>
+          </div>
+          <button id="stop-session" class="secondary-button" type="button" hidden>Stop study session</button>
           <div class="focus-main"><h2 id="plan-heading">Current focus block</h2><p id="current-block">Loading plan…</p></div>
           <div class="focus-meta"><p id="planned-end" hidden></p><p id="focus-remaining" hidden><strong id="focus-remaining-value"></strong> left</p></div>
           <div id="focus-progress" class="focus-progress" role="progressbar" aria-label="Focus block progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span id="focus-progress-fill"></span></div>
@@ -82,7 +100,8 @@
             <div class="connection-flow" aria-hidden="true"></div>
             <div class="connection-device"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="7" width="38" height="27" rx="3"/><path d="M17 41h14m-7-7v7"/></svg><span>This PC</span></div>
           </div>
-          <p class="connection-caption">Chrome keeps the last plan received from your phone so it can continue working offline.</p>
+          <p class="connection-caption">Chrome blocks selected sites locally. The phone joins after it receives the shared session.</p>
+          <p id="phone-receipt-state" role="status">Phone receipt has not been confirmed.</p>
           <section class="sync" aria-label="Recent sync">
             <div class="sync-timestamp"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M16 9v8l5 3"/></svg><p id="last-sync">Last successful sync: Never</p></div>
             <p id="sync-error" class="error" role="alert" hidden></p>

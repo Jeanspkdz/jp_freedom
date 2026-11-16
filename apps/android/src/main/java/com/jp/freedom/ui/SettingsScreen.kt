@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -69,6 +71,10 @@ fun SettingsScreen(
     accessibilityEnabled: Boolean,
     exactAlarmsAllowed: Boolean,
     siteFilterEnabled: Boolean,
+    dailyReviewReminderTime: String,
+    studyHistoryCount: Int,
+    onDailyReviewReminderTimeChange: (String) -> Unit,
+    onClearStudyHistory: () -> Unit,
     onBack: () -> Unit,
     onSettingsChange: (FocusSettings) -> Unit,
     onDesktopDomainsChange: (List<String>) -> Unit,
@@ -81,7 +87,9 @@ fun SettingsScreen(
     var endpoint by rememberSaveable(syncConfiguration.endpoint) { mutableStateOf(syncConfiguration.endpoint) }
     var writeToken by remember { mutableStateOf("") }
     var newDomain by rememberSaveable { mutableStateOf("") }
+    var reminderDraft by rememberSaveable(dailyReviewReminderTime) { mutableStateOf(dailyReviewReminderTime) }
     var formError by remember { mutableStateOf<String?>(null) }
+    var confirmHistoryClear by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -102,6 +110,17 @@ fun SettingsScreen(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { contentPadding ->
+        if (confirmHistoryClear) {
+            AlertDialog(
+                onDismissRequest = { confirmHistoryClear = false },
+                title = { Text("Clear study history?") },
+                text = { Text("This removes synced study sessions and reviews from this phone and the shared record. Plans and blocked websites stay unchanged.") },
+                confirmButton = {
+                    TextButton(onClick = { confirmHistoryClear = false; onClearStudyHistory() }) { Text("Clear history") }
+                },
+                dismissButton = { TextButton(onClick = { confirmHistoryClear = false }) { Text("Cancel") } },
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -127,6 +146,46 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Daily study-hours target", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(settings.studyHoursTargetMinutes.hoursLabel(), style = MaterialTheme.typography.displayMedium, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { onSettingsChange(settings.copy(studyHoursTargetMinutes = settings.studyHoursTargetMinutes - 30)) }, enabled = settings.studyHoursTargetMinutes > 30) {
+                                Icon(Icons.Outlined.Remove, contentDescription = "Decrease study-hours target")
+                            }
+                            IconButton(onClick = { onSettingsChange(settings.copy(studyHoursTargetMinutes = settings.studyHoursTargetMinutes + 30)) }, enabled = settings.studyHoursTargetMinutes < 720) {
+                                Icon(Icons.Outlined.Add, contentDescription = "Increase study-hours target")
+                            }
+                        }
+                        Text("Planned study time for the next required day must reach this target to lift the evening restriction.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Break after each session", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("${settings.breakMinutes} min", style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { onSettingsChange(settings.copy(breakMinutes = settings.breakMinutes - 1)) }, enabled = settings.breakMinutes > 1) {
+                                Icon(Icons.Outlined.Remove, contentDescription = "Shorten break")
+                            }
+                            IconButton(onClick = { onSettingsChange(settings.copy(breakMinutes = settings.breakMinutes + 1)) }, enabled = settings.breakMinutes < 60) {
+                                Icon(Icons.Outlined.Add, contentDescription = "Lengthen break")
+                            }
+                        }
+                        Text("Phone restrictions pause after you save the required session review.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         Text("Required blocks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -138,7 +197,7 @@ fun SettingsScreen(
                                 Icon(Icons.Outlined.Add, contentDescription = "Increase minimum")
                             }
                         }
-                        Text("Minimum number of blocks in tomorrow's plan to unlock your phone.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Minimum number of blocks in the next required day plan before Chrome sends planning reminders.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Surface(
@@ -164,7 +223,25 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("02", "Phone protection")
+                SectionHeading("02", "Study history")
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("$studyHistoryCount reviewed sessions on this phone", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Study history stays available in reviews until you clear it.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedButton(onClick = { confirmHistoryClear = true }, enabled = studyHistoryCount > 0, modifier = Modifier.fillMaxWidth()) {
+                            Text("Clear study history")
+                        }
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionHeading("03", "Phone protection")
                 PermissionCard(
                     icon = Icons.Outlined.AppBlocking,
                     title = "Website filter in Chrome",
@@ -229,7 +306,20 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("03", "Sync with Chrome")
+                SectionHeading("04", "Daily review reminder")
+                Text("Choose when the phone reminds you to review today's timer sessions. Default: 9:00 PM.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(
+                    value = reminderDraft,
+                    onValueChange = { input ->
+                        reminderDraft = input.filter { it.isDigit() || it == ':' }.take(5)
+                        if (reminderDraft.matches(Regex("\\d{2}:\\d{2}")) && runCatching { LocalTime.parse(reminderDraft) }.isSuccess) onDailyReviewReminderTimeChange(reminderDraft)
+                    },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Reminder time (24-hour)") },
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionHeading("05", "Sync with Chrome")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),
@@ -402,3 +492,5 @@ private fun LocalTime.label(): String = when (hour) {
     22 -> "10 PM"
     else -> "11 PM"
 }
+
+private fun Int.hoursLabel(): String = if (this % 60 == 0) "${this / 60} h" else "${this / 60}.${(this % 60) / 30 * 5} h"

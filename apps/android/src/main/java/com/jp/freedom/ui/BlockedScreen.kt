@@ -61,8 +61,8 @@ fun BlockedScreen(
             Text(
                 text = when {
                     isEveningRestriction -> "Complete the required blocks for tomorrow in your planner to unlock your phone."
-                    isSiteFilterSetup -> "Turn on the website filter in Settings to use ChatGPT or Google Search in Chrome during this block."
-                    else -> "This app isn't included in the access mode selected for this block."
+                    isSiteFilterSetup -> "Turn on the website filter in Settings to use Chrome during a study session."
+                    else -> "This app isn't included in the access profile for this study session."
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,

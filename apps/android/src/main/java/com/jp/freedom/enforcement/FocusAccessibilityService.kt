@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import com.jp.freedom.MainActivity
 import com.jp.freedom.data.FocusRepository
+import com.jp.freedom.domain.StudyTimerPolicy
 import java.time.LocalDateTime
 
 class FocusAccessibilityService : AccessibilityService() {
@@ -58,10 +59,19 @@ class FocusAccessibilityService : AccessibilityService() {
 
     private fun enforceCurrentPolicy() {
         val packageName = foregroundPackage ?: return
+        repository.activeStudySession()?.let { session ->
+            StudyTimerPolicy.finishIfDue(session, java.time.Instant.now())?.let { ended ->
+                if (repository.finishStudySession(ended)) {
+                    StudySessionNotifier.show(this, ended)
+                    PolicyAlarmScheduler.scheduleNext(this)
+                }
+            }
+        }
         val policy = FocusPolicy.evaluate(
             now = LocalDateTime.now(),
             blocks = repository.allBlocks(),
             settings = repository.settings(),
+            studySession = repository.activeStudySession(),
         )
         val policyReason = policy.blockedReason
         if (policyReason == null) {
@@ -73,13 +83,7 @@ class FocusAccessibilityService : AccessibilityService() {
         val activeBlock = policy.activeBlock
         val chromeDuringBlock = activeBlock != null && packageName == CHROME_PACKAGE
         val siteFilterRunning = chromeDuringBlock && SiteFilterVpnService.isRunning()
-        val reason = if (activeBlock != null && packageName == CHROME_PACKAGE && !siteFilterRunning &&
-            activeBlock.accessProfile != com.jp.freedom.domain.AccessProfile.ESSENTIALS_ONLY
-        ) {
-            BlockedReason.SITE_FILTER_SETUP
-        } else {
-            policyReason
-        }
+        val reason = policyReason
         val allowedPackages = FocusPolicy.allowedPackages(
             state = policy,
             ownPackage = this.packageName,
@@ -119,7 +123,6 @@ class FocusAccessibilityService : AccessibilityService() {
             add("com.android.phone")
             add("com.android.vpndialogs")
             add("com.android.systemui")
-            add("com.android.settings")
             add("android")
         }
 

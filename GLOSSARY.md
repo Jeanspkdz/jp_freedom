@@ -5,7 +5,7 @@ Terms for the personal, open-source system that coordinates blocking across an A
 ## Language
 
 **Access profile**:
-A named choice of apps and websites allowed on the Android phone during a focus session. The initial choices allow essentials only; essentials plus ChatGPT; or essentials plus ChatGPT and Google Search.
+A saved list of apps allowed on the Android phone during a study timer session. Users can create named access profiles from currently installed apps; the fixed Essentials profile applies when none is chosen.
 _Avoid_: Phone blocklist
 
 **Desktop site blocklist**:
@@ -13,7 +13,7 @@ A shared set of websites that can be edited from Android or the Chrome extension
 _Avoid_: Access profile
 
 **Focus session**:
-A period during which the chosen access profile applies on the Android phone and the desktop site blocklist applies in Chrome. It ends at its planned time or when its planned block is marked Finished.
+A period when a manually started study timer applies its chosen access profile on the Android phone. A planned block continues to determine when Chrome applies the desktop site blocklist.
 _Avoid_: Blocking session
 
 **Day plan**:
@@ -21,16 +21,16 @@ A plan made on the phone for one calendar day that places focus sessions at chos
 _Avoid_: Weekly schedule, recurring schedule
 
 **Planned block**:
-A named activity with a planned start and end time in a day plan that automatically starts a focus session. Planned blocks cannot overlap. A written outcome is optional; marking the block Finished ends its focus session early.
+A recommended study activity with a planned start and end time in a day plan. Planned blocks cannot overlap; they contribute their duration to the planned study-hours total and continue to schedule desktop website restrictions in Chrome, but do not automatically start an Android focus session.
 
 **Completion status**:
 The user's assessment of a planned block after working on it: Finished, Partly done, or Not done, with an optional note about what remains.
 
-**Required block count**:
-The configurable number of planned study or similar blocks needed for tomorrow's day plan to lift the evening phone restriction. Its default is three.
+**Study-hours target**:
+The configurable daily amount of study time used to compare planned study time with actual time recorded by study timer sessions. At the evening cutoff, the next required day's plan must reach this target to avoid or lift the evening restriction; its initial value is three hours.
 
 **Evening restriction**:
-A restriction on most phone use after a chosen start time of 9, 10, or 11 p.m. when tomorrow's day plan has too few qualifying blocks. Calls, messages, emergency functions, and the planner remain available; the restriction ends when the plan meets the required block count and returns if the plan falls below it again. It does not restrict desktop browsing.
+A restriction on most phone use after the configured evening cutoff when the next required day's planned study blocks total less than the study-hours target. Calls, messages, emergency functions, and the planner remain available; it lifts when the plan reaches the target and does not restrict desktop browsing. An automatic post-session break temporarily pauses phone restrictions; the evening restriction resumes after the break if the plan is still short.
 
 **Rest day**:
 A Sunday free from scheduled focus sessions unless the user chooses to plan them. Sunday evening still requires planning Monday.
@@ -42,7 +42,16 @@ Continued blocking on a disconnected device until the scheduled end of a focus s
 Creating or editing a day plan on the phone without internet access. The phone evaluates its own evening restriction from that plan and syncs changes when connectivity returns.
 
 **Planning reminder**:
-A notification from the Chrome extension every 30 minutes while the next required day plan has too few planned blocks and Chrome is open. It directs the user to plan on the phone but does not restrict desktop browsing.
+A notification from the Chrome extension every 30 minutes while the next required day plan is incomplete and Chrome is open. It directs the user to plan on the phone but does not restrict desktop browsing.
+
+**Study timer session**:
+A manually started, duration-based focus session with a chosen access profile and task name. It records actual elapsed study time, continues while the app is in the background or the phone restarts, and ends when its duration elapses or the user stops it early.
+
+**Session review**:
+The required update after a study timer session ends, where the user records the task name and status and may add notes or remaining work. It must be completed before another study timer session can start.
+
+**Automatic break**:
+A configurable rest period that begins after the session review is completed. Phone restrictions are off during the break; the user may skip or end it early after recording what they plan to work on next.
 
 **Device**:
 An installation of the Android app or Chrome extension that participates in the user's focus sessions.

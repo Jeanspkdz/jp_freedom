@@ -15,6 +15,42 @@ function validTime(value) {
   return Boolean(match && Number(match[1]) < 24 && Number(match[2]) < 60);
 }
 
+function validActiveStudySession(session) {
+  if (session === null || session === undefined) return true;
+  if (!session || typeof session !== 'object' || Array.isArray(session)
+    || typeof session.id !== 'string' || session.id.length === 0
+    || typeof session.taskName !== 'string'
+    || !ACCESS_PROFILES.includes(session.accessProfile)
+    || !validProfileSelection(session)) return false;
+  const startedAt = Date.parse(session.startedAt);
+  const endsAt = Date.parse(session.endsAt);
+  return typeof session.startedAt === 'string' && typeof session.endsAt === 'string'
+    && Number.isFinite(startedAt) && Number.isFinite(endsAt) && startedAt < endsAt;
+}
+
+function validProfileSelection(session) {
+  return (session.profileId === undefined || session.profileId === null || (typeof session.profileId === 'string' && session.profileId.length <= 80))
+    && (session.profileName === undefined || (typeof session.profileName === 'string' && session.profileName.length <= 200))
+    && (session.allowedPackages === undefined || (Array.isArray(session.allowedPackages) && session.allowedPackages.length <= 500
+      && session.allowedPackages.every(value => typeof value === 'string' && /^[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+$/.test(value))));
+}
+
+function validSessionStartCandidates(candidates) {
+  if (candidates === undefined) return true;
+  return Array.isArray(candidates) && candidates.length <= 2
+    && candidates.every(candidate => candidate && validActiveStudySession(candidate))
+    && new Set(candidates.map(candidate => candidate.id)).size === candidates.length;
+}
+
+function validFieldConflicts(conflicts) {
+  return conflicts === undefined || (Array.isArray(conflicts) && conflicts.length <= 1000
+    && conflicts.every(conflict => conflict && typeof conflict === 'object'
+      && typeof conflict.path === 'string' && conflict.path.length > 0 && conflict.path.length <= 240
+      && typeof conflict.remoteValue === 'string' && conflict.remoteValue.length <= 2000
+      && typeof conflict.localValue === 'string' && conflict.localValue.length <= 2000)
+    && new Set(conflicts.map(conflict => conflict.path)).size === conflicts.length);
+}
+
 function validSnapshot(snapshot) {
   return snapshot?.version === 1
     && Number.isInteger(snapshot.settings?.requiredBlockCount)
@@ -23,6 +59,11 @@ function validSnapshot(snapshot) {
     && Array.isArray(snapshot.desktopBlockedDomains)
     && snapshot.desktopBlockedDomains.length <= 100
     && snapshot.desktopBlockedDomains.every(isValidDomain)
+    && validActiveStudySession(snapshot.activeStudySession)
+    && validSessionStartCandidates(snapshot.sessionStartCandidates)
+    && validFieldConflicts(snapshot.fieldConflicts)
+    && [snapshot.phoneReceivedStudySessionId, snapshot.pendingStudyReviewSessionId].every(value =>
+      value === undefined || value === null || (typeof value === 'string' && value.length > 0 && value.length <= 80))
     && Array.isArray(snapshot.blocks)
     && snapshot.blocks.length <= 1000
     && snapshot.blocks.every(block => typeof block.id === 'string'

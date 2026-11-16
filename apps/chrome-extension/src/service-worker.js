@@ -1,5 +1,5 @@
 import { applySnapshotRules } from './enforcement.js';
-import { readSnapshot } from './sync-client.js';
+import { readSnapshot, snapshotEndpoint, validSnapshotResponse } from './sync-client.js';
 import {
   PLANNING_REMINDER_ALARM,
   PLANNING_REMINDER_CUTOFF_ALARM,
@@ -45,6 +45,13 @@ function nextBoundary(snapshot, now) {
       if (boundary > now.getTime()) boundaries.push(boundary);
     }
   }
+  const session = snapshot.activeStudySession;
+  if (session) {
+    for (const value of [session.startedAt, session.endsAt]) {
+      const boundary = Date.parse(value);
+      if (Number.isFinite(boundary) && boundary > now.getTime()) boundaries.push(boundary);
+    }
+  }
   return boundaries.length ? Math.min(...boundaries) : null;
 }
 
@@ -78,8 +85,32 @@ export async function refreshRemoteSnapshot(chromeApi = globalThis.chrome, fetch
     ]);
     if (!apiUrl || !apiToken) return false;
     try {
-      const payload = await readSnapshot(apiUrl, apiToken, fetchImpl);
+      let payload = await readSnapshot(apiUrl, apiToken, fetchImpl);
       if (payload.revision < lastSnapshotRevision) return false;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const expiredSession = payload.snapshot.activeStudySession;
+        if (!expiredSession || Date.parse(expiredSession.endsAt) > now.getTime()) break;
+        const expiredSnapshot = {
+          ...payload.snapshot,
+          activeStudySession: null,
+          pendingStudyReviewSessionId: payload.snapshot.pendingStudyReviewSessionId ?? expiredSession.id,
+        };
+        const response = await fetchImpl(snapshotEndpoint(apiUrl), {
+          method: 'PUT',
+          headers: { Accept: 'application/json', Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: payload.revision, snapshot: expiredSnapshot }),
+          cache: 'no-store', credentials: 'omit', redirect: 'error',
+        });
+        if (response.status === 409) {
+          payload = await readSnapshot(apiUrl, apiToken, fetchImpl);
+          continue;
+        }
+        if (!response.ok) throw new Error(`Could not publish expired study session (HTTP ${response.status}).`);
+        const updated = await response.json();
+        if (!validSnapshotResponse(updated)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+        payload = updated;
+        break;
+      }
       const lastSuccessfulSync = now.toISOString();
       await chromeApi.storage.local.set({
         lastValidSnapshot: payload.snapshot,
@@ -107,7 +138,7 @@ if (globalThis.chrome) {
     if (message?.type === 'refresh-focus-state') void refreshFocusState();
   });
   chrome.alarms.onAlarm.addListener(alarm => {
-    if (alarm.name === STATE_ALARM) void refreshFocusState();
+    if (alarm.name === STATE_ALARM) void refreshRemoteSnapshot().then(() => refreshFocusState());
     else if (alarm.name === SNAPSHOT_SYNC_ALARM) void refreshRemoteSnapshot();
     else if ([PLANNING_REMINDER_ALARM, PLANNING_REMINDER_CUTOFF_ALARM].includes(alarm.name)) {
       void refreshPlanningReminders(chrome, new Date(), alarm.name);

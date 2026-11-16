@@ -9,6 +9,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SiteDomainPolicyTest {
+    @Test
+    fun customProfileOnlyAllowsWebsitesWhenChromeWasSelected() {
+        val withoutChrome = FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, AccessProfile.ESSENTIALS_ONLY, emptySet())
+        val withChrome = withoutChrome.copy(allowedPackageSnapshot = setOf("com.android.chrome"))
+        assertFalse(SiteDomainPolicy.isAllowed("example.com", withoutChrome))
+        assertFalse(SiteDomainPolicy.isAllowed("example.com", withChrome))
+        assertTrue(SiteDomainPolicy.isAllowed("chatgpt.com", withChrome))
+        assertTrue(SiteDomainPolicy.isAllowed("www.google.com", withChrome))
+    }
     private val activeBlock = PlannedBlock(
         id = "focus",
         date = LocalDate.of(2026, 11, 3),
@@ -62,5 +71,5 @@ class SiteDomainPolicyTest {
     }
 
     private fun activeState(profile: AccessProfile) =
-        FocusPolicyState(BlockedReason.FOCUS_BLOCK, activeBlock.copy(accessProfile = profile))
+        FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, profile)
 }

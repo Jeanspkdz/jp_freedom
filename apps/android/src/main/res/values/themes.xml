@@ -1,10 +1,11 @@
 <resources>
-    <style name="Theme.JPFreedom" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.JPFreedom" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">#FFFDF8</item>
-        <item name="android:navigationBarColor">#FFFDF8</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#10182B</item>
+        <item name="android:navigationBarColor">#10182B</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowBackground">#10182B</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
 </resources>

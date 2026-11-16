@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
+import com.jp.freedom.domain.StudyTimerSession
+import com.jp.freedom.domain.StudySessionState
 import com.jp.freedom.data.SyncStatus
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -72,6 +76,7 @@ fun PlannerScreen(
     isTodaySelected: Boolean,
     blocks: List<PlannedBlock>,
     allBlocks: List<PlannedBlock>,
+    studySessions: List<StudyTimerSession>,
     settings: FocusSettings,
     restrictionActive: Boolean,
     hasSyncKey: Boolean,
@@ -81,6 +86,8 @@ fun PlannerScreen(
     onSelectToday: () -> Unit,
     onSelectTomorrow: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenStudyTimer: () -> Unit,
+    onOpenDailyReview: () -> Unit,
     onSyncNow: () -> Unit,
     onOpenTomorrowPlan: () -> Unit,
     onAddBlock: () -> Unit,
@@ -101,6 +108,10 @@ fun PlannerScreen(
     val requiredPlanDate = com.jp.freedom.domain.DayPlanPolicy
         .requiredPlanDateForEvening(LocalDate.now())
     val targetDate = requiredPlanDate ?: LocalDate.now().plusDays(1)
+    val targetMinutes = settings.studyHoursTargetMinutes
+    val actualMinutes = studySessions.filter { it.startedAt.atZone(java.time.ZoneId.systemDefault()).toLocalDate() == LocalDate.now() }
+        .sumOf { if (it.state == StudySessionState.ACTIVE) Duration.between(it.startedAt, java.time.Instant.now()).toMinutes() else it.actualMillis / 60_000 }
+        .toInt()
     val targetCount = allBlocks.count { it.date == targetDate }
     val isRestDayTomorrow = requiredPlanDate == null
 
@@ -109,7 +120,7 @@ fun PlannerScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (isTodaySelected) "Today's plan" else "Tomorrow's plan",
+                        text = "Pulso",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -128,12 +139,7 @@ fun PlannerScreen(
         },
         bottomBar = {
             PlannerBottomBar(
-                showNextDaySummary = isTodaySelected,
-                targetCount = targetCount,
-                requiredCount = settings.requiredBlockCount,
-                isRestDayTomorrow = isRestDayTomorrow,
-                onOpenTomorrowPlan = onOpenTomorrowPlan,
-                onAddBlock = onAddBlock,
+                onOpenStudyTimer = onOpenStudyTimer,
             )
         },
         containerColor = MaterialTheme.colorScheme.background,
@@ -141,7 +147,9 @@ fun PlannerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(contentPadding),
+                .padding(contentPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 12.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -170,25 +178,9 @@ fun PlannerScreen(
                 onSelectTomorrow = onSelectTomorrow,
             )
 
-            OutlinedButton(
-                onClick = if (hasSyncKey) onSyncNow else onOpenSettings,
-                enabled = syncStatus != SyncStatus.SYNCING,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-            ) {
-                Icon(Icons.Outlined.CloudSync, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    when {
-                        !hasSyncKey -> "Set up sync"
-                        syncStatus == SyncStatus.SYNCING -> "Syncing…"
-                        syncStatus == SyncStatus.ERROR -> "Retry sync"
-                        syncStatus == SyncStatus.PENDING -> "Sync changes"
-                        else -> "Sync changes"
-                    },
-                )
-            }
+            StudyHoursLedger(actualMinutes, targetMinutes, blocks)
+
+            TextButton(onClick = onOpenDailyReview, modifier = Modifier.align(Alignment.End).padding(end = 16.dp)) { Text("Revisar día") }
 
             if (!accessibilityEnabled || !exactAlarmsAllowed) {
                 Surface(
@@ -220,7 +212,7 @@ fun PlannerScreen(
 
             if (restrictionActive) {
                 RestrictionBanner(
-                    remainingBlocks = (settings.requiredBlockCount - targetCount).coerceAtLeast(0),
+                    remainingMinutes = (targetMinutes - com.jp.freedom.domain.DayPlanPolicy.plannedStudyMinutes(targetDate, allBlocks)).coerceAtLeast(0),
                     onOpenPlan = onOpenTomorrowPlan,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
@@ -230,17 +222,15 @@ fun PlannerScreen(
                 EmptyAgenda(
                     date = date,
                     isTodaySelected = isTodaySelected,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 24.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
                 )
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 16.dp),
-                ) {
-                    item { StudySummary(blocks) }
-                    itemsIndexed(blocks, key = { _, block -> block.id }) { index, block ->
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (isTodaySelected) "Plan de hoy" else "Plan de mañana", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                        IconButton(onClick = onAddBlock) { Icon(Icons.Outlined.Add, contentDescription = "Añadir actividad") }
+                    }
+                    blocks.forEachIndexed { index, block ->
                         val isCurrent = block.id == activeBlock?.id
                         val isNext = block.id == nextBlock?.id
                         EditorialBlock(
@@ -276,14 +266,14 @@ private fun DaySelector(
             onClick = onSelectToday,
             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
         ) {
-            Text("Today", style = MaterialTheme.typography.titleMedium)
+            Text("Hoy", style = MaterialTheme.typography.titleMedium)
         }
         SegmentedButton(
             selected = !isTodaySelected,
             onClick = onSelectTomorrow,
             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
         ) {
-            Text("Tomorrow", style = MaterialTheme.typography.titleMedium)
+            Text("Mañana", style = MaterialTheme.typography.titleMedium)
         }
     }
 }
@@ -315,6 +305,27 @@ private fun StudySummary(blocks: List<PlannedBlock>) {
             }
             if (blocks.size > 3) Text("+${blocks.size - 3} more blocks", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
         }
+    }
+}
+
+@Composable
+private fun StudyHoursLedger(actualMinutes: Int, targetMinutes: Int, blocks: List<PlannedBlock>) {
+    val planned = blocks.sumOf { Duration.between(it.startTime, it.endTime).toMinutes().coerceAtLeast(0) }.toInt()
+    val colors = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("${actualMinutes / 60}:${(actualMinutes % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.displaySmall, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, color = colors.onSurface)
+                Text("ESTUDIADO", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${targetMinutes / 60}:${(targetMinutes % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.headlineMedium, fontFamily = FontFamily.Monospace, color = colors.onSurface)
+                Text("META DIARIA", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        LinearProgressIndicator(progress = { (actualMinutes.toFloat() / targetMinutes.coerceAtLeast(1)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(4.dp), color = colors.primary, trackColor = colors.surfaceVariant)
+        Text("Planificado: ${planned / 60} h ${planned % 60} min", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelMedium, color = colors.secondary)
     }
 }
 
@@ -360,9 +371,9 @@ private fun EditorialBlock(
                     isCurrent -> StateLabel("In progress", emphasized = true)
                     isNext -> StateLabel("Next", emphasized = false)
                     block.completionStatus == CompletionStatus.NOT_STARTED -> StateLabel("Upcoming", emphasized = false)
-                    block.completionStatus == CompletionStatus.FINISHED -> StateLabel(block.completionStatus.label(), emphasized = false)
-                    block.completionStatus == CompletionStatus.PARTLY_DONE -> StateLabel(block.completionStatus.label(), emphasized = false)
-                    block.completionStatus == CompletionStatus.NOT_DONE -> StateLabel(block.completionStatus.label(), emphasized = false)
+                    block.completionStatus == CompletionStatus.FINISHED -> StateLabel("Completado", emphasized = false)
+                    block.completionStatus == CompletionStatus.PARTLY_DONE -> StateLabel("Parcial", emphasized = false)
+                    block.completionStatus == CompletionStatus.NOT_DONE -> StateLabel("No realizado", emphasized = false)
                 }
             }
             if (isCurrent) {
@@ -429,7 +440,7 @@ private fun EmptyAgenda(
 
 @Composable
 private fun RestrictionBanner(
-    remainingBlocks: Int,
+    remainingMinutes: Int,
     onOpenPlan: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -452,112 +463,47 @@ private fun RestrictionBanner(
             )
             Column(Modifier.weight(1f)) {
                 Text(
-                    "Evening restriction is active",
+                    "Plan de mañana incompleto",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.onErrorContainer,
                 )
                 Text(
-                    if (remainingBlocks == 1) "Add 1 block to unlock your phone" else "Add $remainingBlocks blocks to unlock your phone",
+                    "Faltan ${remainingMinutes / 60} h ${remainingMinutes % 60} min para tu meta",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onErrorContainer,
                 )
             }
-            TextButton(onClick = onOpenPlan) { Text("Plan") }
+            TextButton(onClick = onOpenPlan) { Text("Abrir") }
         }
     }
 }
 
 @Composable
 private fun PlannerBottomBar(
-    showNextDaySummary: Boolean,
-    targetCount: Int,
-    requiredCount: Int,
-    isRestDayTomorrow: Boolean,
-    onOpenTomorrowPlan: () -> Unit,
-    onAddBlock: () -> Unit,
+    onOpenStudyTimer: () -> Unit,
 ) {
-    Column(
+    Button(
+        onClick = onOpenStudyTimer,
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .height(56.dp),
+        shape = RoundedCornerShape(12.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
     ) {
-        if (showNextDaySummary) {
-            Surface(
-                onClick = onOpenTomorrowPlan,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 64.dp),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.CalendarMonth,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = if (isRestDayTomorrow) "Tomorrow · day off" else "Tomorrow",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (isRestDayTomorrow) {
-                            Text(
-                                text = "Add blocks if you like",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        } else {
-                            Text(
-                                text = "$targetCount of $requiredCount blocks",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    Icon(
-                        imageVector = Icons.Outlined.ChevronRight,
-                        contentDescription = "Open plan",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-            }
-        }
-        Button(
-            onClick = onAddBlock,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp),
-            shape = RoundedCornerShape(50),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-        ) {
-            Icon(Icons.Outlined.Add, contentDescription = null)
-            Spacer(Modifier.width(12.dp))
-            Text("Add block", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-        }
+        Icon(Icons.Outlined.School, contentDescription = null)
+        Spacer(Modifier.width(10.dp))
+        Text("Iniciar sesión", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
     }
 }
 
 private fun dateLabel(date: LocalDate, isTodaySelected: Boolean): String {
-    val prefix = if (isTodaySelected) "Today" else "Tomorrow"
-    val formatted = date.format(DateTimeFormatter.ofPattern("MMM d", englishLocale()))
-    return "$prefix, $formatted"
+    val prefix = if (isTodaySelected) "Hoy" else "Mañana"
+    val formatted = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("es-PE")))
+    return "$prefix · $formatted"
 }
 
 private fun LocalTime.clockText(): String = format(DateTimeFormatter.ofPattern("HH:mm"))
 
-private fun englishLocale() = Locale.US

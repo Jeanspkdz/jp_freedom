@@ -400,6 +400,412 @@ test('a successful sync shows the active block and planned end, saves the snapsh
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['facebook.com', 'youtube.com']);
 });
 
+test('an Android timer snapshot shows its original end and remaining time while installing desktop blocks', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: {
+      id: 'phone-session-1',
+      taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z',
+      endsAt: '2026-11-05T11:15:00.000Z',
+      accessProfile: 'ESSENTIALS_ONLY',
+    },
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async () => ({ ok: true, json: async () => ({ revision: 3, updatedAt: now.toISOString(), snapshot }) }),
+  });
+
+  assert.equal(harness.nodes.get('current-block').textContent, 'Read chapter four');
+  assert.equal(harness.nodes.get('planned-end').textContent, `Planned end: ${new Date(snapshot.activeStudySession.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`);
+  assert.equal(harness.nodes.get('focus-remaining-value').textContent, '45:00');
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+});
+
+test('starting a duration in Chrome writes one Essentials-only shared session and blocks sites immediately', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: null,
+    phoneReceivedStudySessionId: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  const writes = [];
+
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        writes.push(body);
+        return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+
+  harness.documentRef.getElementById('session-duration').value = '45';
+  await harness.nodes.get('start-session').listeners.get('click')();
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].snapshot.activeStudySession.taskName, 'Study session');
+  assert.equal(writes[0].snapshot.activeStudySession.accessProfile, 'ESSENTIALS_ONLY');
+  assert.equal(writes[0].snapshot.activeStudySession.startedAt, now.toISOString());
+  assert.equal(writes[0].snapshot.activeStudySession.endsAt, '2026-11-05T11:15:00.000Z');
+  assert.equal(harness.nodes.get('current-block').textContent, 'Study session');
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+  assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);
+});
+
+test('a Chrome study session continues from the cached policy while offline and stays pending for the phone', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: snapshot, lastSnapshotRevision: 4 });
+  await initializeManagement({ ...harness, now: () => now, fetchImpl: async () => { throw new TypeError('offline'); } });
+
+  harness.documentRef.getElementById('session-duration').value = '30';
+  await harness.nodes.get('start-session').listeners.get('click')();
+
+  assert.equal(harness.nodes.get('current-block').textContent, 'Study session');
+  assert.equal(harness.storage.lastValidSnapshot.activeStudySession.startedAt, now.toISOString());
+  assert.equal(harness.storage.pendingSessionStart.id, harness.storage.lastValidSnapshot.activeStudySession.id);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+  assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);
+});
+
+test('reconnecting publishes a still-active cached Chrome start to the phone', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: snapshot, lastSnapshotRevision: 4 });
+  let online = false;
+  const writes = [];
+  const management = await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (!online) throw new TypeError('offline');
+      if (options.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        writes.push(body.snapshot);
+        return { ok: true, json: async () => ({ revision: 6, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 5, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+  harness.documentRef.getElementById('session-duration').value = '30';
+  await harness.nodes.get('start-session').listeners.get('click')();
+  online = true;
+  await management.sync();
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].activeStudySession.id, harness.storage.lastValidSnapshot.activeStudySession.id);
+  assert.equal(harness.storage.pendingSessionStart, null);
+  assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);
+});
+
+test('a user can choose the synced value for a conflicted plan field', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1, settings: { requiredBlockCount: 4, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [],
+    fieldConflicts: [{ path: 'settings.requiredBlockCount', remoteValue: '3', localValue: '4' }],
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  const writes = [];
+  await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        writes.push(body.snapshot);
+        return { ok: true, json: async () => ({ revision: 3, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+  harness.nodes.get('field-conflict-choice').value = 'remote';
+  await harness.nodes.get('resolve-field-conflict').listeners.get('click')();
+
+  assert.equal(writes[0].settings.requiredBlockCount, 3);
+  assert.deepEqual(writes[0].fieldConflicts, []);
+});
+
+test('Chrome does not start a second session while the phone has a pending review', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: null,
+    phoneReceivedStudySessionId: null,
+    pendingStudyReviewSessionId: 'phone-session-review',
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  let writes = 0;
+
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') writes += 1;
+      return { ok: true, json: async () => ({ revision: 3, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+
+  assert.equal(harness.nodes.get('start-session').disabled, true);
+  assert.match(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+  await harness.nodes.get('start-session').listeners.get('click')();
+  assert.equal(writes, 0);
+});
+
+test('stopping a shared timer in Chrome releases it and keeps the shared review gate', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const active = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: {
+      id: 'phone-session-stop', taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z', endsAt: '2026-11-05T11:15:00.000Z', accessProfile: 'ESSENTIALS_ONLY',
+    },
+    pendingStudyReviewSessionId: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: active, lastSnapshotRevision: 1 });
+  const requests = [];
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options) => {
+      requests.push(options);
+      if (options.method === 'GET') return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot: active }) };
+      const body = JSON.parse(options.body);
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+    },
+  });
+
+  await harness.nodes.get('stop-session').listeners.get('click')();
+
+  const update = requests.find(request => request.method === 'PUT');
+  assert.ok(update);
+  const stopped = JSON.parse(update.body).snapshot;
+  assert.equal(stopped.activeStudySession, null);
+  assert.equal(stopped.pendingStudyReviewSessionId, 'phone-session-stop');
+  assert.equal(harness.storage.lastValidSnapshot.pendingStudyReviewSessionId, 'phone-session-stop');
+  assert.match(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+});
+
+test('Chrome queues an offline stop and publishes it after reconnecting', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const active = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [],
+    activeStudySession: { id: 'phone-session-offline-stop', taskName: 'Read chapter', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' },
+    pendingStudyReviewSessionId: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: active, lastSnapshotRevision: 1 });
+  let online = false;
+  const writes = [];
+  const management = await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (!online) throw new TypeError('offline');
+      if (options.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        writes.push(body.snapshot);
+        return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot: active }) };
+    },
+  });
+
+  assert.equal(harness.nodes.get('stop-session').disabled, false);
+  await harness.nodes.get('stop-session').listeners.get('click')();
+  assert.equal(harness.storage.lastValidSnapshot.activeStudySession, null);
+  assert.equal(harness.storage.pendingSessionStop.id, 'phone-session-offline-stop');
+  assert.match(harness.nodes.get('session-start-status').textContent, /stop pending/i);
+
+  online = true;
+  await management.sync();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].activeStudySession, null);
+  assert.equal(writes[0].pendingStudyReviewSessionId, 'phone-session-offline-stop');
+  assert.equal(harness.storage.pendingSessionStop, null);
+});
+
+test('Chrome clears a queued stop after Android has reviewed the same session', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const reviewed = {
+    id: 'phone-session-reviewed-offline-stop', taskName: 'Read chapter',
+    startedAt: '2026-11-05T10:00:00.000Z', endedAt: '2026-11-05T10:20:00.000Z',
+    durationMillis: 3_600_000, actualMillis: 1_200_000, accessProfile: 'ESSENTIALS_ONLY',
+    state: 'REVIEWED', completionStatus: 'FINISHED', note: '', remaining: '',
+  };
+  const pending = {
+    id: reviewed.id, taskName: reviewed.taskName,
+    startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z',
+    accessProfile: 'ESSENTIALS_ONLY',
+  };
+  const remote = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null,
+    pendingStudyReviewSessionId: null, studyHistory: [reviewed],
+  };
+  const harness = createHarness({
+    apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: remote,
+    lastSnapshotRevision: 1, pendingSessionStop: pending,
+  });
+  const requests = [];
+  const management = await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      requests.push(options);
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: remote }) };
+    },
+  });
+
+  await management.sync();
+
+  assert.equal(harness.storage.pendingSessionStop, null);
+  assert.equal(harness.storage.lastValidSnapshot.pendingStudyReviewSessionId, null);
+  assert.deepEqual(harness.storage.lastValidSnapshot.studyHistory, [reviewed]);
+  assert.equal(requests.some(request => request.method === 'PUT'), false);
+  assert.doesNotMatch(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+  assert.match(harness.nodes.get('sync-state').textContent, /synced/i);
+});
+
+test('Chrome clears a queued stop after Android clears reviewed history', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const pending = {
+    id: 'phone-session-cleared-review', taskName: 'Read chapter',
+    startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z',
+    accessProfile: 'ESSENTIALS_ONLY',
+  };
+  const remote = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null,
+    pendingStudyReviewSessionId: null, studyHistory: [],
+  };
+  const harness = createHarness({
+    apiUrl: 'https://sync.example', apiToken: 'token',
+    lastValidSnapshot: { ...remote, pendingStudyReviewSessionId: pending.id },
+    lastSnapshotRevision: 1, pendingSessionStop: pending,
+  });
+  const requests = [];
+  const management = await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      requests.push(options);
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: remote }) };
+    },
+  });
+
+  await management.sync();
+
+  assert.equal(harness.storage.pendingSessionStop, null);
+  assert.equal(harness.storage.lastValidSnapshot.pendingStudyReviewSessionId, null);
+  assert.deepEqual(harness.storage.lastValidSnapshot.studyHistory, []);
+  assert.equal(requests.some(request => request.method === 'PUT'), false);
+  assert.doesNotMatch(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+  assert.match(harness.nodes.get('sync-state').textContent, /synced/i);
+});
+
+test('an expired offline Chrome start remains locked for Android review', async () => {
+  const now = new Date('2026-11-05T11:30:00.000Z');
+  const pending = { id: 'chrome-expired-offline', taskName: 'Study session', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' };
+  const empty = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null, studyHistory: [] };
+  const remote = { ...empty, activeStudySession: pending, phoneReceivedStudySessionId: pending.id };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: { ...empty, activeStudySession: pending }, lastSnapshotRevision: 1, pendingSessionStart: pending });
+  let published;
+  await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') {
+        published = JSON.parse(options.body).snapshot;
+        return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: published }) };
+      }
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot: remote }) };
+    },
+  });
+
+  assert.equal(published.activeStudySession, null);
+  assert.equal(published.pendingStudyReviewSessionId, pending.id);
+  assert.equal(published.studyHistory[0].id, pending.id);
+  assert.equal(published.studyHistory[0].endedAt, pending.endsAt);
+  assert.equal(published.studyHistory[0].state, 'PENDING_REVIEW');
+  assert.equal(harness.storage.pendingSessionStart, null);
+  assert.equal(harness.nodes.get('start-session').disabled, true);
+  assert.match(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+});
+
+test('Chrome lets the user choose which imported history version to keep', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const server = { id: 'same-id', taskName: 'Server version', startedAt: '2026-11-05T10:00:00.000Z', endedAt: '2026-11-05T11:00:00.000Z', durationMillis: 3600000, actualMillis: 3600000, accessProfile: 'ESSENTIALS_ONLY', state: 'REVIEWED', completionStatus: 'FINISHED' };
+  const phone = { ...server, id: 'same-id-phone-copy', taskName: 'Phone copy · Phone version' };
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null, studyHistory: [server, phone], fieldConflicts: [{ path: 'studyHistory.same-id', remoteValue: 'same-id', localValue: 'same-id-phone-copy' }] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  let published;
+  await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') {
+        published = JSON.parse(options.body).snapshot;
+        return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: published }) };
+      }
+      return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot }) };
+    },
+  });
+  harness.nodes.get('field-conflict-choice').value = 'local';
+  await harness.nodes.get('resolve-field-conflict').listeners.get('click')();
+
+  assert.deepEqual(published.studyHistory.map(session => session.id), ['same-id-phone-copy']);
+  assert.deepEqual(published.fieldConflicts, []);
+});
+
+test('connection status distinguishes browser enforcement from confirmed phone receipt', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const session = {
+    id: 'chrome-session-1', taskName: 'Study session', accessProfile: 'ESSENTIALS_ONLY',
+    startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z',
+  };
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: session,
+    phoneReceivedStudySessionId: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async () => ({ ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot }) }),
+  });
+  assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);
+
+  const confirmedHarness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  await initializeManagement({
+    ...confirmedHarness,
+    now: () => now,
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ revision: 3, updatedAt: now.toISOString(), snapshot: { ...snapshot, phoneReceivedStudySessionId: session.id } }),
+    }),
+  });
+  assert.match(confirmedHarness.nodes.get('phone-receipt-state').textContent, /phone received/i);
+});
+
 test('management shows the full plan for today and tomorrow from the synced snapshot', async () => {
   const now = new Date(2026, 10, 6, 10, 30);
   const snapshot = {
@@ -544,6 +950,28 @@ test('the blocked page shows the active activity and planned end without a bypas
   assert.equal(harness.nodes.has('bypass'), false);
 });
 
+test('the blocked page explains an Android-started session and its planned end without a bypass', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: {
+      id: 'phone-session-1', taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z', endsAt: '2026-11-05T11:15:00.000Z',
+      accessProfile: 'ESSENTIALS_ONLY',
+    },
+  };
+  const harness = createHarness({ lastValidSnapshot: snapshot });
+
+  await initializeBlockedPage({ ...harness, now: () => now });
+
+  assert.equal(harness.nodes.get('blocked-activity').textContent, 'Read chapter four');
+  assert.equal(harness.nodes.get('blocked-end').textContent, `Planned end: ${new Date(snapshot.activeStudySession.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`);
+  assert.equal(harness.nodes.has('bypass'), false);
+});
+
 test('an invalid newer snapshot does not replace the last valid cached plan', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -591,6 +1019,89 @@ test('offline enforcement refreshes its dynamic rules at the cached block bounda
   await refreshFocusState(harness.chromeApi, new Date(2026, 10, 5, 10, 0));
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['youtube.com']);
   assert.equal(harness.alarms.get('focus-state-refresh').when, new Date(2026, 10, 5, 11, 0).getTime());
+});
+
+test('a synced Android timer installs site rules in the background until its absolute end', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com', 'youtube.com'],
+    blocks: [],
+    activeStudySession: {
+      id: 'phone-session-1', taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z', endsAt: '2026-11-05T11:15:00.000Z',
+      accessProfile: 'ESSENTIALS_ONLY',
+    },
+  };
+  const harness = createHarness({ lastValidSnapshot: snapshot });
+
+  await refreshFocusState(harness.chromeApi, now);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com', 'youtube.com']);
+  assert.equal(harness.alarms.get('focus-state-refresh').when, Date.parse(snapshot.activeStudySession.endsAt));
+
+  await refreshFocusState(harness.chromeApi, new Date(snapshot.activeStudySession.endsAt));
+  assert.deepEqual(harness.rules, []);
+});
+
+test('the background worker lifts timer rules when Android syncs an early stop', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const active = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [],
+    activeStudySession: {
+      id: 'phone-session-1', taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z', endsAt: '2026-11-05T11:15:00.000Z',
+      accessProfile: 'ESSENTIALS_ONLY',
+    },
+  };
+  const stopped = { ...active, activeStudySession: null };
+  const harness = createHarness({
+    apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: active, lastSnapshotRevision: 1,
+  });
+  await refreshFocusState(harness.chromeApi, now);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+
+  await refreshRemoteSnapshot(harness.chromeApi, async () => ({
+    ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: stopped }),
+  }), now);
+
+  assert.deepEqual(harness.rules, []);
+});
+
+test('the background worker publishes automatic expiry and preserves the session review gate', async () => {
+  const now = new Date('2026-11-05T11:15:00.000Z');
+  const snapshot = {
+    version: 1,
+    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'],
+    blocks: [{ id: 'planned', date: '2026-11-05', name: 'Study', startTime: '06:00', endTime: '07:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+    activeStudySession: {
+      id: 'phone-session-expiring', taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z', endsAt: now.toISOString(), accessProfile: 'ESSENTIALS_ONLY',
+    },
+    pendingStudyReviewSessionId: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastSnapshotRevision: 4 });
+  const requests = [];
+  await refreshRemoteSnapshot(harness.chromeApi, async (_url, options) => {
+    requests.push(options);
+    if (options.method === 'GET') return { ok: true, json: async () => ({ revision: 4, updatedAt: null, snapshot }) };
+    const body = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ revision: 5, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+  }, now);
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].method, 'PUT');
+  const published = JSON.parse(requests[1].body).snapshot;
+  assert.equal(published.activeStudySession, null);
+  assert.equal(published.pendingStudyReviewSessionId, 'phone-session-expiring');
+  assert.deepEqual(published.blocks, snapshot.blocks);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+  assert.equal(harness.storage.lastValidSnapshot.activeStudySession, null);
+  assert.equal(harness.storage.lastSnapshotRevision, 5);
 });
 
 test('the background worker polls for Android completion and releases rules with the management page closed', async () => {

@@ -95,6 +95,166 @@ test('a valid Android snapshot is revisioned and returned to other devices', asy
   assert.deepEqual((await read.json()).snapshot, snapshot);
 });
 
+test('the revisioned sync contract preserves an Android-started session for Chrome', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const snapshot = {
+    ...emptySnapshot,
+    activeStudySession: {
+      id: 'session-1',
+      taskName: 'Read chapter four',
+      startedAt: '2026-11-05T10:15:00.000Z',
+      endsAt: '2026-11-05T11:15:00.000Z',
+      accessProfile: 'ESSENTIALS_ONLY',
+    },
+  };
+
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot },
+  }));
+  assert.equal(write.status, 200);
+  assert.deepEqual((await api(request('/v1/snapshot')).then(response => response.json())).snapshot.activeStudySession, snapshot.activeStudySession);
+});
+
+test('the revisioned sync contract retains competing offline session starts', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const sessionStartCandidates = [
+    { id: 'phone-start', taskName: 'Read', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' },
+    { id: 'chrome-start', taskName: 'Write', startedAt: '2026-11-05T10:01:00.000Z', endsAt: '2026-11-05T11:01:00.000Z', accessProfile: 'ESSENTIALS_ONLY' },
+  ];
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot: { ...emptySnapshot, sessionStartCandidates } },
+  }));
+
+  assert.equal(write.status, 200);
+  const read = await api(request('/v1/snapshot'));
+  assert.deepEqual((await read.json()).snapshot.sessionStartCandidates, sessionStartCandidates);
+});
+
+test('the revisioned sync contract retains both values for same-field conflicts', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const fieldConflicts = [{ path: 'settings.requiredBlockCount', remoteValue: '3', localValue: '4' }];
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot: { ...emptySnapshot, fieldConflicts } },
+  }));
+
+  assert.equal(write.status, 200);
+  const read = await api(request('/v1/snapshot'));
+  assert.deepEqual((await read.json()).snapshot.fieldConflicts, fieldConflicts);
+});
+
+test('the revisioned sync contract imports, retains, and explicitly clears reviewed study history', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const reviewedSession = {
+    id: 'history-1', taskName: 'Read chapter four', durationMillis: 3600000,
+    accessProfile: 'ESSENTIALS_ONLY', startedAt: '2026-11-05T10:00:00Z',
+    endedAt: '2026-11-05T11:00:00Z', actualMillis: 3600000, state: 'REVIEWED',
+    completionStatus: 'FINISHED', note: 'Good progress', remaining: '',
+    breakStartedAt: null, breakDurationMillis: 0, nextTask: '',
+  };
+  const imported = { ...emptySnapshot, studyHistory: [reviewedSession] };
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot: imported },
+  }));
+  assert.equal(write.status, 200);
+  const firstRead = await api(request('/v1/snapshot')).then(response => response.json());
+  assert.deepEqual(firstRead.snapshot.studyHistory, [reviewedSession]);
+
+  const cleared = { ...firstRead.snapshot, studyHistory: [] };
+  const clearWrite = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: firstRead.revision, snapshot: cleared },
+  }));
+  assert.equal(clearWrite.status, 200);
+  const afterClear = await api(request('/v1/snapshot')).then(response => response.json());
+  assert.deepEqual(afterClear.snapshot.studyHistory, []);
+  assert.deepEqual(afterClear.snapshot.blocks, emptySnapshot.blocks);
+  assert.deepEqual(afterClear.snapshot.desktopBlockedDomains, emptySnapshot.desktopBlockedDomains);
+});
+
+test('the revisioned sync contract records an expired offline start without an active restriction', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const endedSession = {
+    id: 'chrome-expired-offline', taskName: 'Study session', durationMillis: 3_600_000,
+    accessProfile: 'ESSENTIALS_ONLY', startedAt: '2026-11-05T10:00:00.000Z', endedAt: '2026-11-05T11:00:00.000Z',
+    actualMillis: 3_600_000, state: 'PENDING_REVIEW', completionStatus: null,
+  };
+
+  const response = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot: { ...emptySnapshot, activeStudySession: null, studyHistory: [endedSession] } },
+  }));
+
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.snapshot.activeStudySession, null);
+  assert.equal(result.snapshot.pendingStudyReviewSessionId ?? null, null);
+  assert.deepEqual(result.snapshot.studyHistory, [endedSession]);
+});
+
+test('the revisioned sync contract rejects a session whose end does not follow its start', async () => {
+  const api = createSyncApi({ store: fakeStore(), token });
+  const response = await api(request('/v1/snapshot', {
+    method: 'PUT',
+    body: {
+      expectedRevision: 0,
+      snapshot: {
+        ...emptySnapshot,
+        activeStudySession: {
+          id: 'session-1', taskName: 'Study', accessProfile: 'ESSENTIALS_ONLY',
+          startedAt: '2026-11-05T11:00:00.000Z', endsAt: '2026-11-05T10:00:00.000Z',
+        },
+      },
+    },
+  }));
+
+  assert.equal(response.status, 422);
+  assert.deepEqual(await response.json(), { error: 'invalid_study_session' });
+});
+
+test('the revisioned sync contract carries Android phone receipt for a Chrome-started session', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const snapshot = {
+    ...emptySnapshot,
+    activeStudySession: {
+      id: 'chrome-session-1', taskName: 'Study session', accessProfile: 'ESSENTIALS_ONLY',
+      startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z',
+    },
+    phoneReceivedStudySessionId: 'chrome-session-1',
+  };
+
+  const write = await api(request('/v1/snapshot', { method: 'PUT', body: { expectedRevision: 0, snapshot } }));
+
+  assert.equal(write.status, 200);
+  assert.equal((await api(request('/v1/snapshot')).then(response => response.json())).snapshot.phoneReceivedStudySessionId, 'chrome-session-1');
+});
+
+test('the revisioned sync contract rejects an invalid phone receipt identifier', async () => {
+  const api = createSyncApi({ store: fakeStore(), token });
+  const response = await api(request('/v1/snapshot', {
+    method: 'PUT',
+    body: { expectedRevision: 0, snapshot: { ...emptySnapshot, phoneReceivedStudySessionId: 12 } },
+  }));
+
+  assert.equal(response.status, 422);
+  assert.deepEqual(await response.json(), { error: 'invalid_study_session_receipt' });
+});
+
+test('the revisioned sync contract carries an Android pending review that blocks another timer', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const snapshot = { ...emptySnapshot, pendingStudyReviewSessionId: 'phone-review-1' };
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot },
+  }));
+
+  assert.equal(write.status, 200);
+  assert.equal((await api(request('/v1/snapshot')).then(response => response.json())).snapshot.pendingStudyReviewSessionId, 'phone-review-1');
+});
+
 test('concurrent edits receive a conflict instead of overwriting newer data', async () => {
   const api = createSyncApi({ store: fakeStore(), token });
   const first = await api(request('/v1/snapshot', {

@@ -4,11 +4,17 @@ import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.DayPlanPolicy
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
+import com.jp.freedom.domain.StudyTimerSession
+import com.jp.freedom.domain.StudyTimerPolicy
+import com.jp.freedom.domain.StudySessionState
 import java.time.LocalDateTime
 
 data class FocusPolicyState(
     val blockedReason: BlockedReason?,
     val activeBlock: PlannedBlock?,
+    // Planned blocks schedule work; their legacy serialized profile is not a phone choice.
+    val accessProfile: AccessProfile? = activeBlock?.let { AccessProfile.ESSENTIALS_ONLY },
+    val allowedPackageSnapshot: Set<String>? = null,
 )
 
 object FocusPolicy {
@@ -16,11 +22,18 @@ object FocusPolicy {
         now: LocalDateTime,
         blocks: List<PlannedBlock>,
         settings: FocusSettings,
+        studySession: StudyTimerSession? = null,
     ): FocusPolicyState {
+        if (studySession?.state == StudySessionState.BREAKING &&
+            StudyTimerPolicy.finishBreakIfDue(studySession, now.atZone(java.time.ZoneId.systemDefault()).toInstant()) == null
+        ) return FocusPolicyState(null, null)
+        if (studySession?.state == StudySessionState.ACTIVE && StudyTimerPolicy.finishIfDue(studySession, now.atZone(java.time.ZoneId.systemDefault()).toInstant()) == null) {
+            return FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, studySession.accessProfile, studySession.allowedPackages)
+        }
         val eveningRestriction = DayPlanPolicy.shouldRestrictEvening(
             now = now,
             cutoff = settings.eveningCutoff,
-            requiredBlockCount = settings.requiredBlockCount,
+            studyHoursTargetMinutes = settings.studyHoursTargetMinutes,
             blocks = blocks,
         )
         if (eveningRestriction) return FocusPolicyState(BlockedReason.EVENING_RESTRICTION, null)
@@ -47,8 +60,9 @@ object FocusPolicy {
         val allowed = (essentialPackages + ownPackage).toMutableSet()
         defaultInputMethodPackage?.takeIf(String::isNotBlank)?.let(allowed::add)
         if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return allowed
+        state.allowedPackageSnapshot?.let { return allowed + it }
 
-        val profile = state.activeBlock?.accessProfile
+        val profile = state.accessProfile
         when (profile) {
             AccessProfile.ESSENTIALS_WITH_CHATGPT -> allowed += CHATGPT_PACKAGE
             AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> {

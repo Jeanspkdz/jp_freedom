@@ -23,6 +23,9 @@ class MainActivity : ComponentActivity() {
     private var resumeVersion by mutableIntStateOf(0)
     private var blockedReason by mutableStateOf<BlockedReason?>(null)
     private var blockedRequestVersion by mutableIntStateOf(0)
+    private var openSessionReviewVersion by mutableIntStateOf(0)
+    private var openDailyReviewVersion by mutableIntStateOf(0)
+    private var requestedDailyReviewDate by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,7 +35,11 @@ class MainActivity : ComponentActivity() {
         )
         repository = FocusRepository(applicationContext)
         PolicyAlarmScheduler.scheduleNext(this)
+        com.jp.freedom.enforcement.DailyReviewReminder.schedule(this)
         blockedReason = BlockedReason.fromIntentId(intent.getStringExtra(EXTRA_BLOCKED_REASON))
+        if (intent.getBooleanExtra(com.jp.freedom.enforcement.StudySessionNotifier.EXTRA_OPEN_SESSION_REVIEW, false)) openSessionReviewVersion++
+        requestedDailyReviewDate = intent.getStringExtra(com.jp.freedom.enforcement.DailyReviewReminder.EXTRA_DATE)
+        if (requestedDailyReviewDate != null) openDailyReviewVersion++
         setContent {
             FocusTheme {
                 FocusApp(
@@ -40,6 +47,9 @@ class MainActivity : ComponentActivity() {
                     activityResumeVersion = resumeVersion,
                     initialBlockedReason = blockedReason,
                     blockedRequestVersion = blockedRequestVersion,
+                    openSessionReviewVersion = openSessionReviewVersion,
+                    openDailyReviewVersion = openDailyReviewVersion,
+                    requestedDailyReviewDate = requestedDailyReviewDate,
                 )
             }
         }
@@ -59,6 +69,9 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         blockedReason = BlockedReason.fromIntentId(intent.getStringExtra(EXTRA_BLOCKED_REASON))
         if (blockedReason != null) blockedRequestVersion++
+        if (intent.getBooleanExtra(com.jp.freedom.enforcement.StudySessionNotifier.EXTRA_OPEN_SESSION_REVIEW, false)) openSessionReviewVersion++
+        requestedDailyReviewDate = intent.getStringExtra(com.jp.freedom.enforcement.DailyReviewReminder.EXTRA_DATE)
+        if (requestedDailyReviewDate != null) openDailyReviewVersion++
     }
 
     companion object {

@@ -14,12 +14,13 @@ computer are expected to use the same time zone.
 ## Snapshot contract
 
 `GET /v1/snapshot` returns `{ revision, updatedAt, snapshot }`. Android writes
-plans, settings, and completion states with `PUT /v1/snapshot`; Android and the
+plans, settings, completion states, and reviewed timer history with `PUT /v1/snapshot`; Android and the
 extension can update `desktopBlockedDomains` through that same revision-checked
 route. A stale revision returns `409 revision_conflict`; the client must fetch
 the current snapshot, preserve unrelated fields and its pending edits, and
-retry instead of overwriting a newer copy. Chrome writes only
-`desktopBlockedDomains`.
+retry instead of overwriting a newer copy. Chrome writes
+`desktopBlockedDomains` and `activeStudySession`; Android echoes the received
+session ID as `phoneReceivedStudySessionId` after applying the phone policy.
 
 For a genuinely new snapshot (`revision: 0`, `updatedAt: null`) with an empty
 `desktopBlockedDomains` list, Chrome initializes the shared list with Facebook,
@@ -29,8 +30,25 @@ lists are intentional and stay empty.
 Snapshots contain `version: 1`, `settings.requiredBlockCount`,
 `settings.eveningCutoff` (`21:00`, `22:00`, or `23:00`),
 `desktopBlockedDomains`, and dated blocks with their profile, status, and
-optional note. The initial desktop list selects Facebook, Instagram, TikTok, X,
-and Reddit. YouTube and WhatsApp Web are available unless selected by the user.
+optional note. They also contain `studyHistory`, the reviewed Android timer
+sessions with their original times, elapsed duration, and review fields. The
+first sync imports existing Android history by session ID; distinct records
+from both sides are retained, repeated syncs do not duplicate them, and an ID
+collision keeps the server record plus a phone copy with explicit keep-phone or
+keep-server choices in Android's daily review. Android's
+explicit Clear study history action removes only reviewed timer sessions from
+the shared snapshot; plans and desktop site settings are preserved. Snapshots
+also contain `activeStudySession`, either null or a timer with its task, access
+profile, and absolute `startedAt` and `endsAt` instants, plus optional
+`phoneReceivedStudySessionId` and `pendingStudyReviewSessionId` fields. A
+Chrome-started timer always uses `ESSENTIALS_ONLY`. Android keeps the original
+start and end times, applies only the remaining duration, and echoes the
+received session ID so Chrome can distinguish local browser enforcement from
+confirmed phone receipt. The pending review ID prevents a second timer until
+the phone review is complete. Chrome blocks selected desktop sites only between
+the absolute session times. The initial
+desktop list selects Facebook, Instagram, TikTok, X, and Reddit. YouTube and
+WhatsApp Web are available unless selected by the user.
 
 While Chrome is open, the service worker polls the snapshot API once per minute
 and refreshes immediately on startup. This receives Android changes, including
@@ -48,11 +66,13 @@ Until the extension receives its first valid snapshot, it does not block
 browsing and shows that synchronization is not active.
 
 The extension opens a full management page when clicked. That page shows the
-shared domain list, current block and its planned end time, and synchronization
-status. A blocked page shows the activity and planned end time; it has no bypass
-control. Marking the block Finished on Android releases it when the extension
+shared domain list, current planned block or Android study timer, its end time
+and remaining time, and synchronization status. A blocked page shows the
+activity and planned end time; it has no bypass control. Marking a planned block
+Finished or ending a timer on Android releases its rules when the extension
 receives the updated snapshot. Blocking applies to top-level page navigation,
-not embedded content on unrelated sites.
+not embedded content on unrelated sites. Android access profiles and evening
+restrictions remain phone-only.
 
 Every route except `/health` requires `Authorization: Bearer <SYNC_API_TOKEN>`.
 The token is supplied to the Neon Function at deploy time and entered into each

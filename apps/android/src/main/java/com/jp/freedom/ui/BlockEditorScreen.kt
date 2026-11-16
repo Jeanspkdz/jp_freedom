@@ -23,10 +23,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,7 +47,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
-import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.BlockValidation
 import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.PlannedBlock
@@ -73,13 +69,9 @@ fun BlockEditorScreen(
     var name by remember(block?.id, date) { mutableStateOf(block?.name.orEmpty()) }
     var startTime by remember(block?.id, date) { mutableStateOf(block?.startTime ?: defaultStartTime()) }
     var endTime by remember(block?.id, date) { mutableStateOf(block?.endTime ?: startTime.plusMinutes(60)) }
-    var accessProfile by remember(block?.id, date) {
-        mutableStateOf(block?.accessProfile ?: AccessProfile.ESSENTIALS_ONLY)
-    }
     var completionStatus by remember(block?.id, date) {
         mutableStateOf(block?.completionStatus ?: CompletionStatus.NOT_STARTED)
     }
-    var expandedProfile by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -146,7 +138,6 @@ fun BlockEditorScreen(
                             name = name.trim(),
                             startTime = startTime,
                             endTime = endTime,
-                            accessProfile = accessProfile,
                             completionStatus = completionStatus,
                         )
                         scope.launch {
@@ -233,42 +224,6 @@ fun BlockEditorScreen(
             }
             Text(
                 "Blocks can't overlap and must end on the same day.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Text("Access mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            ExposedDropdownMenuBox(
-                expanded = expandedProfile,
-                onExpandedChange = { expandedProfile = !expandedProfile },
-            ) {
-                OutlinedTextField(
-                    value = accessProfile.title,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Allowed apps during this block") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedProfile) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth(),
-                )
-                ExposedDropdownMenu(
-                    expanded = expandedProfile,
-                    onDismissRequest = { expandedProfile = false },
-                ) {
-                    AccessProfile.entries.forEach { profile ->
-                        DropdownMenuItem(
-                            text = { Text(profile.title) },
-                            onClick = {
-                                accessProfile = profile
-                                expandedProfile = false
-                            },
-                        )
-                    }
-                }
-            }
-            Text(
-                text = "Allowed apps: ${accessProfileDescription(accessProfile)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -439,10 +394,4 @@ private fun validationMessage(validation: BlockValidation): String? = when (vali
     is BlockValidation.InvalidTimeRange -> "The end time must be after the start time."
     is BlockValidation.NoteTooLong -> "The note is too long."
     is BlockValidation.Overlapping -> "This block overlaps with “${validation.firstBlockName}” or “${validation.secondBlockName}”. Change the time."
-}
-
-private fun accessProfileDescription(profile: AccessProfile): String = when (profile) {
-    AccessProfile.ESSENTIALS_ONLY -> "Phone, messages, emergency calls, home screen, Settings, keyboard, and JP Freedom."
-    AccessProfile.ESSENTIALS_WITH_CHATGPT -> "Essential apps and ChatGPT."
-    AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> "Essential apps, ChatGPT, and Google Search."
 }

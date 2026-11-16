@@ -14,10 +14,20 @@ import com.jp.freedom.domain.DesktopSiteBlocklist
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.SyncSnapshot
+import com.jp.freedom.domain.SharedStudySession
+import com.jp.freedom.domain.StudyTimerSession
+import com.jp.freedom.domain.StudySessionState
+import com.jp.freedom.domain.StudySessionStore
+import com.jp.freedom.domain.StudyTimerPolicy
+import com.jp.freedom.domain.SavedAccessProfile
+import com.jp.freedom.domain.SyncFieldConflict
 import com.jp.freedom.sync.SyncScheduler
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.Instant
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class PendingSyncState(
     val revision: Long,
@@ -26,6 +36,7 @@ data class PendingSyncState(
     val status: SyncStatus,
     val message: String?,
     val pendingPaths: Set<String>,
+    val fieldConflicts: List<SyncFieldConflict> = emptyList(),
 )
 
 enum class SyncStatus {
@@ -43,9 +54,69 @@ data class LocalSyncBundle(val snapshot: SyncSnapshot, val state: PendingSyncSta
  * Plan data and pending sync paths share SQLite transactions so a merge cannot
  * persist a server revision for a snapshot that missed a concurrent local edit.
  */
-class FocusRepository(context: Context) {
+class FocusRepository(context: Context) : StudySessionStore {
     private val appContext = context.applicationContext
     private val database = FocusDatabase(appContext)
+
+    fun accessProfiles(): List<SavedAccessProfile> = database.readableDatabase.query(
+        "access_profiles", null, null, null, null, null, "name COLLATE NOCASE",
+    ).use { cursor -> buildList {
+        while (cursor.moveToNext()) add(SavedAccessProfile(
+            cursor.getString(cursor.getColumnIndexOrThrow("id")),
+            cursor.getString(cursor.getColumnIndexOrThrow("name")),
+            jsonPackages(cursor.getString(cursor.getColumnIndexOrThrow("packages"))),
+        ))
+    } }
+
+    fun saveAccessProfile(profile: SavedAccessProfile) {
+        require(profile.name.isNotBlank())
+        require(activeStudySession()?.profileId != profile.id) { "Profile is used by an active session" }
+        writeAccessProfile(profile)
+    }
+
+    private fun writeAccessProfile(profile: SavedAccessProfile) {
+        database.writableDatabase.insertWithOnConflict("access_profiles", null, ContentValues().apply {
+            put("id", profile.id)
+            put("name", profile.name.trim())
+            put("packages", JSONArray(profile.packages.sorted()).toString())
+        }, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun deleteAccessProfile(profileId: String): Boolean {
+        if (activeStudySession()?.profileId == profileId) return false
+        return database.writableDatabase.delete("access_profiles", "id = ?", arrayOf(profileId)) > 0
+    }
+
+    fun reconcileAccessProfiles(installedPackages: Set<String>): List<SavedAccessProfile> {
+        activeStudySession()?.let { session ->
+            val current = session.allowedPackages?.intersect(installedPackages)
+            if (current != session.allowedPackages) {
+                saveStudySession(session.copy(allowedPackages = current))
+                markDirty(database.writableDatabase, listOf("activeStudySession"))
+            }
+        }
+        return accessProfiles().map { profile ->
+            val current = profile.copy(packages = profile.packages intersect installedPackages)
+            if (current != profile) writeAccessProfile(current)
+            current
+        }
+    }
+
+    fun removePackageFromProfiles(packageName: String) {
+        accessProfiles().forEach { profile ->
+            if (packageName in profile.packages) writeAccessProfile(profile.copy(packages = profile.packages - packageName))
+        }
+        activeStudySession()?.let { session ->
+            if (packageName in session.allowedPackages.orEmpty()) {
+                saveStudySession(session.copy(allowedPackages = session.allowedPackages.orEmpty() - packageName))
+                markDirty(database.writableDatabase, listOf("activeStudySession"))
+            }
+        }
+    }
+
+    private fun jsonPackages(json: String): Set<String> = JSONArray(json).let { array ->
+        (0 until array.length()).map(array::getString).toSet()
+    }
 
     fun blocksForDate(date: LocalDate): List<PlannedBlock> =
         queryBlocks(database.readableDatabase, "date = ?", arrayOf(date.toString()))
@@ -53,6 +124,145 @@ class FocusRepository(context: Context) {
     fun allBlocks(): List<PlannedBlock> = queryBlocks(database.readableDatabase, null, null)
 
     fun settings(): FocusSettings = readSettings(database.readableDatabase)
+
+    override fun activeStudySession(): StudyTimerSession? = readStudySession(database.readableDatabase, "state IN (?, ?)", arrayOf(StudySessionState.ACTIVE.name, StudySessionState.BREAKING.name))
+
+    override fun pendingStudyReview(): StudyTimerSession? = readStudySession(database.readableDatabase, "state = ?", arrayOf(StudySessionState.PENDING_REVIEW.name))
+
+    fun studySessions(): List<StudyTimerSession> = readStudySessions(database.readableDatabase)
+
+    private fun readStudyHistory(db: SQLiteDatabase): List<StudyTimerSession> = db.query(
+        "study_sessions", null, "state = ?", arrayOf(StudySessionState.REVIEWED.name), null, null, "started_at DESC",
+    ).use { cursor -> buildList {
+        while (cursor.moveToNext()) {
+            val sessionId = cursor.getString(cursor.getColumnIndexOrThrow("id"))
+            readStudySession(db, "id = ?", arrayOf(sessionId))?.let(::add)
+        }
+    } }
+
+    private fun readStudySessions(db: SQLiteDatabase): List<StudyTimerSession> = db.query(
+        "study_sessions", null, null, null, null, null, "started_at DESC",
+    ).use { cursor -> buildList {
+        while (cursor.moveToNext()) {
+            val id = cursor.getColumnIndexOrThrow("id")
+            val sessionId = cursor.getString(id)
+            readStudySession(db, "id = ?", arrayOf(sessionId))?.let(::add)
+        }
+    } }
+
+    override fun saveStudySession(session: StudyTimerSession) {
+        val values = ContentValues().apply {
+            put("id", session.id); put("task_name", session.taskName); put("duration_ms", session.durationMillis)
+            put("access_profile", session.accessProfile.name); put("started_at", session.startedAt.toEpochMilli())
+            put("profile_id", session.profileId)
+            put("profile_name", session.profileName)
+            put("allowed_packages", session.allowedPackages?.let { JSONArray(it.sorted()).toString() })
+            session.endedAt?.let { put("ended_at", it.toEpochMilli()) } ?: putNull("ended_at")
+            put("actual_ms", session.actualMillis); put("state", session.state.name)
+            session.completionStatus?.let { put("completion_status", it.name) } ?: putNull("completion_status")
+            put("note", session.note); put("remaining", session.remaining)
+            session.breakStartedAt?.let { put("break_started_at", it.toEpochMilli()) } ?: putNull("break_started_at")
+            put("break_duration_ms", session.breakDurationMillis); put("next_task", session.nextTask)
+        }
+        val db = database.writableDatabase
+        db.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        markDirty(db, listOf("studyHistory.${session.id}"))
+        if (session.state == StudySessionState.BREAKING || session.state == StudySessionState.REVIEWED) {
+            markDirty(db, listOf("pendingStudyReviewSessionId"))
+        }
+        scheduleSync()
+    }
+
+    /** Clears timer history and reviews without modifying plans or site settings. */
+    fun clearStudyHistory() {
+        val db = database.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("study_sessions", "state = ?", arrayOf(StudySessionState.REVIEWED.name))
+            markDirty(db, listOf("studyHistory.clear"))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        scheduleSync()
+    }
+
+    fun deleteStudyHistoryEntry(id: String) {
+        val db = database.writableDatabase
+        val deleted = db.delete("study_sessions", "id = ? AND state = ?", arrayOf(id, StudySessionState.REVIEWED.name))
+        if (deleted == 1) {
+            markDirty(db, listOf("studyHistory.$id.deleted"))
+            scheduleSync()
+        }
+    }
+
+    override fun startStudySession(session: StudyTimerSession): Boolean {
+        val db = database.writableDatabase
+        var started = false
+        db.beginTransaction()
+        try {
+            val existing = db.rawQuery("SELECT 1 FROM study_sessions WHERE state IN (?, ?, ?) LIMIT 1", arrayOf("ACTIVE", "PENDING_REVIEW", "BREAKING")).use { it.moveToFirst() }
+            if (existing) return false
+            saveStudySession(session)
+            markDirty(db, listOf("activeStudySession"))
+            db.setTransactionSuccessful()
+            started = true
+        } finally {
+            db.endTransaction()
+        }
+        if (started) scheduleSync()
+        return started
+    }
+
+    override fun finishStudySession(session: StudyTimerSession): Boolean {
+        val db = database.writableDatabase
+        var finished = false
+        db.beginTransaction()
+        try {
+            finished = db.update(
+                "study_sessions",
+                ContentValues().apply {
+                    put("ended_at", session.endedAt?.toEpochMilli())
+                    put("actual_ms", session.actualMillis)
+                    put("state", session.state.name)
+                },
+                "id = ? AND state = ?",
+                arrayOf(session.id, StudySessionState.ACTIVE.name),
+            ) == 1
+            if (finished) {
+                markDirty(db, listOf("activeStudySession"))
+                db.setTransactionSuccessful()
+            }
+        } finally {
+            db.endTransaction()
+        }
+        if (finished) scheduleSync()
+        return finished
+    }
+
+    private fun readStudySession(db: SQLiteDatabase, where: String, args: Array<String>): StudyTimerSession? =
+        db.query("study_sessions", null, where, args, null, null, "started_at DESC", "1").use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            StudyTimerSession(
+                id = cursor.getString(cursor.getColumnIndexOrThrow("id")),
+                taskName = cursor.getString(cursor.getColumnIndexOrThrow("task_name")),
+                durationMillis = cursor.getLong(cursor.getColumnIndexOrThrow("duration_ms")),
+                accessProfile = AccessProfile.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("access_profile"))),
+                profileId = cursor.getColumnIndexOrThrow("profile_id").let { if (cursor.isNull(it)) null else cursor.getString(it) },
+                profileName = cursor.getString(cursor.getColumnIndexOrThrow("profile_name")),
+                allowedPackages = cursor.getColumnIndexOrThrow("allowed_packages").let { if (cursor.isNull(it)) null else jsonPackages(cursor.getString(it)) },
+                startedAt = Instant.ofEpochMilli(cursor.getLong(cursor.getColumnIndexOrThrow("started_at"))),
+                endedAt = cursor.getColumnIndexOrThrow("ended_at").let { if (cursor.isNull(it)) null else Instant.ofEpochMilli(cursor.getLong(it)) },
+                actualMillis = cursor.getLong(cursor.getColumnIndexOrThrow("actual_ms")),
+                state = StudySessionState.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("state"))),
+                completionStatus = cursor.getColumnIndexOrThrow("completion_status").let { if (cursor.isNull(it)) null else CompletionStatus.valueOf(cursor.getString(it)) },
+                note = cursor.getString(cursor.getColumnIndexOrThrow("note")) ?: "",
+                remaining = cursor.getString(cursor.getColumnIndexOrThrow("remaining")) ?: "",
+                breakStartedAt = cursor.getColumnIndexOrThrow("break_started_at").let { if (cursor.isNull(it)) null else Instant.ofEpochMilli(cursor.getLong(it)) },
+                breakDurationMillis = cursor.getLong(cursor.getColumnIndexOrThrow("break_duration_ms")),
+                nextTask = cursor.getString(cursor.getColumnIndexOrThrow("next_task")) ?: "",
+            )
+        }
 
     fun desktopBlockedDomains(): List<String> = readDomains(database.readableDatabase)
 
@@ -65,6 +275,8 @@ class FocusRepository(context: Context) {
                 put(COLUMN_SETTINGS_ID, 1)
                 put(COLUMN_REQUIRED_COUNT, settings.requiredBlockCount)
                 put(COLUMN_CUTOFF_MINUTE, settings.eveningCutoff.toMinuteOfDay())
+                put(COLUMN_STUDY_TARGET_MINUTES, settings.studyHoursTargetMinutes)
+                put(COLUMN_BREAK_MINUTES, settings.breakMinutes)
             }
             db.insertWithOnConflict(TABLE_SETTINGS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
             val paths = buildList {
@@ -194,6 +406,27 @@ class FocusRepository(context: Context) {
 
     fun syncState(): PendingSyncState = readSyncState(database.readableDatabase)
 
+    fun resolveFieldConflict(path: String, keepRemoteValue: Boolean) {
+        val db = database.writableDatabase
+        db.beginTransaction()
+        try {
+            val conflict = readFieldConflicts(db).firstOrNull { it.path == path } ?: return
+            if (keepRemoteValue) applyFieldValue(db, conflict.path, conflict.remoteValue)
+            val remaining = readFieldConflicts(db).filterNot { it.path == path }
+            writeFieldConflicts(db, remaining)
+            markDirty(db, listOf(path, "fieldConflicts.$path.resolved"))
+            db.update(TABLE_SYNC_STATE, ContentValues().apply {
+                put(COLUMN_PENDING, 1)
+                put(COLUMN_STATUS, SyncStatus.PENDING.name)
+                putNull(COLUMN_MESSAGE)
+            }, "$COLUMN_SETTINGS_ID = 1", null)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        scheduleSync()
+    }
+
     fun markSyncing() = updateSyncMetadata(status = SyncStatus.SYNCING, message = null)
 
     fun markSyncError(message: String) = updateSyncMetadata(status = SyncStatus.ERROR, message = message)
@@ -263,7 +496,50 @@ class FocusRepository(context: Context) {
         db.beginTransaction()
         try {
             if (readSyncState(db).generation != expectedGeneration) return false
+            val resolvingCompetingStarts = readSessionStartCandidates(db).size > 1
+                && snapshot.sessionStartCandidates.isEmpty()
             replaceSnapshot(db, snapshot)
+            if (snapshot.activeStudySession == null) {
+                val activeSession = readStudySession(
+                    db,
+                    "state = ?",
+                    arrayOf(StudySessionState.ACTIVE.name),
+                )
+                val now = Instant.now()
+                activeSession?.let { active ->
+                    val sharedStop = StudyTimerPolicy.stopForSharedReview(
+                        active,
+                        snapshot.pendingStudyReviewSessionId,
+                        now,
+                    )
+                    val ended = sharedStop ?: active.takeIf { it.id.startsWith("chrome-") }?.let {
+                        StudyTimerPolicy.finishIfDue(it, now) ?: StudyTimerPolicy.stop(it, now)
+                    }
+                    ended?.let {
+                        saveStudySession(it)
+                        markDirty(db, listOf("activeStudySession", "pendingStudyReviewSessionId"))
+                    }
+                }
+            }
+            snapshot.activeStudySession?.let { shared ->
+                val active = readStudySession(db, "state IN (?, ?)", arrayOf(StudySessionState.ACTIVE.name, StudySessionState.BREAKING.name))
+                val pendingReview = readStudySession(db, "state = ?", arrayOf(StudySessionState.PENDING_REVIEW.name))
+                val canReceive = (resolvingCompetingStarts || active == null || active.id == shared.id)
+                    && (pendingReview == null || pendingReview.id == shared.id)
+                if (canReceive) {
+                    val received = StudyTimerPolicy.receiveSharedSession(shared, Instant.now())
+                    saveStudySession(received)
+                    val changedPaths = mutableListOf<String>()
+                    if (received.state == StudySessionState.PENDING_REVIEW) {
+                        changedPaths += listOf("activeStudySession", "pendingStudyReviewSessionId")
+                    }
+                    if (readReceivedSessionId(db) != shared.id) {
+                        db.update(TABLE_SYNC_STATE, ContentValues().apply { put(COLUMN_RECEIVED_SESSION_ID, shared.id) }, "$COLUMN_SETTINGS_ID = 1", null)
+                        changedPaths += "phoneReceivedStudySessionId"
+                    }
+                    markDirty(db, changedPaths)
+                }
+            }
             val values = ContentValues().apply {
                 put(COLUMN_REVISION, revision)
                 if (conflictResolved) put(COLUMN_STATUS, SyncStatus.CONFLICT_RESOLVED.name)
@@ -284,7 +560,7 @@ class FocusRepository(context: Context) {
 
     private fun readSettings(db: SQLiteDatabase): FocusSettings = db.query(
         TABLE_SETTINGS,
-        arrayOf(COLUMN_REQUIRED_COUNT, COLUMN_CUTOFF_MINUTE),
+        arrayOf(COLUMN_REQUIRED_COUNT, COLUMN_CUTOFF_MINUTE, COLUMN_STUDY_TARGET_MINUTES, COLUMN_BREAK_MINUTES),
         "$COLUMN_SETTINGS_ID = 1",
         null,
         null,
@@ -296,6 +572,8 @@ class FocusRepository(context: Context) {
             FocusSettings(
                 requiredBlockCount = cursor.getInt(0).coerceAtLeast(1),
                 eveningCutoff = LocalTime.of(cursor.getInt(1) / 60, cursor.getInt(1) % 60),
+                studyHoursTargetMinutes = cursor.getInt(2).coerceIn(30, 720),
+                breakMinutes = cursor.getInt(3).coerceIn(1, 60),
             )
         }.getOrDefault(FocusSettings())
     }
@@ -310,11 +588,129 @@ class FocusRepository(context: Context) {
         "$COLUMN_DOMAIN ASC",
     ).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }
 
+    private fun applyFieldValue(db: SQLiteDatabase, path: String, value: String) {
+        when {
+            path == "settings.requiredBlockCount" -> db.update(TABLE_SETTINGS, ContentValues().apply { put(COLUMN_REQUIRED_COUNT, value.toInt()) }, "$COLUMN_SETTINGS_ID = 1", null)
+            path == "settings.eveningCutoff" -> db.update(TABLE_SETTINGS, ContentValues().apply { put(COLUMN_CUTOFF_MINUTE, LocalTime.parse(value).toMinuteOfDay()) }, "$COLUMN_SETTINGS_ID = 1", null)
+            path.startsWith("desktopBlockedDomains.") -> {
+                val domain = path.removePrefix("desktopBlockedDomains.")
+                if (value == "included") db.insertWithOnConflict(TABLE_DESKTOP_DOMAINS, null, ContentValues().apply { put(COLUMN_DOMAIN, domain) }, SQLiteDatabase.CONFLICT_REPLACE)
+                else db.delete(TABLE_DESKTOP_DOMAINS, "$COLUMN_DOMAIN = ?", arrayOf(domain))
+            }
+            path.startsWith("blocks.") -> {
+                val segments = path.split('.', limit = 3)
+                if (segments.size != 3) return
+                val column = when (segments[2]) {
+                    "date" -> COLUMN_DATE
+                    "name" -> COLUMN_NAME
+                    "startTime" -> COLUMN_START_MINUTE
+                    "endTime" -> COLUMN_END_MINUTE
+                    "accessProfile" -> COLUMN_ACCESS_PROFILE
+                    "completionStatus" -> COLUMN_COMPLETION_STATUS
+                    "note" -> COLUMN_NOTE
+                    else -> return
+                }
+                val values = ContentValues().apply {
+                    when (column) {
+                        COLUMN_DATE -> put(column, LocalDate.parse(value).toString())
+                        COLUMN_START_MINUTE, COLUMN_END_MINUTE -> put(column, LocalTime.parse(value).toMinuteOfDay())
+                        COLUMN_NOTE -> if (value == "<null>") putNull(column) else put(column, value)
+                        else -> put(column, value)
+                    }
+                }
+                db.update(TABLE_BLOCKS, values, "$COLUMN_ID = ?", arrayOf(segments[1]))
+            }
+        }
+    }
+
+    private fun readFieldConflicts(db: SQLiteDatabase): List<SyncFieldConflict> = readJsonColumn(db, COLUMN_FIELD_CONFLICTS).let { source ->
+        val array = JSONArray(source)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                add(SyncFieldConflict(item.getString("path"), item.getString("remoteValue"), item.getString("localValue")))
+            }
+        }
+    }
+
+    private fun writeFieldConflicts(db: SQLiteDatabase, conflicts: List<SyncFieldConflict>) {
+        val array = JSONArray().apply {
+            conflicts.forEach { item -> put(JSONObject().apply {
+                put("path", item.path); put("remoteValue", item.remoteValue); put("localValue", item.localValue)
+            }) }
+        }
+        db.update(TABLE_SYNC_STATE, ContentValues().apply { put(COLUMN_FIELD_CONFLICTS, array.toString()) }, "$COLUMN_SETTINGS_ID = 1", null)
+    }
+
+    private fun readSessionStartCandidates(db: SQLiteDatabase): List<SharedStudySession> = readJsonColumn(db, COLUMN_SESSION_CANDIDATES).let { source ->
+        val array = JSONArray(source)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                add(SharedStudySession(
+                    item.getString("id"), item.getString("taskName"), Instant.parse(item.getString("startedAt")),
+                    Instant.parse(item.getString("endsAt")), AccessProfile.valueOf(item.getString("accessProfile")),
+                    item.optString("profileId").takeIf { it.isNotBlank() && it != "null" },
+                    item.optString("profileName", "Essentials only"),
+                    item.optJSONArray("allowedPackages")?.let { packages -> (0 until packages.length()).map(packages::getString).toSet() },
+                ))
+            }
+        }
+    }
+
+    private fun writeSessionStartCandidates(db: SQLiteDatabase, candidates: List<SharedStudySession>) {
+        val array = JSONArray().apply {
+            candidates.forEach { item -> put(JSONObject().apply {
+                put("id", item.id); put("taskName", item.taskName); put("startedAt", item.startedAt.toString())
+                put("endsAt", item.endsAt.toString()); put("accessProfile", item.accessProfile.name)
+                put("profileId", item.profileId ?: JSONObject.NULL)
+                put("profileName", item.profileName)
+                item.allowedPackages?.let { put("allowedPackages", JSONArray(it.sorted())) }
+            }) }
+        }
+        db.update(TABLE_SYNC_STATE, ContentValues().apply { put(COLUMN_SESSION_CANDIDATES, array.toString()) }, "$COLUMN_SETTINGS_ID = 1", null)
+    }
+
+    private fun readJsonColumn(db: SQLiteDatabase, column: String): String = db.query(
+        TABLE_SYNC_STATE, arrayOf(column), "$COLUMN_SETTINGS_ID = 1", null, null, null, null,
+    ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) ?: "[]" else "[]" }
+
     private fun readSnapshot(db: SQLiteDatabase) = SyncSnapshot(
         settings = readSettings(db),
         desktopBlockedDomains = readDomains(db),
         blocks = queryBlocks(db, null, null),
+        activeStudySession = readStudySession(db, "state = ?", arrayOf(StudySessionState.ACTIVE.name))?.let { session ->
+            SharedStudySession(
+                id = session.id,
+                taskName = session.taskName,
+                startedAt = session.startedAt,
+                endsAt = session.startedAt.plusMillis(session.durationMillis),
+                accessProfile = session.accessProfile,
+                profileId = session.profileId,
+                profileName = session.profileName,
+                allowedPackages = session.allowedPackages,
+            )
+        },
+        phoneReceivedStudySessionId = readReceivedSessionId(db),
+        pendingStudyReviewSessionId = readStudySession(
+            db,
+            "state = ?",
+            arrayOf(StudySessionState.PENDING_REVIEW.name),
+        )?.id,
+        studyHistory = readStudyHistory(db),
+        sessionStartCandidates = readSessionStartCandidates(db),
+        fieldConflicts = readFieldConflicts(db),
     )
+
+    private fun readReceivedSessionId(db: SQLiteDatabase): String? = db.query(
+        TABLE_SYNC_STATE,
+        arrayOf(COLUMN_RECEIVED_SESSION_ID),
+        "$COLUMN_SETTINGS_ID = 1",
+        null,
+        null,
+        null,
+        null,
+    ).use { cursor -> if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null }
 
     private fun readSyncState(db: SQLiteDatabase): PendingSyncState {
         val metadata = db.query(
@@ -351,6 +747,7 @@ class FocusRepository(context: Context) {
             status = statusAndMessage.first,
             message = statusAndMessage.second,
             pendingPaths = paths,
+            fieldConflicts = readFieldConflicts(db),
         )
     }
 
@@ -388,6 +785,7 @@ class FocusRepository(context: Context) {
                 put(COLUMN_SETTINGS_ID, 1)
                 put(COLUMN_REQUIRED_COUNT, snapshot.settings.requiredBlockCount)
                 put(COLUMN_CUTOFF_MINUTE, snapshot.settings.eveningCutoff.toMinuteOfDay())
+                put(COLUMN_STUDY_TARGET_MINUTES, readSettings(db).studyHoursTargetMinutes)
             },
             SQLiteDatabase.CONFLICT_REPLACE,
         )
@@ -397,6 +795,30 @@ class FocusRepository(context: Context) {
         snapshot.desktopBlockedDomains.forEach { domain ->
             db.insert(TABLE_DESKTOP_DOMAINS, null, ContentValues().apply { put(COLUMN_DOMAIN, domain) })
         }
+        snapshot.phoneReceivedStudySessionId?.let { receivedId ->
+            db.update(TABLE_SYNC_STATE, ContentValues().apply { put(COLUMN_RECEIVED_SESSION_ID, receivedId) }, "$COLUMN_SETTINGS_ID = 1", null)
+        }
+        db.delete("study_sessions", "state = ?", arrayOf(StudySessionState.REVIEWED.name))
+        snapshot.studyHistory.forEach { session -> saveSessionRow(db, session) }
+        writeFieldConflicts(db, snapshot.fieldConflicts)
+        writeSessionStartCandidates(db, snapshot.sessionStartCandidates)
+    }
+
+    private fun saveSessionRow(db: SQLiteDatabase, session: StudyTimerSession) {
+        val values = ContentValues().apply {
+            put("id", session.id); put("task_name", session.taskName); put("duration_ms", session.durationMillis)
+            put("access_profile", session.accessProfile.name); put("started_at", session.startedAt.toEpochMilli())
+            put("profile_id", session.profileId)
+            put("profile_name", session.profileName)
+            put("allowed_packages", session.allowedPackages?.let { JSONArray(it.sorted()).toString() })
+            session.endedAt?.let { put("ended_at", it.toEpochMilli()) } ?: putNull("ended_at")
+            put("actual_ms", session.actualMillis); put("state", session.state.name)
+            session.completionStatus?.let { put("completion_status", it.name) } ?: putNull("completion_status")
+            put("note", session.note); put("remaining", session.remaining)
+            session.breakStartedAt?.let { put("break_started_at", it.toEpochMilli()) } ?: putNull("break_started_at")
+            put("break_duration_ms", session.breakDurationMillis); put("next_task", session.nextTask)
+        }
+        db.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     private fun queryBlocks(db: SQLiteDatabase, selection: String?, selectionArgs: Array<String>?): List<PlannedBlock> =
@@ -461,6 +883,8 @@ class FocusRepository(context: Context) {
             createSyncTables(db)
             seedDomains(db)
             insertInitialSyncState(db)
+            createStudySessionTable(db)
+            createAccessProfileTable(db)
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -514,6 +938,64 @@ class FocusRepository(context: Context) {
                     db.execSQL("UPDATE $TABLE_SYNC_STATE SET $COLUMN_GENERATION = 1, $COLUMN_PENDING = 1, $COLUMN_STATUS = 'PENDING' WHERE $COLUMN_SETTINGS_ID = 1")
                 }
             }
+            if (oldVersion < 5) {
+                db.execSQL("ALTER TABLE $TABLE_SETTINGS ADD COLUMN $COLUMN_STUDY_TARGET_MINUTES INTEGER NOT NULL DEFAULT 180")
+            }
+            if (oldVersion < 6) createStudySessionTable(db)
+            if (oldVersion < 7) {
+                addColumnIfMissing(db, TABLE_SETTINGS, COLUMN_BREAK_MINUTES, "INTEGER NOT NULL DEFAULT 15")
+                addColumnIfMissing(db, "study_sessions", "break_started_at", "INTEGER")
+                addColumnIfMissing(db, "study_sessions", "break_duration_ms", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfMissing(db, "study_sessions", "next_task", "TEXT NOT NULL DEFAULT ''")
+            }
+            if (oldVersion < 8) {
+                db.insertWithOnConflict(
+                    TABLE_SYNC_CHANGES,
+                    null,
+                    ContentValues().apply { put(COLUMN_PATH, "studyHistory.import") },
+                    SQLiteDatabase.CONFLICT_REPLACE,
+                )
+                db.execSQL("UPDATE $TABLE_SYNC_STATE SET $COLUMN_GENERATION = $COLUMN_GENERATION + 1, $COLUMN_PENDING = 1, $COLUMN_STATUS = 'PENDING' WHERE $COLUMN_SETTINGS_ID = 1")
+            }
+            if (oldVersion < 9) addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_RECEIVED_SESSION_ID, "TEXT")
+            if (oldVersion < 10) {
+                addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_FIELD_CONFLICTS, "TEXT NOT NULL DEFAULT '[]'")
+                addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_SESSION_CANDIDATES, "TEXT NOT NULL DEFAULT '[]'")
+            }
+            if (oldVersion < 11) {
+                createAccessProfileTable(db)
+                addColumnIfMissing(db, "study_sessions", "profile_id", "TEXT")
+                addColumnIfMissing(db, "study_sessions", "profile_name", "TEXT NOT NULL DEFAULT 'Essentials only'")
+                addColumnIfMissing(db, "study_sessions", "allowed_packages", "TEXT")
+            }
+            if (oldVersion < 12) {
+                // Planned blocks no longer select phone access. Keep their scheduling data intact.
+                db.execSQL("UPDATE $TABLE_BLOCKS SET $COLUMN_ACCESS_PROFILE = 'ESSENTIALS_ONLY' WHERE $COLUMN_ACCESS_PROFILE != 'ESSENTIALS_ONLY'")
+            }
+        }
+
+        private fun addColumnIfMissing(db: SQLiteDatabase, table: String, column: String, definition: String) {
+            val exists = db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+                val nameColumn = cursor.getColumnIndexOrThrow("name")
+                var found = false
+                while (cursor.moveToNext()) if (cursor.getString(nameColumn) == column) found = true
+                found
+            }
+            if (!exists) db.execSQL("ALTER TABLE $table ADD COLUMN $column $definition")
+        }
+
+        private fun createStudySessionTable(db: SQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS study_sessions (
+                id TEXT PRIMARY KEY NOT NULL, task_name TEXT NOT NULL, duration_ms INTEGER NOT NULL,
+                access_profile TEXT NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER,
+                actual_ms INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL,
+                completion_status TEXT, note TEXT NOT NULL DEFAULT '', remaining TEXT NOT NULL DEFAULT '',
+                break_started_at INTEGER, break_duration_ms INTEGER NOT NULL DEFAULT 0, next_task TEXT NOT NULL DEFAULT '',
+                profile_id TEXT, profile_name TEXT NOT NULL DEFAULT 'Essentials only', allowed_packages TEXT)""")
+        }
+
+        private fun createAccessProfileTable(db: SQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS access_profiles (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, packages TEXT NOT NULL)")
         }
 
         private fun createPlanTables(db: SQLiteDatabase) {
@@ -534,7 +1016,9 @@ class FocusRepository(context: Context) {
                 """CREATE TABLE IF NOT EXISTS $TABLE_SETTINGS (
                     $COLUMN_SETTINGS_ID INTEGER PRIMARY KEY NOT NULL,
                     $COLUMN_REQUIRED_COUNT INTEGER NOT NULL,
-                    $COLUMN_CUTOFF_MINUTE INTEGER NOT NULL
+                    $COLUMN_CUTOFF_MINUTE INTEGER NOT NULL,
+                    $COLUMN_STUDY_TARGET_MINUTES INTEGER NOT NULL DEFAULT 180,
+                    $COLUMN_BREAK_MINUTES INTEGER NOT NULL DEFAULT 15
                 )""".trimIndent(),
             )
         }
@@ -548,7 +1032,10 @@ class FocusRepository(context: Context) {
                     $COLUMN_GENERATION INTEGER NOT NULL,
                     $COLUMN_PENDING INTEGER NOT NULL,
                     $COLUMN_STATUS TEXT NOT NULL,
-                    $COLUMN_MESSAGE TEXT
+                    $COLUMN_MESSAGE TEXT,
+                    $COLUMN_RECEIVED_SESSION_ID TEXT,
+                    $COLUMN_FIELD_CONFLICTS TEXT NOT NULL DEFAULT '[]',
+                    $COLUMN_SESSION_CANDIDATES TEXT NOT NULL DEFAULT '[]'
                 )""".trimIndent(),
             )
             db.execSQL("CREATE TABLE IF NOT EXISTS $TABLE_SYNC_CHANGES ($COLUMN_PATH TEXT PRIMARY KEY NOT NULL)")
@@ -577,7 +1064,7 @@ class FocusRepository(context: Context) {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 4
+            private const val DATABASE_VERSION = 12
         }
     }
 
@@ -598,6 +1085,8 @@ class FocusRepository(context: Context) {
         const val COLUMN_SETTINGS_ID = "id"
         const val COLUMN_REQUIRED_COUNT = "required_count"
         const val COLUMN_CUTOFF_MINUTE = "cutoff_minute"
+        const val COLUMN_STUDY_TARGET_MINUTES = "study_target_minutes"
+        const val COLUMN_BREAK_MINUTES = "break_minutes"
         const val COLUMN_DOMAIN = "domain"
         const val COLUMN_PATH = "path"
         const val COLUMN_REVISION = "revision"
@@ -605,6 +1094,9 @@ class FocusRepository(context: Context) {
         const val COLUMN_PENDING = "pending"
         const val COLUMN_STATUS = "status"
         const val COLUMN_MESSAGE = "message"
+        const val COLUMN_RECEIVED_SESSION_ID = "phone_received_session_id"
+        const val COLUMN_FIELD_CONFLICTS = "field_conflicts"
+        const val COLUMN_SESSION_CANDIDATES = "session_start_candidates"
         val BLOCK_COLUMNS = arrayOf(
             COLUMN_ID,
             COLUMN_DATE,

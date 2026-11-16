@@ -11,6 +11,11 @@ export const DEFAULT_SNAPSHOT = Object.freeze({
     'reddit.com',
   ]),
   blocks: Object.freeze([]),
+  activeStudySession: null,
+  phoneReceivedStudySessionId: null,
+  pendingStudyReviewSessionId: null,
+  sessionStartCandidates: Object.freeze([]),
+  studyHistory: Object.freeze([]),
 });
 
 const accessProfiles = new Set([
@@ -19,9 +24,17 @@ const accessProfiles = new Set([
   'ESSENTIALS_WITH_CHATGPT_AND_SEARCH',
 ]);
 const completionStatuses = new Set(['NOT_STARTED', 'FINISHED', 'PARTLY_DONE', 'NOT_DONE']);
+const studySessionStates = new Set(['ACTIVE', 'PENDING_REVIEW', 'BREAKING', 'REVIEWED']);
 const supportedCutoffs = new Set(['21:00', '22:00', '23:00']);
 const domainPattern = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const blockIdPattern = /^[A-Za-z0-9_-]{1,80}$/;
+const packagePattern = /^[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+$/;
+function validProfileSelection(session) {
+  return (session.profileId == null || (typeof session.profileId === 'string' && session.profileId.length <= 80))
+    && (session.profileName === undefined || (typeof session.profileName === 'string' && session.profileName.length <= 200))
+    && (session.allowedPackages === undefined || (Array.isArray(session.allowedPackages) && session.allowedPackages.length <= 500
+      && session.allowedPackages.every(value => typeof value === 'string' && packagePattern.test(value))));
+}
 const corsHeaders = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET, PUT, OPTIONS',
@@ -74,6 +87,81 @@ export function validateSnapshot(snapshot) {
     || desktopBlockedDomains.some(domain => typeof domain !== 'string' || !domainPattern.test(domain))
     || new Set(desktopBlockedDomains).size !== desktopBlockedDomains.length) return 'invalid_blocklist';
   if (!Array.isArray(blocks) || blocks.length > 1000) return 'invalid_blocks';
+  const session = snapshot.activeStudySession;
+  if (session !== undefined && session !== null) {
+    const startedAt = typeof session.startedAt === 'string' ? Date.parse(session.startedAt) : NaN;
+    const endsAt = typeof session.endsAt === 'string' ? Date.parse(session.endsAt) : NaN;
+    if (!session || typeof session !== 'object' || Array.isArray(session)
+      || typeof session.id !== 'string' || session.id.length === 0 || session.id.length > 80
+      || typeof session.taskName !== 'string' || session.taskName.length > 200
+      || !accessProfiles.has(session.accessProfile)
+      || !validProfileSelection(session)
+      || !Number.isFinite(startedAt) || !Number.isFinite(endsAt) || startedAt >= endsAt) {
+      return 'invalid_study_session';
+    }
+  }
+  const sessionStartCandidates = snapshot.sessionStartCandidates ?? [];
+  if (!Array.isArray(sessionStartCandidates) || sessionStartCandidates.length > 2
+    || sessionStartCandidates.some(candidate => {
+      const startedAt = typeof candidate?.startedAt === 'string' ? Date.parse(candidate.startedAt) : NaN;
+      const endsAt = typeof candidate?.endsAt === 'string' ? Date.parse(candidate.endsAt) : NaN;
+      return !candidate || typeof candidate !== 'object' || Array.isArray(candidate)
+        || typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 80
+        || typeof candidate.taskName !== 'string' || candidate.taskName.length > 200
+        || !accessProfiles.has(candidate.accessProfile)
+        || !validProfileSelection(candidate)
+        || !Number.isFinite(startedAt) || !Number.isFinite(endsAt) || startedAt >= endsAt;
+    }) || new Set(sessionStartCandidates.map(candidate => candidate.id)).size !== sessionStartCandidates.length) {
+    return 'invalid_session_start_candidates';
+  }
+  const fieldConflicts = snapshot.fieldConflicts ?? [];
+  if (!Array.isArray(fieldConflicts) || fieldConflicts.length > 1000
+    || fieldConflicts.some(conflict => !conflict || typeof conflict !== 'object' || Array.isArray(conflict)
+      || typeof conflict.path !== 'string' || conflict.path.length === 0 || conflict.path.length > 240
+      || typeof conflict.remoteValue !== 'string' || conflict.remoteValue.length > 2000
+      || typeof conflict.localValue !== 'string' || conflict.localValue.length > 2000)
+    || new Set(fieldConflicts.map(conflict => conflict.path)).size !== fieldConflicts.length) {
+    return 'invalid_field_conflicts';
+  }
+  const receivedSessionId = snapshot.phoneReceivedStudySessionId;
+  if (receivedSessionId !== undefined && receivedSessionId !== null
+    && (typeof receivedSessionId !== 'string' || receivedSessionId.length === 0 || receivedSessionId.length > 80)) {
+    return 'invalid_study_session_receipt';
+  }
+  const pendingReviewId = snapshot.pendingStudyReviewSessionId;
+  if (pendingReviewId !== undefined && pendingReviewId !== null
+    && (typeof pendingReviewId !== 'string' || pendingReviewId.length === 0 || pendingReviewId.length > 80)) {
+    return 'invalid_pending_study_review';
+  }
+
+  const studyHistory = snapshot.studyHistory ?? [];
+  if (!Array.isArray(studyHistory) || studyHistory.length > 10000) return 'invalid_study_history';
+  const historyIds = new Set();
+  for (const entry of studyHistory) {
+    const startedAt = typeof entry?.startedAt === 'string' ? Date.parse(entry.startedAt) : NaN;
+    const endedAt = entry?.endedAt == null ? null : Date.parse(entry.endedAt);
+    const breakStartedAt = entry?.breakStartedAt == null ? null : Date.parse(entry.breakStartedAt);
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)
+      || typeof entry.id !== 'string' || entry.id.length === 0 || entry.id.length > 80
+      || historyIds.has(entry.id)
+      || typeof entry.taskName !== 'string' || entry.taskName.length > 200
+      || !Number.isSafeInteger(entry.durationMillis) || entry.durationMillis < 0
+      || !accessProfiles.has(entry.accessProfile)
+      || !validProfileSelection(entry)
+      || !Number.isFinite(startedAt)
+      || (endedAt !== null && (!Number.isFinite(endedAt) || endedAt < startedAt))
+      || !Number.isSafeInteger(entry.actualMillis) || entry.actualMillis < 0
+      || !studySessionStates.has(entry.state)
+      || (entry.completionStatus !== null && entry.completionStatus !== undefined && !completionStatuses.has(entry.completionStatus))
+      || typeof (entry.note ?? '') !== 'string' || (entry.note ?? '').length > 2000
+      || typeof (entry.remaining ?? '') !== 'string' || (entry.remaining ?? '').length > 2000
+      || (breakStartedAt !== null && !Number.isFinite(breakStartedAt))
+      || !Number.isSafeInteger(entry.breakDurationMillis ?? 0) || (entry.breakDurationMillis ?? 0) < 0
+      || typeof (entry.nextTask ?? '') !== 'string' || (entry.nextTask ?? '').length > 200) {
+      return 'invalid_study_history';
+    }
+    historyIds.add(entry.id);
+  }
 
   const ids = new Set();
   const byDate = new Map();
