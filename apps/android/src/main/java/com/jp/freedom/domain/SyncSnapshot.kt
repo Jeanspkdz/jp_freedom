@@ -76,9 +76,10 @@ object SyncSnapshotReconciler {
 
         fun <T> choose(path: String, remoteValue: T, localValue: T): T {
             if (path !in pendingPaths) return remoteValue
+            val explicitlyResolved = "fieldConflicts.$path.resolved" in pendingPaths
             if (remoteValue != localValue) {
-                conflicts += path
-                if (isChoiceField(path)) {
+                if (!explicitlyResolved) conflicts += path
+                if (!explicitlyResolved && isChoiceField(path)) {
                     fieldConflicts[path] = SyncFieldConflict(path, conflictValue(remoteValue), conflictValue(localValue))
                 }
             }
@@ -103,7 +104,8 @@ object SyncSnapshotReconciler {
         val domains = (remoteDomains + localDomains).filter { domain ->
             val path = "desktopBlockedDomains.$domain"
             if (path in pendingPaths) {
-                if ((domain in remoteDomains) != (domain in localDomains)) {
+                val explicitlyResolved = "fieldConflicts.$path.resolved" in pendingPaths
+                if (!explicitlyResolved && (domain in remoteDomains) != (domain in localDomains)) {
                     conflicts += path
                     fieldConflicts[path] = SyncFieldConflict(
                         path,
@@ -236,13 +238,15 @@ object SyncSnapshotReconciler {
         local: PlannedBlock,
         pendingPaths: Set<String>,
         conflicts: MutableSet<String>,
+        fieldConflicts: MutableMap<String, SyncFieldConflict>,
     ): PlannedBlock {
         fun <T> field(name: String, remoteValue: T, localValue: T): T {
             val path = "blocks.${local.id}.$name"
             if (path !in pendingPaths) return remoteValue
+            val explicitlyResolved = "fieldConflicts.$path.resolved" in pendingPaths
             if (remoteValue != localValue) {
-                conflicts += path
-                if (isChoiceField(path)) fieldConflicts[path] = SyncFieldConflict(path, conflictValue(remoteValue), conflictValue(localValue))
+                if (!explicitlyResolved) conflicts += path
+                if (!explicitlyResolved && isChoiceField(path)) fieldConflicts[path] = SyncFieldConflict(path, conflictValue(remoteValue), conflictValue(localValue))
             }
             return localValue
         }

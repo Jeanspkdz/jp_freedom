@@ -145,6 +145,30 @@ class SyncSnapshotTest {
     }
 
     @Test
+    fun choosingTheLocalValueDoesNotReopenAResolvedFieldConflict() {
+        val previousConflict = SyncFieldConflict("settings.requiredBlockCount", "3", "4")
+        val remote = SyncSnapshot(
+            FocusSettings(requiredBlockCount = 3), DEFAULT_DESKTOP_BLOCKED_DOMAINS, emptyList(),
+            fieldConflicts = listOf(previousConflict),
+        )
+        val local = remote.copy(settings = remote.settings.copy(requiredBlockCount = 4))
+
+        val result = SyncSnapshotReconciler.merge(
+            remote = remote,
+            local = local,
+            pendingPaths = setOf(
+                "settings.requiredBlockCount",
+                "fieldConflicts.settings.requiredBlockCount.resolved",
+            ),
+        )
+
+        assertEquals(4, result.snapshot.settings.requiredBlockCount)
+        assertTrue(result.conflictedPaths.isEmpty())
+        assertTrue(result.fieldConflicts.isEmpty())
+        assertTrue(result.snapshot.fieldConflicts.isEmpty())
+    }
+
+    @Test
     fun replacingTheSyncEndpointSeedsThePhoneSnapshotInsteadOfImportingAnotherEndpoint() {
         val local = SyncSnapshot(FocusSettings(requiredBlockCount = 5), listOf("reddit.com"), emptyList())
         val remote = SyncSnapshot(FocusSettings(requiredBlockCount = 2), listOf("facebook.com"), emptyList())
