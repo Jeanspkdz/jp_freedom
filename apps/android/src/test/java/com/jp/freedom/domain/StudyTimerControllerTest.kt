@@ -12,6 +12,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StudyTimerControllerTest {
+    @Test fun activeSessionLocksItsSavedProfileUntilItEnds() {
+        val store = MemorySessionStore()
+        val controller = controller(store, "2026-11-10T12:00:00Z")
+        val profile = SavedAccessProfile("reading", "Reading", setOf("reader.app"))
+        assertTrue(controller.canMaintainProfile(profile.id))
+        controller.start(Duration.ofMinutes(60), profile)
+        assertFalse(controller.canMaintainProfile(profile.id))
+        assertTrue(controller.canMaintainProfile("other"))
+        assertNull(controller.start(Duration.ofMinutes(30), SavedAccessProfile("other", "Other", emptySet())))
+        controller.stop()
+        assertTrue(controller.canMaintainProfile(profile.id))
+    }
     @Test fun savedProfileSelectionAndEssentialsFallbackStayWithTheSession() {
         val store = MemorySessionStore()
         val controller = controller(store, "2026-11-10T12:00:00Z")

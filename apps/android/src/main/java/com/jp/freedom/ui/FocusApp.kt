@@ -389,6 +389,15 @@ fun FocusApp(
                 repository.saveAccessProfile(SavedAccessProfile(java.util.UUID.randomUUID().toString(), name, packages))
                 refreshVersion++
             },
+            onUpdateProfile = { profile ->
+                if (studyTimerController.canMaintainProfile(profile.id)) {
+                    repository.saveAccessProfile(profile)
+                    refreshVersion++
+                }
+            },
+            onDeleteProfile = { profileId ->
+                if (studyTimerController.canMaintainProfile(profileId) && repository.deleteAccessProfile(profileId)) refreshVersion++
+            },
             onBack = { page = AppPage.PLANNER },
             onStart = startTimer,
             onStop = {
