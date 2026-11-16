@@ -1,0 +1,3 @@
+# Share study sessions across Android and Chrome
+
+Android previously kept study sessions and review history locally. A Chrome-started timer must become the same session on the phone, and a phone-started timer must activate desktop site blocking, so the sync API becomes the shared record for session state and study history. Both devices cache changes while offline and reconcile conflicts without silently discarding them. Android retains the review interface and its phone-only restrictions; Chrome provides the timer, desktop site list, and connection controls. Device permissions and credentials stay local. This supersedes ADR-0002's local-only study tracking decision.
