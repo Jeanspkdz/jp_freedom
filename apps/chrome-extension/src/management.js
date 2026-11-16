@@ -81,12 +81,22 @@ function renderFocusMeter(documentRef, current, now) {
   const remainingValue = documentRef.getElementById('focus-remaining-value');
   const progress = documentRef.getElementById('focus-progress');
   const fill = documentRef.getElementById('focus-progress-fill');
+  const clock = documentRef.getElementById('session-clock');
+  const clockMinutes = documentRef.getElementById('focus-clock-minutes');
+  const clockSeconds = documentRef.getElementById('focus-clock-seconds');
+  const clockUnit = documentRef.getElementById('session-clock-unit');
   if (!current) {
     remaining.hidden = true;
     progress.hidden = true;
     remainingValue.textContent = '';
     fill.style.width = '0%';
     progress.setAttribute('aria-valuenow', '0');
+    const selectedDuration = Number(documentRef.getElementById('session-duration')?.value);
+    const minutes = Number.isSafeInteger(selectedDuration) && selectedDuration > 0 ? selectedDuration : 30;
+    clockMinutes.textContent = String(minutes).padStart(2, '0');
+    clockSeconds.textContent = '00';
+    clockUnit.textContent = 'Minutes';
+    clock.setAttribute('aria-label', `Study session duration: ${minutes} minutes`);
     return;
   }
 
@@ -102,7 +112,13 @@ function renderFocusMeter(documentRef, current, now) {
   const elapsed = Math.min(Math.max(currentTime - start, 0), duration);
   const secondsLeft = Math.max(adjustedEnd - currentTime, 0);
   const percent = duration > 0 ? elapsed / duration * 100 : 0;
-  remainingValue.textContent = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
+  const minutesLeft = Math.floor(secondsLeft / 60);
+  const secondsRemainder = secondsLeft % 60;
+  remainingValue.textContent = `${minutesLeft}:${String(secondsRemainder).padStart(2, '0')}`;
+  clockMinutes.textContent = String(minutesLeft).padStart(2, '0');
+  clockSeconds.textContent = String(secondsRemainder).padStart(2, '0');
+  clockUnit.textContent = 'Remaining';
+  clock.setAttribute('aria-label', `Time remaining: ${minutesLeft} minutes and ${secondsRemainder} seconds`);
   remaining.hidden = false;
   progress.hidden = false;
   fill.style.width = `${percent.toFixed(2)}%`;
@@ -174,6 +190,10 @@ function render(documentRef, state, now) {
   if (startControls) startControls.hidden = active;
   const startButton = documentRef.getElementById('start-session');
   if (startButton) startButton.disabled = !snapshot || !state.connected || state.saving || sharedSessionPending || Boolean(snapshot.pendingStudyReviewSessionId) || candidates.length > 1;
+  const selectedDuration = Number(documentRef.getElementById('session-duration')?.value);
+  for (const duration of [25, 30, 45, 60]) {
+    documentRef.getElementById(`duration-${duration}`)?.setAttribute?.('aria-pressed', String(selectedDuration === duration));
+  }
   const stopButton = documentRef.getElementById('stop-session');
   if (stopButton) {
     stopButton.hidden = !sharedSessionPending;
@@ -181,13 +201,18 @@ function render(documentRef, state, now) {
   }
   const startStatus = documentRef.getElementById('session-start-status');
   if (startStatus) startStatus.textContent = state.sessionMessage
-    ?? (!snapshot || !state.connected ? 'Connect to the sync API at least once before starting a study session.'
+    ?? (!state.connected ? 'Connect to the sync API at least once before starting a study session.'
+      : !snapshot ? 'Sync once to load your plan before starting a study session.'
       : snapshot.pendingStudyReviewSessionId ? 'Finish the pending phone review before starting another session.'
         : snapshot.activeStudySession
           ? Date.parse(snapshot.activeStudySession.endsAt) > now.getTime()
             ? 'A study session is already active.'
             : 'Wait for the phone to sync this session and its review before starting another.'
           : '');
+  const connectionNotice = documentRef.getElementById('session-connection-notice');
+  if (connectionNotice) connectionNotice.hidden = active || !startStatus?.textContent;
+  const connectionLabel = documentRef.getElementById('session-connection-label');
+  if (connectionLabel) connectionLabel.textContent = state.connected ? 'Action needed' : 'Not connected';
   const receipt = documentRef.getElementById('phone-receipt-state');
   if (receipt) {
     const sharedSession = snapshot?.activeStudySession;
@@ -242,10 +267,12 @@ function render(documentRef, state, now) {
   }
   const resolveFieldButton = documentRef.getElementById('resolve-field-conflict');
   if (resolveFieldButton) resolveFieldButton.disabled = !state.online || state.saving;
-  documentRef.getElementById('focus-heading').textContent = active ? 'In focus' : 'Focus plan';
+  documentRef.getElementById('focus-heading').textContent = active ? 'In focus' : 'Focus session';
   documentRef.getElementById('focus-heading').classList?.toggle('is-active', active);
   documentRef.getElementById('focus-live').hidden = !active;
   documentRef.querySelector?.('.focus-board')?.classList?.toggle('is-active', active);
+  const focusMain = documentRef.getElementById('focus-main');
+  if (focusMain) focusMain.hidden = !active;
   state.focusBlockId = current?.id ?? null;
   renderFocusMeter(documentRef, current, now);
   const currentBlockId = current?.id ?? null;
@@ -382,10 +409,20 @@ export async function initializeManagement({
   for (const view of views) {
     documentRef.getElementById(`tab-${view}`).addEventListener('click', () => showView(view));
   }
+  documentRef.getElementById('open-connection').addEventListener('click', () => showView('connection'));
   documentRef.getElementById('api-url').value = state.apiUrl;
   documentRef.getElementById('api-token').value = state.apiToken;
+  const durationInput = documentRef.getElementById('session-duration');
+  if (!durationInput.value) durationInput.value = '30';
 
   const show = () => render(documentRef, state, now());
+  for (const duration of [25, 30, 45, 60]) {
+    documentRef.getElementById(`duration-${duration}`).addEventListener('click', () => {
+      durationInput.value = String(duration);
+      state.sessionMessage = null;
+      show();
+    });
+  }
   const focusClock = globalThis.setInterval(() => {
     if (documentRef.visibilityState === 'hidden') return;
     const current = state.snapshot ? getCurrentAndNext(state.snapshot, now()).current : null;
