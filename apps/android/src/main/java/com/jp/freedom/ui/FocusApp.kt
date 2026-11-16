@@ -21,6 +21,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import com.jp.freedom.data.FocusRepository
 import com.jp.freedom.data.PendingSyncState
 import com.jp.freedom.data.SyncStatus
@@ -441,6 +445,30 @@ fun FocusApp(
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
                 (context as? Activity)?.finish()
+            },
+        )
+    }
+
+    syncState.fieldConflicts.firstOrNull()?.let { conflict ->
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Choose which value to keep") },
+            text = { Text("${conflict.path}\n\nPhone: ${conflict.localValue}\nSynced: ${conflict.remoteValue}") },
+            confirmButton = {
+                Button(onClick = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) { repository.resolveFieldConflict(conflict.path, keepRemoteValue = false) }
+                        refreshVersion++
+                    }
+                }) { Text("Keep phone value") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) { repository.resolveFieldConflict(conflict.path, keepRemoteValue = true) }
+                        refreshVersion++
+                    }
+                }) { Text("Keep synced value") }
             },
         )
     }

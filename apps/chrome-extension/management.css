@@ -856,6 +856,11 @@ button:focus-visible, input:focus-visible, .site-row:has(input:focus-visible) {
 .session-start-controls input { width: 132px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--on-surface); }
 .session-start-controls button { min-height: 44px; padding: 8px 18px; border: 0; border-radius: 8px; background: var(--accent-amber); color: var(--background); font-weight: 700; }
 #session-start-status, #phone-receipt-state { color: var(--muted); font-size: .86rem; }
+#session-conflict-state { color: var(--accent-amber); font-size: .9rem; font-weight: 700; }
+#session-conflict-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; }
+#session-conflict-controls select { min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--on-surface); }
+#field-conflict-controls { display: grid; gap: 8px; padding: 12px 0; }
+#field-conflict-controls select { min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--on-surface); }
 .plan-hero {
   border: 1px solid var(--line-soft);
   background: var(--surface);

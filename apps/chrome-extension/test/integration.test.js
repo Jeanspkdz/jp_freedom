@@ -468,6 +468,80 @@ test('starting a duration in Chrome writes one Essentials-only shared session an
   assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);
 });
 
+test('a Chrome study session continues from the cached policy while offline and stays pending for the phone', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null,
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: snapshot, lastSnapshotRevision: 4 });
+  await initializeManagement({ ...harness, now: () => now, fetchImpl: async () => { throw new TypeError('offline'); } });
+
+  harness.documentRef.getElementById('session-duration').value = '30';
+  await harness.nodes.get('start-session').listeners.get('click')();
+
+  assert.equal(harness.nodes.get('current-block').textContent, 'Study session');
+  assert.equal(harness.storage.lastValidSnapshot.activeStudySession.startedAt, now.toISOString());
+  assert.equal(harness.storage.pendingSessionStart.id, harness.storage.lastValidSnapshot.activeStudySession.id);
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+  assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);
+});
+
+test('reconnecting publishes a still-active cached Chrome start to the phone', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: snapshot, lastSnapshotRevision: 4 });
+  let online = false;
+  const writes = [];
+  const management = await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (!online) throw new TypeError('offline');
+      if (options.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        writes.push(body.snapshot);
+        return { ok: true, json: async () => ({ revision: 6, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 5, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+  harness.documentRef.getElementById('session-duration').value = '30';
+  await harness.nodes.get('start-session').listeners.get('click')();
+  online = true;
+  await management.sync();
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].activeStudySession.id, harness.storage.lastValidSnapshot.activeStudySession.id);
+  assert.equal(harness.storage.pendingSessionStart, null);
+  assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);
+});
+
+test('a user can choose the synced value for a conflicted plan field', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1, settings: { requiredBlockCount: 4, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [],
+    fieldConflicts: [{ path: 'settings.requiredBlockCount', remoteValue: '3', localValue: '4' }],
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  const writes = [];
+  await initializeManagement({
+    ...harness, now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        writes.push(body.snapshot);
+        return { ok: true, json: async () => ({ revision: 3, updatedAt: now.toISOString(), snapshot: body.snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+  harness.nodes.get('field-conflict-choice').value = 'remote';
+  await harness.nodes.get('resolve-field-conflict').listeners.get('click')();
+
+  assert.equal(writes[0].settings.requiredBlockCount, 3);
+  assert.deepEqual(writes[0].fieldConflicts, []);
+});
+
 test('Chrome does not start a second session while the phone has a pending review', async () => {
   const now = new Date('2026-11-05T10:30:00.000Z');
   const snapshot = {

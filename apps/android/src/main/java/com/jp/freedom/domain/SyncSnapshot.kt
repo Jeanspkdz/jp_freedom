@@ -38,6 +38,8 @@ data class SyncSnapshot(
     val phoneReceivedStudySessionId: String? = null,
     val pendingStudyReviewSessionId: String? = null,
     val studyHistory: List<StudyTimerSession> = emptyList(),
+    val sessionStartCandidates: List<SharedStudySession> = emptyList(),
+    val fieldConflicts: List<SyncFieldConflict> = emptyList(),
 )
 
 data class SharedStudySession(
@@ -51,6 +53,13 @@ data class SharedStudySession(
 data class SnapshotMergeResult(
     val snapshot: SyncSnapshot,
     val conflictedPaths: Set<String>,
+    val fieldConflicts: List<SyncFieldConflict> = emptyList(),
+)
+
+data class SyncFieldConflict(
+    val path: String,
+    val remoteValue: String,
+    val localValue: String,
 )
 
 object SyncSnapshotReconciler {
@@ -63,10 +72,16 @@ object SyncSnapshotReconciler {
             return SnapshotMergeResult(snapshot = local, conflictedPaths = emptySet())
         }
         val conflicts = mutableSetOf<String>()
+        val fieldConflicts = linkedMapOf<String, SyncFieldConflict>()
 
         fun <T> choose(path: String, remoteValue: T, localValue: T): T {
             if (path !in pendingPaths) return remoteValue
-            if (remoteValue != localValue) conflicts += path
+            if (remoteValue != localValue) {
+                conflicts += path
+                if (isChoiceField(path)) {
+                    fieldConflicts[path] = SyncFieldConflict(path, conflictValue(remoteValue), conflictValue(localValue))
+                }
+            }
             return localValue
         }
 
@@ -88,7 +103,14 @@ object SyncSnapshotReconciler {
         val domains = (remoteDomains + localDomains).filter { domain ->
             val path = "desktopBlockedDomains.$domain"
             if (path in pendingPaths) {
-                if ((domain in remoteDomains) != (domain in localDomains)) conflicts += path
+                if ((domain in remoteDomains) != (domain in localDomains)) {
+                    conflicts += path
+                    fieldConflicts[path] = SyncFieldConflict(
+                        path,
+                        if (domain in remoteDomains) "included" else "excluded",
+                        if (domain in localDomains) "included" else "excluded",
+                    )
+                }
                 domain in localDomains
             } else {
                 domain in remoteDomains
@@ -122,16 +144,33 @@ object SyncSnapshotReconciler {
                         remoteBlock
                     }
                 }
-                else -> mergeBlock(remoteBlock, localBlock, pendingPaths, conflicts)
+                else -> mergeBlock(remoteBlock, localBlock, pendingPaths, conflicts, fieldConflicts)
             }
         }.sortedWith(compareBy<PlannedBlock>({ it.date }, { it.startTime }, { it.id }))
+
+        val competingStarts = if ("activeStudySession" in pendingPaths
+            && remote.activeStudySession != null
+            && local.activeStudySession != null
+            && remote.activeStudySession != local.activeStudySession) {
+            (remote.sessionStartCandidates + local.sessionStartCandidates + listOfNotNull(remote.activeStudySession, local.activeStudySession))
+                .distinctBy(SharedStudySession::id)
+                .take(2)
+        } else {
+            (remote.sessionStartCandidates + local.sessionStartCandidates).distinctBy(SharedStudySession::id).take(2)
+        }
+        val competingStartIds = competingStarts.map(SharedStudySession::id).toSet()
+        val competingStartConflict = competingStarts.size > 1
+            && remote.activeStudySession != null
+            && local.activeStudySession != null
+            && remote.activeStudySession.id in competingStartIds
+            && local.activeStudySession.id in competingStartIds
 
         return SnapshotMergeResult(
             snapshot = SyncSnapshot(
                 settings = settings,
                 desktopBlockedDomains = domains,
                 blocks = blocks,
-                activeStudySession = choose(
+                activeStudySession = if (competingStartConflict) remote.activeStudySession else choose(
                     "activeStudySession",
                     remote.activeStudySession,
                     local.activeStudySession,
@@ -147,8 +186,13 @@ object SyncSnapshotReconciler {
                     local.pendingStudyReviewSessionId,
                 ),
                 studyHistory = mergeStudyHistory(remote.studyHistory, local.studyHistory, pendingPaths, conflicts),
+                sessionStartCandidates = competingStarts,
+                fieldConflicts = (remote.fieldConflicts.filterNot { conflict ->
+                    "fieldConflicts.${conflict.path}.resolved" in pendingPaths || conflict.path in fieldConflicts
+                } + fieldConflicts.values).distinctBy(SyncFieldConflict::path),
             ),
             conflictedPaths = conflicts,
+            fieldConflicts = fieldConflicts.values.toList(),
         )
     }
 
@@ -157,6 +201,7 @@ object SyncSnapshotReconciler {
         local: List<StudyTimerSession>,
         pendingPaths: Set<String>,
         conflicts: MutableSet<String>,
+        fieldConflicts: MutableMap<String, SyncFieldConflict>,
     ): List<StudyTimerSession> {
         if ("studyHistory.clear" in pendingPaths) return emptyList()
         val localById = local.associateBy(StudyTimerSession::id)
@@ -195,7 +240,10 @@ object SyncSnapshotReconciler {
         fun <T> field(name: String, remoteValue: T, localValue: T): T {
             val path = "blocks.${local.id}.$name"
             if (path !in pendingPaths) return remoteValue
-            if (remoteValue != localValue) conflicts += path
+            if (remoteValue != localValue) {
+                conflicts += path
+                if (isChoiceField(path)) fieldConflicts[path] = SyncFieldConflict(path, conflictValue(remoteValue), conflictValue(localValue))
+            }
             return localValue
         }
 
@@ -210,4 +258,10 @@ object SyncSnapshotReconciler {
             note = field("note", remote.note, local.note),
         )
     }
+
+    private fun conflictValue(value: Any?): String = value?.toString() ?: "<null>"
+
+    private fun isChoiceField(path: String): Boolean = path.startsWith("settings.")
+        || path.startsWith("desktopBlockedDomains.")
+        || path.startsWith("blocks.")
 }

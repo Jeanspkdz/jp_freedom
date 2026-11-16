@@ -19,11 +19,14 @@ import com.jp.freedom.domain.StudyTimerSession
 import com.jp.freedom.domain.StudySessionState
 import com.jp.freedom.domain.StudySessionStore
 import com.jp.freedom.domain.StudyTimerPolicy
+import com.jp.freedom.domain.SyncFieldConflict
 import com.jp.freedom.sync.SyncScheduler
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.Instant
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class PendingSyncState(
     val revision: Long,
@@ -32,6 +35,7 @@ data class PendingSyncState(
     val status: SyncStatus,
     val message: String?,
     val pendingPaths: Set<String>,
+    val fieldConflicts: List<SyncFieldConflict> = emptyList(),
 )
 
 enum class SyncStatus {
@@ -335,6 +339,27 @@ class FocusRepository(context: Context) : StudySessionStore {
 
     fun syncState(): PendingSyncState = readSyncState(database.readableDatabase)
 
+    fun resolveFieldConflict(path: String, keepRemoteValue: Boolean) {
+        val db = database.writableDatabase
+        db.beginTransaction()
+        try {
+            val conflict = readFieldConflicts(db).firstOrNull { it.path == path } ?: return
+            if (keepRemoteValue) applyFieldValue(db, conflict.path, conflict.remoteValue)
+            val remaining = readFieldConflicts(db).filterNot { it.path == path }
+            writeFieldConflicts(db, remaining)
+            markDirty(db, listOf(path, "fieldConflicts.$path.resolved"))
+            db.update(TABLE_SYNC_STATE, ContentValues().apply {
+                put(COLUMN_PENDING, 1)
+                put(COLUMN_STATUS, SyncStatus.PENDING.name)
+                putNull(COLUMN_MESSAGE)
+            }, "$COLUMN_SETTINGS_ID = 1", null)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        scheduleSync()
+    }
+
     fun markSyncing() = updateSyncMetadata(status = SyncStatus.SYNCING, message = null)
 
     fun markSyncError(message: String) = updateSyncMetadata(status = SyncStatus.ERROR, message = message)
@@ -404,6 +429,8 @@ class FocusRepository(context: Context) : StudySessionStore {
         db.beginTransaction()
         try {
             if (readSyncState(db).generation != expectedGeneration) return false
+            val resolvingCompetingStarts = readSessionStartCandidates(db).size > 1
+                && snapshot.sessionStartCandidates.isEmpty()
             replaceSnapshot(db, snapshot)
             if (snapshot.activeStudySession == null) {
                 val activeSession = readStudySession(
@@ -430,7 +457,7 @@ class FocusRepository(context: Context) : StudySessionStore {
             snapshot.activeStudySession?.let { shared ->
                 val active = readStudySession(db, "state IN (?, ?)", arrayOf(StudySessionState.ACTIVE.name, StudySessionState.BREAKING.name))
                 val pendingReview = readStudySession(db, "state = ?", arrayOf(StudySessionState.PENDING_REVIEW.name))
-                val canReceive = (active == null || active.id == shared.id)
+                val canReceive = (resolvingCompetingStarts || active == null || active.id == shared.id)
                     && (pendingReview == null || pendingReview.id == shared.id)
                 if (canReceive) {
                     val received = StudyTimerPolicy.receiveSharedSession(shared, Instant.now())
@@ -494,6 +521,84 @@ class FocusRepository(context: Context) : StudySessionStore {
         "$COLUMN_DOMAIN ASC",
     ).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }
 
+    private fun applyFieldValue(db: SQLiteDatabase, path: String, value: String) {
+        when {
+            path == "settings.requiredBlockCount" -> db.update(TABLE_SETTINGS, ContentValues().apply { put(COLUMN_REQUIRED_COUNT, value.toInt()) }, "$COLUMN_SETTINGS_ID = 1", null)
+            path == "settings.eveningCutoff" -> db.update(TABLE_SETTINGS, ContentValues().apply { put(COLUMN_CUTOFF_MINUTE, LocalTime.parse(value).toMinuteOfDay()) }, "$COLUMN_SETTINGS_ID = 1", null)
+            path.startsWith("desktopBlockedDomains.") -> {
+                val domain = path.removePrefix("desktopBlockedDomains.")
+                if (value == "included") db.insertWithOnConflict(TABLE_DESKTOP_DOMAINS, null, ContentValues().apply { put(COLUMN_DOMAIN, domain) }, SQLiteDatabase.CONFLICT_REPLACE)
+                else db.delete(TABLE_DESKTOP_DOMAINS, "$COLUMN_DOMAIN = ?", arrayOf(domain))
+            }
+            path.startsWith("blocks.") -> {
+                val segments = path.split('.', limit = 3)
+                if (segments.size != 3) return
+                val column = when (segments[2]) {
+                    "date" -> COLUMN_DATE
+                    "name" -> COLUMN_NAME
+                    "startTime" -> COLUMN_START_MINUTE
+                    "endTime" -> COLUMN_END_MINUTE
+                    "accessProfile" -> COLUMN_ACCESS_PROFILE
+                    "completionStatus" -> COLUMN_COMPLETION_STATUS
+                    "note" -> COLUMN_NOTE
+                    else -> return
+                }
+                val values = ContentValues().apply {
+                    when (column) {
+                        COLUMN_DATE -> put(column, LocalDate.parse(value).toString())
+                        COLUMN_START_MINUTE, COLUMN_END_MINUTE -> put(column, LocalTime.parse(value).toMinuteOfDay())
+                        COLUMN_NOTE -> if (value == "<null>") putNull(column) else put(column, value)
+                        else -> put(column, value)
+                    }
+                }
+                db.update(TABLE_BLOCKS, values, "$COLUMN_ID = ?", arrayOf(segments[1]))
+            }
+        }
+    }
+
+    private fun readFieldConflicts(db: SQLiteDatabase): List<SyncFieldConflict> = readJsonColumn(db, COLUMN_FIELD_CONFLICTS).let { source ->
+        val array = JSONArray(source)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                add(SyncFieldConflict(item.getString("path"), item.getString("remoteValue"), item.getString("localValue")))
+            }
+        }
+    }
+
+    private fun writeFieldConflicts(db: SQLiteDatabase, conflicts: List<SyncFieldConflict>) {
+        val array = JSONArray().apply {
+            conflicts.forEach { item -> put(JSONObject().apply {
+                put("path", item.path); put("remoteValue", item.remoteValue); put("localValue", item.localValue)
+            }) }
+        }
+        db.update(TABLE_SYNC_STATE, ContentValues().apply { put(COLUMN_FIELD_CONFLICTS, array.toString()) }, "$COLUMN_SETTINGS_ID = 1", null)
+    }
+
+    private fun readSessionStartCandidates(db: SQLiteDatabase): List<SharedStudySession> = readJsonColumn(db, COLUMN_SESSION_CANDIDATES).let { source ->
+        val array = JSONArray(source)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                add(SharedStudySession(item.getString("id"), item.getString("taskName"), Instant.parse(item.getString("startedAt")), Instant.parse(item.getString("endsAt")), AccessProfile.valueOf(item.getString("accessProfile"))))
+            }
+        }
+    }
+
+    private fun writeSessionStartCandidates(db: SQLiteDatabase, candidates: List<SharedStudySession>) {
+        val array = JSONArray().apply {
+            candidates.forEach { item -> put(JSONObject().apply {
+                put("id", item.id); put("taskName", item.taskName); put("startedAt", item.startedAt.toString())
+                put("endsAt", item.endsAt.toString()); put("accessProfile", item.accessProfile.name)
+            }) }
+        }
+        db.update(TABLE_SYNC_STATE, ContentValues().apply { put(COLUMN_SESSION_CANDIDATES, array.toString()) }, "$COLUMN_SETTINGS_ID = 1", null)
+    }
+
+    private fun readJsonColumn(db: SQLiteDatabase, column: String): String = db.query(
+        TABLE_SYNC_STATE, arrayOf(column), "$COLUMN_SETTINGS_ID = 1", null, null, null, null,
+    ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) ?: "[]" else "[]" }
+
     private fun readSnapshot(db: SQLiteDatabase) = SyncSnapshot(
         settings = readSettings(db),
         desktopBlockedDomains = readDomains(db),
@@ -514,6 +619,8 @@ class FocusRepository(context: Context) : StudySessionStore {
             arrayOf(StudySessionState.PENDING_REVIEW.name),
         )?.id,
         studyHistory = readStudyHistory(db),
+        sessionStartCandidates = readSessionStartCandidates(db),
+        fieldConflicts = readFieldConflicts(db),
     )
 
     private fun readReceivedSessionId(db: SQLiteDatabase): String? = db.query(
@@ -561,6 +668,7 @@ class FocusRepository(context: Context) : StudySessionStore {
             status = statusAndMessage.first,
             message = statusAndMessage.second,
             pendingPaths = paths,
+            fieldConflicts = readFieldConflicts(db),
         )
     }
 
@@ -613,6 +721,8 @@ class FocusRepository(context: Context) : StudySessionStore {
         }
         db.delete("study_sessions", "state = ?", arrayOf(StudySessionState.REVIEWED.name))
         snapshot.studyHistory.forEach { session -> saveSessionRow(db, session) }
+        writeFieldConflicts(db, snapshot.fieldConflicts)
+        writeSessionStartCandidates(db, snapshot.sessionStartCandidates)
     }
 
     private fun saveSessionRow(db: SQLiteDatabase, session: StudyTimerSession) {
@@ -765,6 +875,10 @@ class FocusRepository(context: Context) : StudySessionStore {
                 db.execSQL("UPDATE $TABLE_SYNC_STATE SET $COLUMN_GENERATION = $COLUMN_GENERATION + 1, $COLUMN_PENDING = 1, $COLUMN_STATUS = 'PENDING' WHERE $COLUMN_SETTINGS_ID = 1")
             }
             if (oldVersion < 9) addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_RECEIVED_SESSION_ID, "TEXT")
+            if (oldVersion < 10) {
+                addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_FIELD_CONFLICTS, "TEXT NOT NULL DEFAULT '[]'")
+                addColumnIfMissing(db, TABLE_SYNC_STATE, COLUMN_SESSION_CANDIDATES, "TEXT NOT NULL DEFAULT '[]'")
+            }
         }
 
         private fun addColumnIfMissing(db: SQLiteDatabase, table: String, column: String, definition: String) {
@@ -821,7 +935,9 @@ class FocusRepository(context: Context) : StudySessionStore {
                     $COLUMN_PENDING INTEGER NOT NULL,
                     $COLUMN_STATUS TEXT NOT NULL,
                     $COLUMN_MESSAGE TEXT,
-                    $COLUMN_RECEIVED_SESSION_ID TEXT
+                    $COLUMN_RECEIVED_SESSION_ID TEXT,
+                    $COLUMN_FIELD_CONFLICTS TEXT NOT NULL DEFAULT '[]',
+                    $COLUMN_SESSION_CANDIDATES TEXT NOT NULL DEFAULT '[]'
                 )""".trimIndent(),
             )
             db.execSQL("CREATE TABLE IF NOT EXISTS $TABLE_SYNC_CHANGES ($COLUMN_PATH TEXT PRIMARY KEY NOT NULL)")
@@ -850,7 +966,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 9
+            private const val DATABASE_VERSION = 10
         }
     }
 
@@ -881,6 +997,8 @@ class FocusRepository(context: Context) : StudySessionStore {
         const val COLUMN_STATUS = "status"
         const val COLUMN_MESSAGE = "message"
         const val COLUMN_RECEIVED_SESSION_ID = "phone_received_session_id"
+        const val COLUMN_FIELD_CONFLICTS = "field_conflicts"
+        const val COLUMN_SESSION_CANDIDATES = "session_start_candidates"
         val BLOCK_COLUMNS = arrayOf(
             COLUMN_ID,
             COLUMN_DATE,

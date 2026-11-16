@@ -95,6 +95,25 @@ class SyncSnapshotCodecTest {
     }
 
     @Test
+    fun concurrentOfflineStartsSurviveTheSyncContract() {
+        val candidates = listOf(
+            SharedStudySession("chrome-start", "Write", Instant.parse("2026-11-05T10:00:00Z"), Instant.parse("2026-11-05T11:00:00Z"), AccessProfile.ESSENTIALS_ONLY),
+            SharedStudySession("phone-start", "Read", Instant.parse("2026-11-05T10:01:00Z"), Instant.parse("2026-11-05T11:01:00Z"), AccessProfile.ESSENTIALS_ONLY),
+        )
+        val snapshot = SyncSnapshot(FocusSettings(), listOf("reddit.com"), emptyList(), sessionStartCandidates = candidates)
+
+        assertEquals(candidates, SyncSnapshotCodec.decode(SyncSnapshotCodec.encode(snapshot)).sessionStartCandidates)
+    }
+
+    @Test
+    fun sameFieldConflictAlternativesSurviveTheSyncContract() {
+        val conflict = com.jp.freedom.domain.SyncFieldConflict("settings.requiredBlockCount", "3", "4")
+        val snapshot = SyncSnapshot(FocusSettings(), listOf("reddit.com"), emptyList(), fieldConflicts = listOf(conflict))
+
+        assertEquals(listOf(conflict), SyncSnapshotCodec.decode(SyncSnapshotCodec.encode(snapshot)).fieldConflicts)
+    }
+
+    @Test
     fun reviewedStudyHistoryAndReviewFieldsSurviveTheSyncContract() {
         val session = StudyTimerSession(
             id = "history-1", taskName = "Read chapter four", durationMillis = 3_600_000,

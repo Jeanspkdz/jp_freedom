@@ -3,7 +3,7 @@ import { getActiveStudySession, getCurrentAndNext } from './policy.js';
 import { readSnapshot, snapshotEndpoint, validSnapshotResponse } from './sync-client.js';
 import { isValidDomain } from './domain.js';
 
-const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync', 'lastSnapshotRevision'];
+const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync', 'lastSnapshotRevision', 'pendingSessionStart'];
 const DEFAULT_SYNC_API_URL = 'https://br-floral-block-bddjl0rs-jpfreedomsync.compute.c-8.us-east-2.aws.neon.tech/';
 const DEFAULT_DESKTOP_DOMAINS = ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com'];
 const COMMON_DOMAINS = [...DEFAULT_DESKTOP_DOMAINS, 'youtube.com', 'web.whatsapp.com'];
@@ -27,6 +27,28 @@ function connectionError(apiUrl) {
     // The regular URL validation message is more useful for malformed values.
   }
   return 'Could not reach the sync API. Check your connection and API URL.';
+}
+
+function withFieldValue(snapshot, conflict, value) {
+  const result = { ...snapshot };
+  if (conflict.path.startsWith('settings.')) {
+    const field = conflict.path.slice('settings.'.length);
+    return { ...result, settings: { ...snapshot.settings, [field]: field === 'requiredBlockCount' ? Number(value) : value } };
+  }
+  if (conflict.path.startsWith('desktopBlockedDomains.')) {
+    const domain = conflict.path.slice('desktopBlockedDomains.'.length);
+    const domains = new Set(snapshot.desktopBlockedDomains);
+    if (value === 'included') domains.add(domain);
+    else domains.delete(domain);
+    return { ...result, desktopBlockedDomains: [...domains] };
+  }
+  if (conflict.path.startsWith('blocks.')) {
+    const [, id, field] = conflict.path.split('.', 3);
+    return { ...result, blocks: snapshot.blocks.map(block => block.id !== id ? block : {
+      ...block, [field]: value === '<null>' ? null : value,
+    }) };
+  }
+  return result;
 }
 
 function localDateKey(date) {
@@ -136,6 +158,7 @@ function render(documentRef, state, now) {
   const currentBlock = documentRef.getElementById('current-block');
   const plannedEnd = documentRef.getElementById('planned-end');
   const session = snapshot ? getActiveStudySession(snapshot, now) : null;
+  const candidates = snapshot?.sessionStartCandidates ?? [];
   const plannedBlock = snapshot ? getCurrentAndNext(snapshot, now).current : null;
   const current = session
     ? { id: session.id, name: session.taskName, studySession: true, startedAt: session.startedAt, endsAt: session.endsAt }
@@ -145,7 +168,7 @@ function render(documentRef, state, now) {
   const startControls = documentRef.getElementById('session-start-controls');
   if (startControls) startControls.hidden = active;
   const startButton = documentRef.getElementById('start-session');
-  if (startButton) startButton.disabled = !snapshot || !state.connected || !state.online || state.saving || sharedSessionPending || Boolean(snapshot.pendingStudyReviewSessionId);
+  if (startButton) startButton.disabled = !snapshot || !state.connected || state.saving || sharedSessionPending || Boolean(snapshot.pendingStudyReviewSessionId) || candidates.length > 1;
   const stopButton = documentRef.getElementById('stop-session');
   if (stopButton) {
     stopButton.hidden = !sharedSessionPending;
@@ -153,7 +176,7 @@ function render(documentRef, state, now) {
   }
   const startStatus = documentRef.getElementById('session-start-status');
   if (startStatus) startStatus.textContent = state.sessionMessage
-    ?? (!snapshot || !state.connected || !state.online ? 'Sync before starting a study session.'
+    ?? (!snapshot || !state.connected ? 'Connect to the sync API at least once before starting a study session.'
       : snapshot.pendingStudyReviewSessionId ? 'Finish the pending phone review before starting another session.'
         : snapshot.activeStudySession
           ? Date.parse(snapshot.activeStudySession.endsAt) > now.getTime()
@@ -169,6 +192,47 @@ function render(documentRef, state, now) {
         ? 'Phone received this study session.'
         : 'Chrome is blocking selected sites locally. Waiting for phone to receive this session.';
   }
+  const conflict = documentRef.getElementById('session-conflict-state');
+  if (conflict) {
+    conflict.hidden = candidates.length < 2;
+    conflict.textContent = candidates.length < 2
+      ? ''
+      : `Two offline study sessions need a choice: ${candidates.map(item => `${item.taskName} (${new Date(item.startedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`).join(' or ')}.`;
+  }
+  const choice = documentRef.getElementById('session-start-choice');
+  if (choice && candidates.length) {
+    choice.replaceChildren?.(...candidates.map(candidate => {
+      const option = documentRef.createElement('option');
+      option.value = candidate.id;
+      option.textContent = `${candidate.taskName} · ${new Date(candidate.startedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      return option;
+    }));
+  }
+  const chooseSession = documentRef.getElementById('choose-session-start');
+  if (chooseSession) chooseSession.hidden = candidates.length < 2;
+  const conflictControls = documentRef.getElementById('session-conflict-controls');
+  if (conflictControls) conflictControls.hidden = candidates.length < 2;
+  const fieldConflicts = snapshot?.fieldConflicts ?? [];
+  const fieldConflictControls = documentRef.getElementById('field-conflict-controls');
+  if (fieldConflictControls) fieldConflictControls.hidden = fieldConflicts.length === 0;
+  const fieldConflictState = documentRef.getElementById('field-conflict-state');
+  if (fieldConflictState) fieldConflictState.textContent = fieldConflicts.length
+    ? `Choose which value to keep for ${fieldConflicts[0].path}.` : '';
+  const fieldChoice = documentRef.getElementById('field-conflict-choice');
+  if (fieldChoice && fieldConflicts.length) {
+    const conflict = fieldConflicts[0];
+    fieldChoice.replaceChildren?.(...[
+      ['remote', `Synced value: ${conflict.remoteValue}`],
+      ['local', `This device: ${conflict.localValue}`],
+    ].map(([source, label]) => {
+      const option = documentRef.createElement('option');
+      option.value = source;
+      option.textContent = label;
+      return option;
+    }));
+  }
+  const resolveFieldButton = documentRef.getElementById('resolve-field-conflict');
+  if (resolveFieldButton) resolveFieldButton.disabled = !state.online || state.saving;
   documentRef.getElementById('focus-heading').textContent = active ? 'In focus' : 'Focus plan';
   documentRef.getElementById('focus-heading').classList?.toggle('is-active', active);
   documentRef.getElementById('focus-live').hidden = !active;
@@ -292,6 +356,7 @@ export async function initializeManagement({
     newEmptyBlocklist: Boolean(cachedSnapshot && cachedSnapshot.desktopBlockedDomains.length === 0 && saved.lastSnapshotRevision === 0),
     saving: false,
     blocklistMessage: null,
+    pendingSessionStart: saved.pendingSessionStart ?? null,
   };
   const views = ['plan', 'sites', 'connection'];
   const showView = selected => {
@@ -333,8 +398,8 @@ export async function initializeManagement({
       show();
       return;
     }
-    if (!state.snapshot || !state.connected || !state.online || state.saving) {
-      state.sessionMessage = 'Sync before starting a study session.';
+    if (!state.snapshot || !state.connected || state.saving) {
+      state.sessionMessage = 'Connect to the sync API at least once before starting a study session.';
       show();
       return;
     }
@@ -362,9 +427,11 @@ export async function initializeManagement({
     state.saving = true;
     state.sessionMessage = null;
     state.snapshot = { ...state.snapshot, activeStudySession: session, phoneReceivedStudySessionId: null };
+    state.pendingSessionStart = session;
     show();
     try {
       await chromeApi.storage.local.set({ lastValidSnapshot: state.snapshot, lastSnapshotRevision: state.revision });
+      await chromeApi.storage.local.set({ pendingSessionStart: session });
       await updateRules();
       await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
       const endpoint = snapshotEndpoint(state.apiUrl);
@@ -409,6 +476,7 @@ export async function initializeManagement({
       if (!validSnapshotResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
       state.snapshot = payload.snapshot;
       state.revision = payload.revision;
+      state.pendingSessionStart = null;
       state.newEmptyBlocklist = false;
       state.online = true;
       state.error = null;
@@ -417,11 +485,78 @@ export async function initializeManagement({
       await updateRules();
       await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
     } catch (cause) {
-      state.snapshot = previousSnapshot;
-      await chromeApi.storage.local.set({ lastValidSnapshot: previousSnapshot, lastSnapshotRevision: state.revision });
-      state.error = cause?.message || 'Could not start the study session.';
-      state.sessionMessage = state.error;
+      if (cause instanceof TypeError) {
+        state.online = false;
+        state.error = connectionError(state.apiUrl);
+        state.sessionMessage = 'Study session is running on this computer. Waiting to send it to the phone.';
+      } else {
+        state.snapshot = previousSnapshot;
+        state.pendingSessionStart = null;
+        await chromeApi.storage.local.set({ lastValidSnapshot: previousSnapshot, lastSnapshotRevision: state.revision, pendingSessionStart: null });
+        state.error = cause?.message || 'Could not start the study session.';
+        state.sessionMessage = state.error;
+      }
       await updateRules();
+    } finally {
+      state.saving = false;
+      show();
+    }
+  });
+  documentRef.getElementById('choose-session-start')?.addEventListener('click', async () => {
+    const chosenId = documentRef.getElementById('session-start-choice')?.value;
+    const candidates = state.snapshot?.sessionStartCandidates ?? [];
+    const chosen = candidates.find(candidate => candidate.id === chosenId);
+    if (!chosen || !state.online || state.saving) return;
+    state.saving = true;
+    show();
+    try {
+      const snapshot = { ...state.snapshot, activeStudySession: chosen, sessionStartCandidates: [], phoneReceivedStudySessionId: null };
+      const response = await fetchImpl(snapshotEndpoint(state.apiUrl), {
+        method: 'PUT', headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: state.revision, snapshot }), cache: 'no-store', credentials: 'omit', redirect: 'error',
+      });
+      if (!response.ok) throw new Error(`Could not share the chosen study session (HTTP ${response.status}).`);
+      const payload = await response.json();
+      if (!validSnapshotResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+      state.snapshot = payload.snapshot;
+      state.revision = payload.revision;
+      state.pendingSessionStart = null;
+      state.sessionMessage = null;
+      await chromeApi.storage.local.set({ lastValidSnapshot: payload.snapshot, lastSnapshotRevision: payload.revision, pendingSessionStart: null });
+      await updateRules();
+    } catch (cause) {
+      state.sessionMessage = cause?.message || 'Could not share the chosen study session.';
+    } finally {
+      state.saving = false;
+      show();
+    }
+  });
+  documentRef.getElementById('resolve-field-conflict')?.addEventListener('click', async () => {
+    const conflict = state.snapshot?.fieldConflicts?.[0];
+    const choice = documentRef.getElementById('field-conflict-choice')?.value;
+    if (!conflict || !['remote', 'local'].includes(choice) || !state.online || state.saving) return;
+    state.saving = true;
+    show();
+    try {
+      const value = choice === 'remote' ? conflict.remoteValue : conflict.localValue;
+      const snapshot = {
+        ...withFieldValue(state.snapshot, conflict, value),
+        fieldConflicts: state.snapshot.fieldConflicts.filter(item => item.path !== conflict.path),
+      };
+      const response = await fetchImpl(snapshotEndpoint(state.apiUrl), {
+        method: 'PUT', headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: state.revision, snapshot }), cache: 'no-store', credentials: 'omit', redirect: 'error',
+      });
+      if (!response.ok) throw new Error(`Could not save the chosen value (HTTP ${response.status}). Sync again and retry.`);
+      const payload = await response.json();
+      if (!validSnapshotResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+      state.snapshot = payload.snapshot;
+      state.revision = payload.revision;
+      state.lastSuccessfulSync = now().toISOString();
+      await chromeApi.storage.local.set({ lastValidSnapshot: payload.snapshot, lastSnapshotRevision: payload.revision, lastSuccessfulSync: state.lastSuccessfulSync });
+      await updateRules();
+    } catch (cause) {
+      state.sessionMessage = cause?.message || 'Could not resolve the conflicting value.';
     } finally {
       state.saving = false;
       show();
@@ -620,6 +755,44 @@ export async function initializeManagement({
     show();
     try {
       let payload = await readSnapshot(state.apiUrl, state.apiToken, fetchImpl);
+      if (state.pendingSessionStart) {
+        const pending = state.pendingSessionStart;
+        if (Date.parse(pending.endsAt) <= now().getTime()) {
+          state.pendingSessionStart = null;
+          await chromeApi.storage.local.set({ pendingSessionStart: null });
+        } else if (payload.snapshot.activeStudySession && payload.snapshot.activeStudySession.id !== pending.id) {
+          const candidates = [...(payload.snapshot.sessionStartCandidates ?? []), payload.snapshot.activeStudySession, pending]
+            .filter((candidate, index, all) => all.findIndex(value => value.id === candidate.id) === index)
+            .slice(0, 2);
+          const conflicted = { ...payload.snapshot, sessionStartCandidates: candidates, phoneReceivedStudySessionId: null };
+          const response = await fetchImpl(snapshotEndpoint(state.apiUrl), {
+            method: 'PUT', headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expectedRevision: payload.revision, snapshot: conflicted }),
+            cache: 'no-store', credentials: 'omit', redirect: 'error',
+          });
+          if (!response.ok) throw new Error(`Could not preserve both offline study sessions (HTTP ${response.status}).`);
+          payload = await response.json();
+          state.pendingSessionStart = null;
+          await chromeApi.storage.local.set({ pendingSessionStart: null });
+        } else if (!payload.snapshot.activeStudySession && !payload.snapshot.pendingStudyReviewSessionId) {
+          const resumed = { ...payload.snapshot, activeStudySession: pending, phoneReceivedStudySessionId: null };
+          const response = await fetchImpl(snapshotEndpoint(state.apiUrl), {
+            method: 'PUT', headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expectedRevision: payload.revision, snapshot: resumed }),
+            cache: 'no-store', credentials: 'omit', redirect: 'error',
+          });
+          if (!response.ok) throw new Error(`Could not send the pending study session (HTTP ${response.status}).`);
+          payload = await response.json();
+          state.pendingSessionStart = null;
+          await chromeApi.storage.local.set({ pendingSessionStart: null });
+        } else if (payload.snapshot.activeStudySession?.id === pending.id) {
+          state.pendingSessionStart = null;
+          await chromeApi.storage.local.set({ pendingSessionStart: null });
+        }
+      }
+      if (state.pendingSessionStart === null && payload.snapshot.sessionStartCandidates?.length > 1) {
+        state.sessionMessage = 'Choose which offline study session to share.';
+      }
       const isNewEmptySnapshot = payload.revision === 0
         && payload.updatedAt === null
         && payload.snapshot.desktopBlockedDomains.length === 0;

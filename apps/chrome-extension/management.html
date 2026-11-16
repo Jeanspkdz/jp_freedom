@@ -27,6 +27,18 @@
             <div><input id="session-duration" type="number" min="1" step="1" value="30"><button id="start-session" type="button">Start study session</button></div>
             <p id="session-start-status" role="status"></p>
           </div>
+          <div id="session-conflict-state" role="status" hidden></div>
+          <div id="session-conflict-controls" hidden>
+            <label for="session-start-choice">Choose the shared study session</label>
+            <select id="session-start-choice"></select>
+            <button id="choose-session-start" type="button">Use this study session</button>
+          </div>
+          <div id="field-conflict-controls" hidden>
+            <p id="field-conflict-state" role="status"></p>
+            <label for="field-conflict-choice">Choose a value for this field</label>
+            <select id="field-conflict-choice"></select>
+            <button id="resolve-field-conflict" type="button">Use selected value</button>
+          </div>
           <button id="stop-session" class="secondary-button" type="button" hidden>Stop study session</button>
           <div class="focus-main"><h2 id="plan-heading">Current focus block</h2><p id="current-block">Loading plan…</p></div>
           <div class="focus-meta"><p id="planned-end" hidden></p><p id="focus-remaining" hidden><strong id="focus-remaining-value"></strong> left</p></div>
