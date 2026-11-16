@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -111,9 +112,9 @@ fun PlannerScreen(
         .requiredPlanDateForEvening(LocalDate.now())
     val targetDate = requiredPlanDate ?: LocalDate.now().plusDays(1)
     val targetMinutes = settings.studyHoursTargetMinutes
-    val actualMinutes = studySessions.filter { it.startedAt.atZone(java.time.ZoneId.systemDefault()).toLocalDate() == LocalDate.now() }
-        .sumOf { if (it.state == StudySessionState.ACTIVE) Duration.between(it.startedAt, java.time.Instant.now()).toMinutes() else it.actualMillis / 60_000 }
-        .toInt()
+    val actualMinutes = com.jp.freedom.domain.StudyTimerPolicy.dailyReview(
+        date, java.time.ZoneId.systemDefault(), targetMinutes, studySessions, blocks,
+    ).actualMinutes.toInt()
     val targetCount = allBlocks.count { it.date == targetDate }
     val isRestDayTomorrow = requiredPlanDate == null
 
@@ -121,13 +122,15 @@ fun PlannerScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "Pulso",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Dimky",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
@@ -192,7 +195,7 @@ fun PlannerScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    color = MaterialTheme.colorScheme.secondary,
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -201,15 +204,18 @@ fun PlannerScreen(
                     ) {
                         Text(
                             when {
-                                !accessibilityEnabled && !exactAlarmsAllowed -> "App blocking is off, and focus blocks may start late."
-                                !accessibilityEnabled -> "App blocking is off. JP Freedom cannot restrict phone apps yet."
-                                else -> "Exact alarm access is off. Focus blocks may start late."
+                                !accessibilityEnabled && !exactAlarmsAllowed -> "Activa el bloqueo y las alarmas para aplicar tus sesiones a tiempo."
+                                !accessibilityEnabled -> "Activa accesibilidad para bloquear distracciones."
+                                else -> "Activa las alarmas exactas para iniciar los bloques a tiempo."
                             },
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            color = MaterialTheme.colorScheme.onSecondary,
                         )
-                        TextButton(onClick = onOpenSettings) { Text("Fix") }
+                        TextButton(
+                            onClick = onOpenSettings,
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSecondary),
+                        ) { Text("Configurar") }
                     }
                 }
             }
@@ -226,6 +232,7 @@ fun PlannerScreen(
                 EmptyAgenda(
                     date = date,
                     isTodaySelected = isTodaySelected,
+                    onAddBlock = onAddBlock,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
                 )
             } else {
@@ -301,7 +308,7 @@ private fun StudySummary(blocks: List<PlannedBlock>) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 blocks.take(3).forEach { block ->
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.fillMaxWidth().height(8.dp).background(Color(0xFFF5AE55), RoundedCornerShape(50)))
+                        Box(Modifier.fillMaxWidth().height(8.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50)))
                         Spacer(Modifier.height(6.dp))
                         Text("${block.startTime.clockText()}–${block.endTime.clockText()}", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, maxLines = 1, softWrap = false)
                     }
@@ -328,8 +335,12 @@ private fun StudyHoursLedger(actualMinutes: Int, targetMinutes: Int, blocks: Lis
             }
         }
         Spacer(Modifier.height(12.dp))
-        LinearProgressIndicator(progress = { (actualMinutes.toFloat() / targetMinutes.coerceAtLeast(1)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(4.dp), color = colors.primary, trackColor = colors.surfaceVariant)
-        Text("Planificado: ${planned / 60} h ${planned % 60} min", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelMedium, color = colors.secondary)
+        Text("Estudiado", style = MaterialTheme.typography.labelMedium)
+        LinearProgressIndicator(progress = { (actualMinutes.toFloat() / maxOf(targetMinutes, planned, actualMinutes, 1)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(10.dp), color = colors.primary, trackColor = colors.surfaceVariant)
+        Spacer(Modifier.height(10.dp))
+        Text("Planificado · ${planned / 60} h ${planned % 60} min", style = MaterialTheme.typography.labelMedium)
+        LinearProgressIndicator(progress = { (planned.toFloat() / maxOf(targetMinutes, planned, actualMinutes, 1)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(10.dp), color = colors.secondary, trackColor = colors.surfaceVariant)
+        Text("Meta: ${targetMinutes / 60} h ${targetMinutes % 60} min", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
     }
 }
 
@@ -375,7 +386,7 @@ private fun EditorialBlock(
                     isCurrent -> StateLabel("In progress", emphasized = true)
                     isNext -> StateLabel("Next", emphasized = false)
                     block.completionStatus == CompletionStatus.NOT_STARTED -> StateLabel("Upcoming", emphasized = false)
-                    block.completionStatus == CompletionStatus.FINISHED -> StateLabel("Completado", emphasized = false)
+                    block.completionStatus == CompletionStatus.FINISHED -> StateLabel("Finalizado", emphasized = true, amber = true)
                     block.completionStatus == CompletionStatus.PARTLY_DONE -> StateLabel("Parcial", emphasized = false)
                     block.completionStatus == CompletionStatus.NOT_DONE -> StateLabel("No realizado", emphasized = false)
                 }
@@ -393,10 +404,14 @@ private fun EditorialBlock(
 }
 
 @Composable
-private fun StateLabel(text: String, emphasized: Boolean) {
+private fun StateLabel(text: String, emphasized: Boolean, amber: Boolean = false) {
     val colors = MaterialTheme.colorScheme
     Surface(
-        color = if (emphasized) colors.primary else colors.surfaceVariant,
+        color = when {
+            amber -> colors.primary
+            emphasized -> colors.primary
+            else -> colors.surfaceVariant
+        },
         shape = RoundedCornerShape(50),
     ) {
         Text(
@@ -404,7 +419,11 @@ private fun StateLabel(text: String, emphasized: Boolean) {
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            color = if (emphasized) colors.onPrimary else colors.onSurfaceVariant,
+            color = when {
+                amber -> colors.onPrimary
+                emphasized -> colors.onPrimary
+                else -> colors.onSurfaceVariant
+            },
         )
     }
 }
@@ -413,6 +432,7 @@ private fun StateLabel(text: String, emphasized: Boolean) {
 private fun EmptyAgenda(
     date: LocalDate,
     isTodaySelected: Boolean,
+    onAddBlock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -428,17 +448,23 @@ private fun EmptyAgenda(
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            text = if (isTodaySelected) "Your schedule is empty today" else "Your schedule is empty tomorrow",
+            text = if (isTodaySelected) "Hoy no hay bloques" else "Mañana no hay bloques",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Add a block to plan your focus time.",
+            text = "Añade una actividad para organizar tu tiempo.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.height(20.dp))
+        OutlinedButton(onClick = onAddBlock, modifier = Modifier.height(56.dp)) {
+            Icon(Icons.Outlined.Add, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Añadir bloque")
+        }
     }
 }
 
@@ -452,8 +478,7 @@ private fun RestrictionBanner(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = colors.errorContainer,
-        border = BorderStroke(1.dp, colors.error.copy(alpha = 0.25f)),
+        color = colors.secondaryContainer,
     ) {
         Row(
             modifier = Modifier.padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
@@ -463,22 +488,25 @@ private fun RestrictionBanner(
             Icon(
                 imageVector = Icons.Outlined.Lock,
                 contentDescription = null,
-                tint = colors.error,
+                tint = colors.onSecondaryContainer,
             )
             Column(Modifier.weight(1f)) {
                 Text(
                     "Plan de mañana incompleto",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = colors.onErrorContainer,
+                    color = colors.onSecondaryContainer,
                 )
                 Text(
                     "Faltan ${remainingMinutes / 60} h ${remainingMinutes % 60} min para tu meta",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = colors.onErrorContainer,
+                    color = colors.onSecondaryContainer,
                 )
             }
-            TextButton(onClick = onOpenPlan) { Text("Abrir") }
+            TextButton(
+                onClick = onOpenPlan,
+                colors = ButtonDefaults.textButtonColors(contentColor = colors.onSecondaryContainer),
+            ) { Text("Abrir") }
         }
     }
 }

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>JP Freedom</title>
+  <title>Dimky</title>
   <style>
-    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
-    body { color: #e7f5ee; font: 16px/1.4 system-ui, sans-serif; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #10182b; }
+    body { color: #f2f0ea; font: 16px/1.4 system-ui, sans-serif; }
     canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
     body::before {
       content: "";
@@ -30,9 +30,21 @@
       font-weight: 350;
       text-shadow: 0 1px 6px #000, 0 0 16px #000;
     }
-    .brand svg { width: clamp(52px, 21vw, 84px); height: auto; color: #5fd0c4; }
-    .brand.cup-rendered svg { opacity: 0; }
-    .brand.cup-rendered::before {
+    .brand .mascot {
+      width: clamp(56px, 21vw, 84px);
+      height: auto;
+      transform-origin: 50% 82%;
+      animation: ritmy-hop 2.15s cubic-bezier(.34, 1.56, .64, 1) infinite;
+      filter: drop-shadow(0 5px 9px rgb(179 157 219 / 35%));
+    }
+    @keyframes ritmy-hop {
+      0%, 100% { transform: translateY(0) rotate(0); }
+      14% { transform: translateY(0) rotate(-4deg); }
+      38% { transform: translateY(-12px) rotate(3deg); }
+      54% { transform: translateY(-12px) rotate(-2deg); }
+      76% { transform: translateY(0) rotate(2deg); }
+    }
+    .brand.mascot-rendered::before {
       content: "";
       position: absolute;
       z-index: -1;
@@ -42,16 +54,16 @@
       width: 180px;
       height: 180px;
       transform: translate(-50%, -50%);
-      background: radial-gradient(circle, #5fd0c4, transparent 70%);
+      background: radial-gradient(circle, #ffc27a, transparent 70%);
       opacity: calc(0.07 + 0.05 * var(--cup-pulse, 0));
     }
     .brand b {
       padding: 3px 9px;
       border-radius: 6px;
-      color: #fff;
-      background: #176a77;
+      color: #402d12;
+      background: #ffc27a;
       font-weight: 700;
-      box-shadow: 0 0 24px rgb(95 208 196 / calc(0.14 + 0.21 * var(--cup-pulse, 0)));
+      box-shadow: 0 0 24px rgb(255 194 122 / calc(0.14 + 0.21 * var(--cup-pulse, 0)));
     }
     @media (max-height: 360px) {
       .brand { top: 76%; }
@@ -59,23 +71,23 @@
     body.blocked .brand { top: min(82%, calc(100% - 188px)); }
     @media (max-height: 450px) {
       body.blocked .brand { top: max(27px, calc(100% - 160px)); font-size: 26px; }
-      body.blocked .brand svg { width: 54px; }
+      body.blocked .brand .mascot { width: 54px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .brand .mascot { animation: none; }
     }
   </style>
 </head>
 <body>
   <canvas aria-hidden="true" hidden></canvas>
   <div class="brand">
-    <svg viewBox="0 0 56 56" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Cup">
-      <path d="M12 28h29v7a12 12 0 0 1-12 12h-5a12 12 0 0 1-12-12v-7Zm29 2h3a5 5 0 0 1 0 10h-4M9 51h36"/>
-    </svg>
-    <span><b>JP</b> Freedom</span>
+    <img class="mascot" src="illustrations/ritmy.png" alt="Ritmy, la mascota de Dimky" width="1024" height="1024">
+    <span>Dimky</span>
   </div>
   <script type="module">
     const TEXT = 'BLOCKED';
     const FORM_DELAY = 0.2;
     const FORM_DURATION = 2.8;
-    const CUP_PARTICLES = true;
     const LOOP = false;
     const TEXT_Y = 0.38;
     const TEXT_COUNT = 22000;
@@ -98,14 +110,14 @@
 
       const float PI = 3.14159265;
       const float TAU = 6.28318531;
-      const vec3 STEAM = vec3(207, 238, 232) / 255.0;
-      const vec3 TURQUOISE = vec3(95, 208, 196) / 255.0;
-      const vec3 DARK_GREEN = vec3(15, 107, 69) / 255.0;
-      const vec3 GREEN = vec3(24, 224, 138) / 255.0;
-      const vec3 MINT = vec3(125, 255, 208) / 255.0;
-      const vec3 WHITE_MINT = vec3(232, 255, 246) / 255.0;
-      const vec3 AMBER = vec3(242, 166, 60) / 255.0;
-      const vec3 VIOLET = vec3(178, 119, 255) / 255.0;
+      const vec3 STEAM = vec3(180, 190, 216) / 255.0;
+      const vec3 PURPLE = vec3(179, 157, 219) / 255.0;
+      const vec3 DARK_GREEN = vec3(34, 46, 71) / 255.0;
+      const vec3 GREEN = vec3(71, 57, 95) / 255.0;
+      const vec3 MINT = vec3(235, 221, 255) / 255.0;
+      const vec3 WHITE_MINT = vec3(242, 240, 234) / 255.0;
+      const vec3 AMBER = vec3(255, 194, 122) / 255.0;
+      const vec3 VIOLET = vec3(179, 157, 219) / 255.0;
 
       vec2 rotate(vec2 p, float angle) {
         float s = sin(angle);
@@ -271,7 +283,7 @@
         }
         gl_Position = vec4(position / u_size * 2.0 - 1.0, 0.0, 1.0);
         gl_PointSize = mix(1.6, 2.2, seed) * (1.0 + wave * 0.15) * u_dpr;
-        v_color = TURQUOISE * (u_cupExposure * (1.0 + wave * 0.8));
+        v_color = PURPLE * (u_cupExposure * (1.0 + wave * 0.8));
         v_alpha = mix(0.12, 0.85, k);
       }
 
@@ -355,8 +367,7 @@
 
     const canvas = document.querySelector('canvas');
     const brand = document.querySelector('.brand');
-    const cup = brand.querySelector('svg');
-    const cupPath = CUP_PARTICLES ? new Path2D(cup.querySelector('path').getAttribute('d')) : null;
+    const mascot = brand.querySelector('.mascot');
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
     const mask = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
     if (new URLSearchParams(location.search).has('blocked')) {
@@ -446,19 +457,6 @@
       return sampleMask(step, { left, top, width: maskWidth, height: maskHeight }, width, height);
     }
 
-    function sampleCup(bounds, width, height) {
-      // Supersample the narrow SVG stroke so it stays connected on small screens.
-      mask.canvas.width = Math.max(1, Math.round(bounds.width * 2));
-      mask.canvas.height = Math.max(1, Math.round(bounds.height * 2));
-      mask.setTransform(mask.canvas.width / 56, 0, 0, mask.canvas.height / 56, 0, 0);
-      mask.strokeStyle = '#fff';
-      mask.lineWidth = 2.2;
-      mask.lineCap = 'round';
-      mask.lineJoin = 'round';
-      mask.stroke(cupPath);
-      return sampleMask(2, bounds, width, height);
-    }
-
     function sampleMask(step, bounds, width, height) {
       const { width: columns, height: rows } = mask.canvas;
       const { data } = mask.getImageData(0, 0, columns, rows);
@@ -496,19 +494,10 @@
       }
       letters.length = Math.min(letters.length, TEXT_COUNT);
 
-      let cupPoints = [];
-      if (cupPath) {
-        try {
-          cupPoints = sampleCup(bounds, width, height);
-        } catch (error) {
-          console.warn('Could not sample the cup', error);
-        }
-      }
       const { gl, count, particles, targetBuffer, uniforms } = renderer;
       const targets = new Float32Array(count * 4);
       // Limit overlap on small masks so the letter strokes still read as points.
       const textCount = Math.min(TEXT_COUNT, letters.length * 6);
-      const cupEnd = TEXT_COUNT + (cupPoints.length ? CUP_COUNT : 0);
       for (let i = 0; i < count; i++) {
         const index = i * 4;
         const initialX = particles[index];
@@ -519,11 +508,6 @@
           targets[index] = x + jitter * (2 * initialX - 1) / width;
           targets[index + 1] = y + jitter * (2 * initialY - 1) / height;
           targets[index + 2] = 1;
-        } else if (i >= TEXT_COUNT && i < cupEnd) {
-          const [x, y] = cupPoints[(i - TEXT_COUNT) % cupPoints.length];
-          targets[index] = x + (2 * initialX - 1) * 0.65 / width;
-          targets[index + 1] = y + (2 * initialY - 1) * 0.65 / height;
-          targets[index + 3] = 1;
         } else {
           targets[index] = initialX;
           targets[index + 1] = initialY;
@@ -537,17 +521,16 @@
       gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 16, 8);
       gl.enableVertexAttribArray(3);
       gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 16, 12);
-      // Compensate for repeated samples under additive blending.
-      gl.uniform1f(uniforms.cupExposure, Math.min(1, 1.8 * cupPoints.length / CUP_COUNT));
-      brand.classList.toggle('cup-rendered', cupPoints.length > 0);
+      gl.uniform1f(uniforms.cupExposure, 0);
+      brand.classList.add('mascot-rendered');
       if (textCount) formStart ??= elapsed;
     }
 
     function updateOrigin(gl, uniforms, bounds, width, height) {
       // The midpoint of the cup's rim in the SVG's 56 × 56 viewBox.
-      const center = bounds.width * 26.5 / 56;
+        const center = bounds.width / 2;
       const x = bounds.left + center;
-      const y = bounds.top + bounds.height * 28 / 56;
+        const y = bounds.top + bounds.height / 2;
       gl.uniform2f(uniforms.origin, x / width, 1 - y / height);
       brand.style.setProperty('--cup-center', center + 'px');
       brand.style.setProperty('--cup-halo-offset', (bounds.height * 12 / 56) + 'px');
@@ -605,7 +588,7 @@
         canvas.width = Math.max(1, Math.round(width * dpr));
         canvas.height = Math.max(1, Math.round(height * dpr));
         gl.viewport(0, 0, canvas.width, canvas.height);
-        const bounds = cup.getBoundingClientRect();
+        const bounds = mascot.getBoundingClientRect();
         updateOrigin(gl, uniforms, bounds, width, height);
         gl.uniform2f(uniforms.size, width, height);
         gl.uniform1f(uniforms.dpr, dpr);
@@ -668,7 +651,7 @@
         console.warn('Focus particles could not initialize', error);
         renderer = undefined;
         canvas.hidden = true;
-        brand.classList.remove('cup-rendered');
+        brand.classList.remove('mascot-rendered');
       }
     }
 
@@ -721,7 +704,7 @@
       stop();
       renderer = undefined;
       canvas.hidden = true;
-      brand.classList.remove('cup-rendered');
+      brand.classList.remove('mascot-rendered');
     });
     canvas.addEventListener('webglcontextrestored', start);
     if (mask) {

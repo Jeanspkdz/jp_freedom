@@ -24,6 +24,11 @@ object DailyReviewReminder {
     fun time(context: Context): LocalTime = runCatching { LocalTime.parse(context.getSharedPreferences(PREFS, 0).getString(TIME, "21:00")) }.getOrDefault(LocalTime.of(21, 0))
     fun saveTime(context: Context, value: LocalTime) { context.getSharedPreferences(PREFS, 0).edit().putString(TIME, value.toString()).apply(); schedule(context) }
 
+    fun openReviewIntent(context: Context, date: LocalDate): Intent =
+        Intent(context, MainActivity::class.java)
+            .putExtra(EXTRA_DATE, date.toString())
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
     fun schedule(context: Context) {
         val trigger = com.jp.freedom.domain.StudyTimerPolicy.nextReminder(ZonedDateTime.now(), time(context)).toInstant().toEpochMilli()
         val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -37,8 +42,10 @@ object DailyReviewReminder {
 
     fun show(context: Context, date: LocalDate) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (!manager.areNotificationsEnabled()) return
+        if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(CHANNEL, "Daily study review", NotificationManager.IMPORTANCE_DEFAULT))
-        val intent = Intent(context, MainActivity::class.java).putExtra(EXTRA_DATE, date.toString()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val intent = openReviewIntent(context, date)
         val open = PendingIntent.getActivity(context, 85, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         manager.notify(85, Notification.Builder(context, CHANNEL).setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle("Review your study day").setContentText("See your timer sessions and progress for today.").setContentIntent(open).setAutoCancel(true).build())
     }

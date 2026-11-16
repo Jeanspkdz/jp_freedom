@@ -11,6 +11,7 @@ android {
         applicationId = "com.jp.freedom"
         minSdk = 26
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -35,5 +36,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.json)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
 }
 

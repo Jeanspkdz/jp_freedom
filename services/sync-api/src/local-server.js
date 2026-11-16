@@ -29,5 +29,5 @@ const server = createServer(async (incoming, outgoing) => {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const port = Number(process.env.PORT ?? 8787);
-  server.listen(port, '0.0.0.0', () => console.log(`JP Freedom sync API listening on ${port}`));
+  server.listen(port, '0.0.0.0', () => console.log(`Dimky sync API listening on ${port}`));
 }

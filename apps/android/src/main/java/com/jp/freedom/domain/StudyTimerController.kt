@@ -34,9 +34,11 @@ class StudyTimerController(
     fun canStartAnother(): Boolean =
         StudyTimerPolicy.canStartAnother(store.activeStudySession() ?: store.pendingStudyReview())
 
-    fun start(duration: Duration, profile: AccessProfile): StudyTimerSession? {
+    fun start(duration: Duration, profile: AccessProfile, focusAreaId: String? = null): StudyTimerSession? {
         if (!canStartAnother()) return null
-        return StudyTimerSession.start("", duration, profile, Instant.now(clock)).takeIf(store::startStudySession)
+        return StudyTimerSession.start("", duration, profile, Instant.now(clock))
+            .copy(focusAreaId = focusAreaId)
+            .takeIf(store::startStudySession)
     }
 
     fun stop(): StudyTimerSession? = store.activeStudySession()?.let {
@@ -53,13 +55,14 @@ class StudyTimerController(
             state = StudySessionState.ACTIVE,
         ).also(store::saveStudySession)
     }
+
     fun finishIfDue(): StudyTimerSession? = store.activeStudySession()?.let {
         StudyTimerPolicy.finishIfDue(it, Instant.now(clock))
     }?.takeIf(store::finishStudySession)
 
-    fun review(taskName: String, status: CompletionStatus, note: String, remaining: String = "", breakDuration: Duration = Duration.ofMinutes(15)): StudyTimerSession? =
+    fun review(taskName: String, outcome: SessionOutcome, note: String, breakDuration: Duration = Duration.ofMinutes(15)): StudyTimerSession? =
         store.pendingStudyReview()?.let {
-            StudyTimerPolicy.review(it, taskName, status, note, remaining).copy(
+            StudyTimerPolicy.review(it, taskName, outcome, note).copy(
                 state = StudySessionState.BREAKING,
                 breakStartedAt = Instant.now(clock),
                 breakDurationMillis = breakDuration.toMillis(),

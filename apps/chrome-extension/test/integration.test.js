@@ -540,8 +540,19 @@ test('the blocked page shows the active activity and planned end without a bypas
   await initializeBlockedPage({ ...harness, now: () => now });
 
   assert.equal(harness.nodes.get('blocked-activity').textContent, 'Write project proposal');
-  assert.equal(harness.nodes.get('blocked-end').textContent, 'Planned end: 11:15');
+  assert.equal(harness.nodes.get('blocked-end').textContent, '11:15');
+  assert.equal(harness.nodes.get('blocked-end-row').hidden, false);
   assert.equal(harness.nodes.has('bypass'), false);
+});
+
+test('the blocked page hides the return-time row when no block is active', async () => {
+  const harness = createHarness();
+
+  await initializeBlockedPage({ ...harness, now: () => new Date(2026, 10, 5, 10, 30) });
+
+  assert.equal(harness.nodes.get('blocked-activity').textContent, 'No active focus block');
+  assert.equal(harness.nodes.get('blocked-end').textContent, '');
+  assert.equal(harness.nodes.get('blocked-end-row').hidden, true);
 });
 
 test('an invalid newer snapshot does not replace the last valid cached plan', async () => {
@@ -652,7 +663,7 @@ test('the worker reminds from cached plan data offline without installing browsi
   await refreshFocusState(harness.chromeApi, now);
 
   assert.equal(harness.notifications.shown.length, 1);
-  assert.match(harness.notifications.shown[0].options.message, /Open JP Freedom on your phone/);
+  assert.match(harness.notifications.shown[0].options.message, /Open Dimky on your phone/);
   assert.equal(harness.alarms.get('planning-reminder-repeat').periodInMinutes, 30);
   assert.deepEqual(harness.rules, []);
 });

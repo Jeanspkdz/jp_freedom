@@ -3,13 +3,22 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>JP Freedom · Focus plan</title>
+    <title>Dimky · Focus plan</title>
     <link rel="stylesheet" href="management.css">
   </head>
   <body>
     <main class="app-shell">
       <header class="page-header">
-        <div class="brand"><img src="icons/app-48.png" alt="" width="48" height="48"><span>JP Freedom</span></div>
+        <div class="brand">
+          <svg class="brand-icon" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+            <g class="brand-icon-shapes" transform="translate(17 17) scale(.66)">
+              <path class="brand-icon-piece brand-icon-piece--left" d="M11 28h9q11 0 11 11v50q0 11-11 11h-9q-11 0-11-11v-50q0-11 11-11z"/>
+              <path class="brand-icon-piece brand-icon-piece--top" d="M46 0h41q13 0 13 13v34q0 13-13 13h-26q-4 0-4-4v-14h-11q-13 0-13-13v-16q0-13 13-13z"/>
+              <path class="brand-icon-piece brand-icon-piece--bottom" d="M47 65h42q11 0 11 11v13q0 11-11 11h-42q-11 0-11-11v-13q0-11 11-11z"/>
+            </g>
+          </svg>
+          <span>Dimky</span>
+        </div>
         <nav class="view-nav" aria-label="Extension sections">
           <button id="tab-plan" class="view-tab is-selected" type="button" aria-controls="view-plan" aria-current="page">Plan</button>
           <button id="tab-sites" class="view-tab" type="button" aria-controls="view-sites">Sites</button>
@@ -75,8 +84,8 @@
       </div>
       <div id="view-connection" class="view-panel" hidden>
         <div class="connection-rail">
-          <div class="connection-intro"><h1>Connection</h1><p>Your focus plan travels from your phone to Chrome.</p></div>
           <div class="connection-overview">
+            <div class="connection-intro"><h1>Connection</h1><p>Your focus plan travels from your phone to Chrome.</p></div>
           <div class="connection-path" aria-label="Phone syncs the plan to this computer">
             <div class="connection-device"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="13" y="5" width="22" height="38" rx="5"/><path d="M21 37h6"/></svg><span>Phone</span></div>
             <div class="connection-flow" aria-hidden="true"></div>

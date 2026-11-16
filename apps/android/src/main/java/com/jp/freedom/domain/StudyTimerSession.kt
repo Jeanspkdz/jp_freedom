@@ -8,6 +8,7 @@ import java.time.LocalTime
 import java.time.ZonedDateTime
 
 enum class StudySessionState { ACTIVE, PENDING_REVIEW, BREAKING, REVIEWED }
+enum class SessionOutcome { FINISHED, NOT_FINISHED }
 
 data class StudyTimerSession(
     val id: String,
@@ -18,7 +19,8 @@ data class StudyTimerSession(
     val endedAt: Instant? = null,
     val actualMillis: Long = 0,
     val state: StudySessionState = StudySessionState.ACTIVE,
-    val completionStatus: CompletionStatus? = null,
+    val focusAreaId: String? = null,
+    val outcome: SessionOutcome? = null,
     val note: String = "",
     val remaining: String = "",
     val breakStartedAt: Instant? = null,
@@ -50,19 +52,39 @@ object StudyTimerPolicy {
     fun finishBreakIfDue(session: StudyTimerSession, now: Instant): StudyTimerSession? =
         if (session.state == StudySessionState.BREAKING && breakRemaining(session, now).isZero) session.copy(state = StudySessionState.REVIEWED) else null
 
-    fun review(session: StudyTimerSession, taskName: String, status: CompletionStatus, note: String, remaining: String = "") =
-        session.copy(taskName = taskName.trim(), completionStatus = status, note = note, remaining = remaining, state = StudySessionState.REVIEWED)
+    fun review(session: StudyTimerSession, taskName: String, outcome: SessionOutcome, note: String) =
+        session.copy(taskName = taskName.trim(), outcome = outcome, note = note, remaining = "", state = StudySessionState.REVIEWED)
 
     fun canStartAnother(session: StudyTimerSession?): Boolean = session == null || session.state == StudySessionState.REVIEWED
 
-    fun dailyReview(date: LocalDate, zone: ZoneId, targetMinutes: Int, sessions: List<StudyTimerSession>, blocks: List<PlannedBlock>): DailyReview =
-        DailyReview(
+    fun dailyReview(
+        date: LocalDate,
+        zone: ZoneId,
+        targetMinutes: Int,
+        sessions: List<StudyTimerSession>,
+        blocks: List<PlannedBlock>,
+        now: Instant = Instant.now(),
+        focusAreas: List<FocusArea> = emptyList(),
+    ): DailyReview {
+        val todaysSessions = sessions.filter { it.startedAt.atZone(zone).toLocalDate() == date }.sortedBy { it.startedAt }
+        val areaNames = focusAreas.associate { it.id to it.name }
+        val focusAreaMinutes = todaysSessions
+            .groupBy { session -> session.focusAreaId?.takeIf(areaNames::containsKey) }
+            .mapNotNull { (areaId, groupedSessions) ->
+                val minutes = groupedSessions.sumOf { it.actualStudyMinutes(now) }
+                if (minutes == 0L) return@mapNotNull null
+                FocusAreaMinutes(areaId, areaId?.let(areaNames::get) ?: "Unassigned", minutes)
+            }
+            .sortedWith(compareBy<FocusAreaMinutes> { it.focusAreaId == null }.thenBy { it.name })
+        return DailyReview(
             date = date,
-            sessions = sessions.filter { it.startedAt.atZone(zone).toLocalDate() == date }.sortedBy { it.startedAt },
-            actualMinutes = sessions.filter { it.startedAt.atZone(zone).toLocalDate() == date }.sumOf { it.actualMillis } / 60_000,
+            sessions = todaysSessions,
+            actualMinutes = todaysSessions.sumOf { it.actualStudyMinutes(now) },
             targetMinutes = targetMinutes,
             plannedBlocks = blocks.filter { it.date == date }.sortedBy { it.startTime },
+            focusAreaMinutes = focusAreaMinutes,
         )
+    }
 
     fun nextReminder(now: ZonedDateTime, reminderTime: LocalTime): ZonedDateTime =
         now.toLocalDate().atTime(reminderTime).atZone(now.zone).let { if (it.isAfter(now)) it else it.plusDays(1) }
@@ -72,7 +94,27 @@ object StudyTimerPolicy {
         actualMillis = Duration.between(session.startedAt, now).toMillis().coerceAtLeast(0).coerceAtMost(session.durationMillis),
         state = StudySessionState.PENDING_REVIEW,
     )
+
+    private fun StudyTimerSession.actualStudyMinutes(now: Instant): Long =
+        (if (state == StudySessionState.ACTIVE) {
+            Duration.between(startedAt, now).toMillis().coerceIn(0, durationMillis)
+        } else actualMillis) / 60_000
 }
+
+data class FocusArea(val id: String, val name: String)
+
+object FocusAreaPolicy {
+    const val MAX_AREAS = 2
+
+    fun prepare(areas: List<FocusArea>): List<FocusArea> = areas.asSequence()
+        .map { it.copy(name = it.name.trim()) }
+        .filter { it.id.isNotBlank() && it.name.isNotBlank() }
+        .distinctBy { it.name.lowercase() }
+        .take(MAX_AREAS)
+        .toList()
+}
+
+data class FocusAreaMinutes(val focusAreaId: String?, val name: String, val minutes: Long)
 
 data class DailyReview(
     val date: LocalDate,
@@ -80,4 +122,5 @@ data class DailyReview(
     val actualMinutes: Long,
     val targetMinutes: Int,
     val plannedBlocks: List<PlannedBlock>,
+    val focusAreaMinutes: List<FocusAreaMinutes>,
 )

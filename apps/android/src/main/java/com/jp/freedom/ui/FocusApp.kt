@@ -26,6 +26,7 @@ import com.jp.freedom.data.PendingSyncState
 import com.jp.freedom.data.SyncStatus
 import com.jp.freedom.domain.BlockValidation
 import com.jp.freedom.domain.FocusSettings
+import com.jp.freedom.domain.FocusArea
 import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.StudyTimerSession
 import com.jp.freedom.domain.AccessProfile
@@ -70,6 +71,7 @@ fun FocusApp(
     openSessionTimerVersion: Int,
     openDailyReviewVersion: Int,
     requestedDailyReviewDate: String?,
+    showLaunchSplash: Boolean = false,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -93,13 +95,14 @@ fun FocusApp(
     var studySession by remember { mutableStateOf<StudyTimerSession?>(null) }
     var pendingReview by remember { mutableStateOf<StudyTimerSession?>(null) }
     var studySessions by remember { mutableStateOf(emptyList<StudyTimerSession>()) }
+    var focusAreas by remember { mutableStateOf(emptyList<FocusArea>()) }
     var dailyReviewDate by remember { mutableStateOf(requestedDailyReviewDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()) }
     var dailyReviewReminderTime by remember { mutableStateOf(com.jp.freedom.enforcement.DailyReviewReminder.time(context).toString()) }
     val studyTimerController = remember(repository) { StudyTimerController(repository) }
-    var queuedTimerStart by remember { mutableStateOf<Pair<Duration, AccessProfile>?>(null) }
-    fun persistTimerStart(duration: Duration, profile: AccessProfile) {
+    var queuedTimerStart by remember { mutableStateOf<Triple<Duration, AccessProfile, String?>?>(null) }
+    fun persistTimerStart(duration: Duration, profile: AccessProfile, focusAreaId: String?) {
         scope.launch {
-            val started = withContext(Dispatchers.IO) { studyTimerController.start(duration, profile) }
+            val started = withContext(Dispatchers.IO) { studyTimerController.start(duration, profile, focusAreaId) }
             if (started != null) {
                 com.jp.freedom.enforcement.StudySessionNotifier.showActive(context, started)
                 PolicyAlarmScheduler.scheduleNext(context)
@@ -112,15 +115,24 @@ fun FocusApp(
             }
         }
     }
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        queuedTimerStart?.let { (duration, profile) -> persistTimerStart(duration, profile) }
+    var notificationPermissionDenied by remember { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        notificationPermissionDenied = !granted
+        if (granted) queuedTimerStart?.let { (duration, profile, focusAreaId) -> persistTimerStart(duration, profile, focusAreaId) }
         queuedTimerStart = null
     }
-    val startTimer: (Duration, AccessProfile) -> Unit = { duration, profile ->
+    val startTimer: (Duration, AccessProfile, String?) -> Unit = { duration, profile, focusAreaId ->
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            queuedTimerStart = duration to profile
+            queuedTimerStart = Triple(duration, profile, focusAreaId)
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else persistTimerStart(duration, profile)
+        } else persistTimerStart(duration, profile, focusAreaId)
+    }
+    val notificationsAllowed = (Build.VERSION.SDK_INT < 33 ||
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) &&
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).areNotificationsEnabled()
+    val requestNotificationPermission: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= 33) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        else context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
     val siteFilterPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -152,6 +164,7 @@ fun FocusApp(
                 val timer = repository.activeStudySession()
                 val review = repository.pendingStudyReview()
                 val sessions = repository.studySessions()
+                val areas = repository.focusAreas()
                 val policy = FocusPolicy.evaluate(
                     now = LocalDateTime.now(),
                     blocks = blocks,
@@ -160,7 +173,7 @@ fun FocusApp(
                 )
                 val restricted = policy.blockedReason == BlockedReason.EVENING_RESTRICTION
                 val policyBlocked = policy.blockedReason != null
-            PlannerSnapshot(blocks, settings, domains, sync, restricted, policyBlocked, timer, review, sessions)
+            PlannerSnapshot(blocks, settings, domains, sync, restricted, policyBlocked, timer, review, sessions, areas)
             }
             allBlocks = snapshot.blocks
             focusSettings = snapshot.settings
@@ -171,6 +184,7 @@ fun FocusApp(
             studySession = snapshot.studySession
             pendingReview = snapshot.pendingReview
             studySessions = snapshot.studySessions
+            focusAreas = snapshot.focusAreas
             stateLoaded = true
             delay(if (studySession != null || page == AppPage.STUDY_TIMER) 1_000 else if (page == AppPage.SETTINGS) 1_500 else 60_000)
         }
@@ -245,6 +259,7 @@ fun FocusApp(
         }
     }
 
+    DimkySplashHost(ready = stateLoaded, enabled = showLaunchSplash) {
     when (page) {
         AppPage.PLANNER -> PlannerScreen(
             date = selectedDate,
@@ -318,10 +333,17 @@ fun FocusApp(
             exactAlarmsAllowed = exactAlarmsAllowed,
             siteFilterEnabled = siteFilterEnabled,
             dailyReviewReminderTime = dailyReviewReminderTime,
+            focusAreas = focusAreas,
+            notificationsAllowed = notificationsAllowed,
             onDailyReviewReminderTimeChange = { value ->
                 dailyReviewReminderTime = value
                 runCatching { com.jp.freedom.enforcement.DailyReviewReminder.saveTime(context, java.time.LocalTime.parse(value)) }
             },
+            onFocusAreasChange = { updated ->
+                focusAreas = updated.take(2)
+                scope.launch { withContext(Dispatchers.IO) { repository.saveFocusAreas(updated) } }
+            },
+            onRequestNotificationPermission = requestNotificationPermission,
             onBack = { page = AppPage.PLANNER },
             onSettingsChange = { updated ->
                 focusSettings = updated
@@ -379,8 +401,11 @@ fun FocusApp(
         AppPage.STUDY_TIMER, AppPage.SESSION_REVIEW -> StudyTimerScreen(
             session = studySession,
             pendingReview = pendingReview,
+            focusAreas = focusAreas,
+            notificationPermissionDenied = notificationPermissionDenied,
             onBack = { page = AppPage.PLANNER },
             onStart = startTimer,
+            onOpenFocusAreaSettings = { page = AppPage.SETTINGS },
             onStop = {
                 scope.launch {
                     val stopped = withContext(Dispatchers.IO) {
@@ -388,6 +413,7 @@ fun FocusApp(
                     }
                     studySession = null
                     pendingReview = stopped
+                    com.jp.freedom.enforcement.StudySessionNotifier.dismiss(context)
                     PolicyAlarmScheduler.scheduleNext(context)
                     PolicyAlarmScheduler.broadcastRecheck(context)
                     page = AppPage.SESSION_REVIEW
@@ -407,10 +433,10 @@ fun FocusApp(
                     }
                 }
             },
-            onReview = { task, status, note, remaining ->
+            onReview = { task, outcome, note ->
                 scope.launch {
                     val reviewed = withContext(Dispatchers.IO) {
-                        studyTimerController.review(task, status, note, remaining, Duration.ofMinutes(focusSettings.breakMinutes.toLong()))
+                        studyTimerController.review(task, outcome, note, Duration.ofMinutes(focusSettings.breakMinutes.toLong()))
                     }
                     com.jp.freedom.enforcement.StudySessionNotifier.dismiss(context)
                     pendingReview = null
@@ -438,7 +464,7 @@ fun FocusApp(
         AppPage.DAILY_REVIEW -> DailyReviewScreen(
             review = com.jp.freedom.domain.StudyTimerPolicy.dailyReview(
                 dailyReviewDate, java.time.ZoneId.systemDefault(), focusSettings.studyHoursTargetMinutes,
-                studySessions, allBlocks,
+                studySessions, allBlocks, focusAreas = focusAreas,
             ),
             onBack = { page = AppPage.PLANNER },
         )
@@ -456,6 +482,7 @@ fun FocusApp(
             },
         )
     }
+    }
 }
 
 private data class PlannerSnapshot(
@@ -468,6 +495,7 @@ private data class PlannerSnapshot(
     val studySession: StudyTimerSession?,
     val pendingReview: StudyTimerSession?,
     val studySessions: List<StudyTimerSession>,
+    val focusAreas: List<FocusArea>,
 )
 
 private fun isAccessibilityServiceEnabled(context: Context): Boolean {

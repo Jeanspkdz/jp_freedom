@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dimky · Water reflection</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #10182b; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    #fallback {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #10182b url("illustrations/bg.jpg") center / cover no-repeat;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="water" aria-hidden="true"></canvas>
+  <div id="fallback" aria-hidden="true"></div>
+  <script>
+    const DAMPING = 0.992;
+    const DROP_STRENGTH = 0.7;
+    const DROP_RADIUS = 0.03;
+    const BG_DISTORTION = 0.03;
+    const MASK_DISTORTION = 0.06;
+    const REVEAL_DELAY_MS = 3000;
+    const REVEAL_DURATION_MS = 3000;
+    const REFLECTION_TINT = [179 / 255, 157 / 255, 219 / 255];
+    const REFLECTION_INTENSITY = 0.85;
+
+    const canvas = document.getElementById('water');
+    const fallback = document.getElementById('fallback');
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    const image = new Image();
+    image.src = 'illustrations/bg.jpg';
+
+    let gl, waveProgram, displayProgram, backgroundTexture, maskTexture;
+    let waveTargets = [], waveIndex = 0;
+    let waveUniforms, displayUniforms;
+    let width = 1, height = 1, waveWidth = 256, waveHeight = 256;
+    let imageWidth = 1, imageHeight = 1;
+    let frame = 0, startedAt = 0, revealAt = null, nextRainAt = 0;
+    let ready = false, pressed = false;
+    const drops = [];
+
+    const vertexSource = `#version 300 es
+      out vec2 uv;
+      void main() {
+        vec2 point = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+        uv = point;
+        gl_Position = vec4(point * 2.0 - 1.0, 0.0, 1.0);
+      }`;
+
+    const waveSource = `#version 300 es
+      precision highp float;
+      in vec2 uv;
+      uniform sampler2D previous;
+      uniform vec2 pixel, drop, aspect;
+      uniform float strength, radius, damping;
+      out vec4 outputColor;
+      void main() {
+        vec4 state = texture(previous, uv);
+        float neighbors =
+          texture(previous, uv + vec2(pixel.x, 0.0)).r +
+          texture(previous, uv - vec2(pixel.x, 0.0)).r +
+          texture(previous, uv + vec2(0.0, pixel.y)).r +
+          texture(previous, uv - vec2(0.0, pixel.y)).r;
+        float velocity = (state.g + (neighbors * 0.25 - state.r) * 0.45) * damping;
+        float height = (state.r + velocity) * damping;
+        float distanceToDrop = length((uv - drop) * aspect);
+        float inside = 1.0 - smoothstep(0.0, radius, distanceToDrop);
+        height += strength * 0.5 * (1.0 + cos(3.14159265 * min(distanceToDrop / radius, 1.0))) * inside;
+        outputColor = vec4(height, velocity, 0.0, 1.0);
+      }`;
+
+    const displaySource = `#version 300 es
+      precision highp float;
+      in vec2 uv;
+      uniform sampler2D background, mask, waves;
+      uniform vec2 wavePixel, coverScale;
+      uniform float backgroundDistortion, maskDistortion, reveal, reflectionIntensity, time;
+      uniform vec3 tint;
+      out vec4 outputColor;
+      void main() {
+        float left = texture(waves, uv - vec2(wavePixel.x, 0.0)).r;
+        float right = texture(waves, uv + vec2(wavePixel.x, 0.0)).r;
+        float below = texture(waves, uv - vec2(0.0, wavePixel.y)).r;
+        float above = texture(waves, uv + vec2(0.0, wavePixel.y)).r;
+        vec2 slope = vec2(right - left, above - below);
+        vec3 normal = normalize(vec3(-slope * 8.0, 1.0));
+
+        vec2 imageUV = (uv - 0.5) * coverScale + 0.5 + slope * backgroundDistortion;
+        vec3 color = texture(background, clamp(imageUV, 0.001, 0.999)).rgb;
+
+        vec2 waterShimmer = vec2(
+          0.0035 * sin(uv.y * 120.0 + time * 0.65) +
+          0.0015 * sin(uv.y * 250.0 - time * 0.4),
+          0.0012 * cos(uv.x * 80.0 + time * 0.45)
+        );
+        vec2 reflectedUV = uv + waterShimmer + slope * maskDistortion +
+          vec2(slope.y, -slope.x) * maskDistortion * 0.3;
+        float mark = texture(mask, clamp(reflectedUV, 0.001, 0.999)).r;
+        float fragments = clamp(0.88 - length(slope) * 1.5, 0.25, 0.88);
+        color += tint * mark * reveal * reflectionIntensity * fragments;
+
+        vec3 light = normalize(vec3(-0.45, 0.35, 0.82));
+        float glint = pow(max(dot(reflect(-light, normal), vec3(0.0, 0.0, 1.0)), 0.0), 48.0);
+        color += tint * glint * 0.11;
+        color *= 1.0 - 0.24 * smoothstep(0.25, 0.75, length(uv - 0.5));
+        outputColor = vec4(color, 1.0);
+      }`;
+
+    function makeProgram(fragmentSource) {
+      const program = gl.createProgram();
+      for (const [type, source] of [[gl.VERTEX_SHADER, vertexSource], [gl.FRAGMENT_SHADER, fragmentSource]]) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
+        gl.attachShader(program, shader);
+        gl.deleteShader(shader);
+      }
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+      return program;
+    }
+
+    function locations(program, names) {
+      return Object.fromEntries(names.map(name => [name, gl.getUniformLocation(program, name)]));
+    }
+
+    function uploadImage(source, mipmaps = false) {
+      const result = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, result);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mipmaps ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+      if (mipmaps) gl.generateMipmap(gl.TEXTURE_2D);
+      return result;
+    }
+
+    function makeWaveTarget() {
+      const texture = gl.createTexture();
+      const framebuffer = gl.createFramebuffer();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, waveWidth, waveHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        throw new Error('Float framebuffer unavailable');
+      }
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      return { texture, framebuffer };
+    }
+
+    function drawMask() {
+      const source = document.createElement('canvas');
+      source.height = 2048;
+      source.width = Math.max(512, Math.round(source.height * width / height));
+      const context = source.getContext('2d');
+      const w = source.width, h = source.height;
+      context.fillStyle = '#000';
+      context.fillRect(0, 0, w, h);
+      context.strokeStyle = '#fff';
+      context.fillStyle = '#fff';
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+
+      const size = Math.min(w * 0.35, h * 0.20);
+      const x = w * 0.5, y = h * 0.52;
+      context.lineWidth = size * 0.035;
+      context.beginPath();
+      context.moveTo(x - size * 0.35, y - size * 0.15);
+      context.lineTo(x + size * 0.35, y - size * 0.15);
+      context.lineTo(x + size * 0.31, y + size * 0.2);
+      context.quadraticCurveTo(x + size * 0.26, y + size * 0.37, x, y + size * 0.37);
+      context.quadraticCurveTo(x - size * 0.26, y + size * 0.37, x - size * 0.31, y + size * 0.2);
+      context.closePath();
+      context.stroke();
+      context.beginPath();
+      context.moveTo(x + size * 0.35, y - size * 0.09);
+      context.bezierCurveTo(x + size * 0.68, y - size * 0.14,
+        x + size * 0.72, y + size * 0.25, x + size * 0.34, y + size * 0.25);
+      context.stroke();
+      context.beginPath();
+      context.ellipse(x, y + size * 0.49, size * 0.53, size * 0.055, 0, 0, Math.PI * 2);
+      context.stroke();
+      for (let index = -1; index <= 1; index++) {
+        const steamX = x + index * size * 0.17;
+        context.beginPath();
+        context.moveTo(steamX, y - size * 0.24);
+        context.bezierCurveTo(steamX - size * 0.13, y - size * 0.38,
+          steamX + size * 0.12, y - size * 0.45, steamX, y - size * 0.60);
+        context.stroke();
+      }
+
+      const letters = 'BLOCKED';
+      let fontSize = Math.min(h * 0.085, w * 0.15);
+      context.font = `800 ${fontSize}px Arial, sans-serif`;
+      let spacing = fontSize * 0.08;
+      let textWidth = [...letters].reduce((sum, letter) => sum + context.measureText(letter).width, 0)
+        + spacing * (letters.length - 1);
+      const scale = Math.min(1, w * 0.82 / textWidth);
+      fontSize *= scale;
+      spacing *= scale;
+      textWidth *= scale;
+      context.font = `800 ${fontSize}px Arial, sans-serif`;
+      let cursor = (w - textWidth) * 0.5;
+      for (const letter of letters) {
+        context.fillText(letter, cursor, h * 0.72);
+        cursor += context.measureText(letter).width + spacing;
+      }
+
+      const blurred = document.createElement('canvas');
+      blurred.width = w;
+      blurred.height = h;
+      const blur = blurred.getContext('2d');
+      blur.filter = `blur(${Math.max(1, w / 900)}px)`;
+      blur.drawImage(source, 0, 0);
+      blur.filter = 'none';
+      blur.globalAlpha = 0.65;
+      blur.drawImage(source, 0, 0);
+      if (maskTexture) gl.deleteTexture(maskTexture);
+      maskTexture = uploadImage(blurred, true);
+    }
+
+    function resize() {
+      width = Math.max(1, innerWidth);
+      height = Math.max(1, innerHeight);
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      const waveScale = Math.min(512 / Math.max(width, height), 1);
+      waveWidth = Math.max(256, Math.round(width * waveScale));
+      waveHeight = Math.max(256, Math.round(height * waveScale));
+      for (const target of waveTargets) {
+        gl.deleteFramebuffer(target.framebuffer);
+        gl.deleteTexture(target.texture);
+      }
+      waveTargets = [makeWaveTarget(), makeWaveTarget()];
+      waveIndex = 0;
+      drawMask();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    function addDrop(x, y, strength = DROP_STRENGTH, radius = DROP_RADIUS) {
+      if (reducedMotion.matches || !ready) return;
+      drops.push({ x: x / width, y: 1 - y / height, strength, radius });
+      if (drops.length > 20) drops.shift();
+      if (revealAt === null) revealAt = performance.now();
+    }
+
+    function simulate(drop) {
+      gl.useProgram(waveProgram);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, waveTargets[1 - waveIndex].framebuffer);
+      gl.viewport(0, 0, waveWidth, waveHeight);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, waveTargets[waveIndex].texture);
+      gl.uniform1i(waveUniforms.previous, 0);
+      gl.uniform2f(waveUniforms.pixel, 1 / waveWidth, 1 / waveHeight);
+      gl.uniform2f(waveUniforms.aspect, width / Math.min(width, height), height / Math.min(width, height));
+      gl.uniform2f(waveUniforms.drop, drop?.x ?? -10, drop?.y ?? -10);
+      gl.uniform1f(waveUniforms.strength, drop?.strength ?? 0);
+      gl.uniform1f(waveUniforms.radius, drop?.radius ?? DROP_RADIUS);
+      gl.uniform1f(waveUniforms.damping, DAMPING);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      waveIndex = 1 - waveIndex;
+    }
+
+    function render(now) {
+      frame = 0;
+      if (!ready || document.hidden) return;
+      if (revealAt === null && now - startedAt >= REVEAL_DELAY_MS) revealAt = now;
+      if (!reducedMotion.matches) {
+        if (now >= nextRainAt) {
+          drops.push({
+            x: Math.random(), y: Math.random(),
+            strength: DROP_STRENGTH * (0.08 + Math.random() * 0.12),
+            radius: DROP_RADIUS * 0.35,
+          });
+          nextRainAt = now + 150 + Math.random() * 250;
+        }
+        simulate(drops.shift());
+        simulate(drops.shift());
+      }
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.useProgram(displayProgram);
+      for (const [unit, uniform, texture] of [
+        [0, displayUniforms.background, backgroundTexture],
+        [1, displayUniforms.mask, maskTexture],
+        [2, displayUniforms.waves, waveTargets[waveIndex].texture],
+      ]) {
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(uniform, unit);
+      }
+      const imageAspect = imageWidth / imageHeight;
+      const viewportAspect = width / height;
+      const coverScale = viewportAspect > imageAspect
+        ? [1, imageAspect / viewportAspect]
+        : [viewportAspect / imageAspect, 1];
+      gl.uniform2fv(displayUniforms.coverScale, coverScale);
+      gl.uniform2f(displayUniforms.wavePixel, 1 / waveWidth, 1 / waveHeight);
+      gl.uniform1f(displayUniforms.backgroundDistortion, BG_DISTORTION);
+      gl.uniform1f(displayUniforms.maskDistortion, MASK_DISTORTION);
+      gl.uniform3fv(displayUniforms.tint, REFLECTION_TINT);
+      gl.uniform1f(displayUniforms.reflectionIntensity, REFLECTION_INTENSITY);
+      gl.uniform1f(displayUniforms.time, reducedMotion.matches ? 0 : (now - startedAt) / 1000);
+      const progress = revealAt === null ? 0 : Math.min(1, (now - revealAt) / REVEAL_DURATION_MS);
+      gl.uniform1f(displayUniforms.reveal, progress * progress * (3 - 2 * progress));
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      if (!reducedMotion.matches || progress < 1) frame = requestAnimationFrame(render);
+    }
+
+    function showFallback() {
+      ready = false;
+      cancelAnimationFrame(frame);
+      canvas.style.display = 'none';
+      fallback.style.display = 'block';
+    }
+
+    async function start() {
+      try {
+        gl = canvas.getContext('webgl2', { alpha: false, antialias: false });
+        if (!gl || !gl.getExtension('EXT_color_buffer_float')) throw new Error('WebGL2 float rendering unavailable');
+        await image.decode();
+        imageWidth = image.naturalWidth;
+        imageHeight = image.naturalHeight;
+        backgroundTexture = uploadImage(image);
+        waveProgram = makeProgram(waveSource);
+        displayProgram = makeProgram(displaySource);
+        waveUniforms = locations(waveProgram,
+          ['previous', 'pixel', 'drop', 'aspect', 'strength', 'radius', 'damping']);
+        displayUniforms = locations(displayProgram,
+          ['background', 'mask', 'waves', 'wavePixel', 'coverScale',
+            'backgroundDistortion', 'maskDistortion', 'reveal', 'reflectionIntensity', 'tint', 'time']);
+        resize();
+        ready = true;
+        canvas.style.display = 'block';
+        fallback.style.display = 'none';
+        startedAt = performance.now();
+        nextRainAt = startedAt + 150;
+        frame = requestAnimationFrame(render);
+      } catch (error) {
+        console.warn('Water reflection could not initialize', error);
+        showFallback();
+      }
+    }
+
+    canvas.addEventListener('pointerdown', event => {
+      pressed = true;
+      canvas.setPointerCapture(event.pointerId);
+      addDrop(event.clientX, event.clientY);
+      if (revealAt === null) revealAt = performance.now();
+      if (reducedMotion.matches && ready) frame = requestAnimationFrame(render);
+    });
+    canvas.addEventListener('pointermove', event => {
+      if (pressed) addDrop(event.clientX, event.clientY, DROP_STRENGTH * 0.25, DROP_RADIUS * 0.55);
+    });
+    canvas.addEventListener('pointerup', () => { pressed = false; });
+    canvas.addEventListener('pointercancel', () => { pressed = false; });
+    window.addEventListener('resize', () => { if (ready) resize(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) cancelAnimationFrame(frame);
+      else if (ready) frame = requestAnimationFrame(render);
+    });
+    reducedMotion.addEventListener('change', () => {
+      if (ready) {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(render);
+      }
+    });
+    canvas.addEventListener('webglcontextlost', event => {
+      event.preventDefault();
+      showFallback();
+    });
+    canvas.addEventListener('webglcontextrestored', start);
+    start();
+  </script>
+</body>
+</html>

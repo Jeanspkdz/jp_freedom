@@ -1,4 +1,4 @@
-# JP Freedom
+# Dimky
 
 ## Repository layout
 

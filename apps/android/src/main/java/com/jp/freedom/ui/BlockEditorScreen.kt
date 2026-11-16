@@ -1,6 +1,7 @@
 package com.jp.freedom.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,12 +29,16 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -47,8 +52,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.BlockValidation
@@ -91,14 +94,14 @@ fun BlockEditorScreen(
             TopAppBar(
                 title = {
                     Text(
-                        if (block == null) "Add block" else "Edit block",
+                        if (block == null) "Añadir bloque" else "Editar bloque",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Volver")
                     }
                 },
             )
@@ -133,11 +136,11 @@ fun BlockEditorScreen(
                 Button(
                     onClick = {
                         if (name.isBlank()) {
-                            errorMessage = "Enter an activity name to save this block."
+                            errorMessage = "Escribe una actividad para guardar el bloque."
                             return@Button
                         }
                         if (!startTime.isBefore(endTime)) {
-                            errorMessage = "The end time must be after the start time."
+                            errorMessage = "La hora de fin debe ser posterior al inicio."
                             return@Button
                         }
                         val updated = PlannedBlock(
@@ -163,7 +166,7 @@ fun BlockEditorScreen(
                         .fillMaxWidth()
                         .height(56.dp),
                 ) {
-                    Text(if (isSaving) "Saving…" else "Save block")
+                    Text(if (isSaving) "Guardando…" else "Guardar bloque")
                 }
             }
         },
@@ -187,7 +190,7 @@ fun BlockEditorScreen(
                     tint = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = date.format(DateTimeFormatter.ofPattern("MMMM d", java.util.Locale.US)),
+                    text = date.format(DateTimeFormatter.ofPattern("d 'de' MMMM", java.util.Locale.forLanguageTag("es-PE"))),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -200,29 +203,30 @@ fun BlockEditorScreen(
                     errorMessage = null
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Activity") },
-                placeholder = { Text("e.g. Study math") },
+                label = { Text("Actividad") },
+                placeholder = { Text("Ej.: estudiar matemáticas") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                supportingText = { Text("Use a name that helps you recognize this block in your schedule.") },
+                supportingText = { Text("Usa un nombre fácil de reconocer en tu plan.") },
             )
 
-            Text("Schedule", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Horario", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 TimeChoice(
-                    title = "Start",
+                    title = "Inicio",
                     time = startTime,
                     modifier = Modifier.weight(1f),
                     onChoose = { picked ->
                         startTime = picked
+                        if (!endTime.isAfter(picked)) endTime = picked.plusHours(1)
                         errorMessage = null
                     },
                 )
                 TimeChoice(
-                    title = "End",
+                    title = "Fin",
                     time = endTime,
                     modifier = Modifier.weight(1f),
                     onChoose = { picked ->
@@ -231,13 +235,33 @@ fun BlockEditorScreen(
                     },
                 )
             }
+            Text("Duración rápida", style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(30, 60, 90).forEach { duration ->
+                    FilterChip(
+                        selected = java.time.Duration.between(startTime, endTime).toMinutes() == duration.toLong(),
+                        enabled = startTime.plusMinutes(duration.toLong()).isAfter(startTime),
+                        onClick = {
+                            val candidate = startTime.plusMinutes(duration.toLong())
+                            if (candidate.isAfter(startTime)) { endTime = candidate; errorMessage = null }
+                        },
+                        label = { Text(if (duration == 90) "1 h 30" else "$duration min") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.secondary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onSecondary,
+                            selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondary,
+                        ),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
             Text(
-                "Blocks can't overlap and must end on the same day.",
+                "Los bloques no pueden superponerse y deben terminar el mismo día.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Text("Access mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Acceso al teléfono", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             ExposedDropdownMenuBox(
                 expanded = expandedProfile,
                 onExpandedChange = { expandedProfile = !expandedProfile },
@@ -246,7 +270,7 @@ fun BlockEditorScreen(
                     value = accessProfile.title,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Allowed apps during this block") },
+                    label = { Text("Apps permitidas en este bloque") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedProfile) },
                     modifier = Modifier
                         .menuAnchor()
@@ -268,20 +292,21 @@ fun BlockEditorScreen(
                 }
             }
             Text(
-                text = "Allowed apps: ${accessProfileDescription(accessProfile)}",
+                text = "Apps permitidas: ${accessProfileDescription(accessProfile)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             if (block != null) {
-                Text("Progress", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    CompletionStatus.entries.forEach { status ->
-                        FilterChip(
-                            selected = completionStatus == status,
+                Text("¿Se completó este bloque?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    listOf(CompletionStatus.FINISHED, CompletionStatus.NOT_DONE).forEachIndexed { index, status ->
+                        SegmentedButton(
+                            selected = completionStatus == status ||
+                                (status == CompletionStatus.NOT_DONE && completionStatus == CompletionStatus.PARTLY_DONE),
                             onClick = { completionStatus = status },
-                            label = { Text(status.label()) },
-                        )
+                            shape = SegmentedButtonDefaults.itemShape(index, 2),
+                        ) { Text(if (status == CompletionStatus.NOT_DONE) "No realizado" else "Finalizado") }
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -292,7 +317,7 @@ fun BlockEditorScreen(
                 ) {
                     Icon(Icons.Outlined.DeleteOutline, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Delete block")
+                    Text("Eliminar bloque")
                 }
             }
         }
@@ -301,18 +326,18 @@ fun BlockEditorScreen(
     if (showDeleteConfirmation && block != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
-            title = { Text("Delete this block?") },
-            text = { Text("This block will be removed from your schedule and can't be recovered.") },
+            title = { Text("¿Eliminar este bloque?") },
+            text = { Text("Se quitará de tu plan y no se podrá recuperar.") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showDeleteConfirmation = false
                         scope.launch { onDelete(block.id) }
                     },
-                ) { Text("Delete") }
+                ) { Text("Eliminar") }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancelar") }
             },
         )
     }
@@ -351,6 +376,7 @@ private fun TimeChoice(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimeEntryDialog(
     title: String,
@@ -358,72 +384,7 @@ private fun TimeEntryDialog(
     onDismiss: () -> Unit,
     onConfirm: (LocalTime) -> Unit,
 ) {
-    var hour by remember(time) { mutableStateOf(time.hour.toString().padStart(2, '0')) }
-    var minute by remember(time) { mutableStateOf(time.minute.toString().padStart(2, '0')) }
-    var showError by remember { mutableStateOf(false) }
-    val parsedHour = hour.toIntOrNull()
-    val parsedMinute = minute.toIntOrNull()
-    val isValid = parsedHour != null && parsedHour in 0..23 &&
-        parsedMinute != null && parsedMinute in 0..59
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "Enter the time in 24-hour format.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = hour,
-                        onValueChange = { value ->
-                            if (value.length <= 2 && value.all(Char::isDigit)) {
-                                hour = value
-                                showError = false
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("Hour") },
-                        placeholder = { Text("00–23") },
-                        singleLine = true,
-                        isError = showError && (parsedHour == null || parsedHour !in 0..23),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
-                    )
-                    OutlinedTextField(
-                        value = minute,
-                        onValueChange = { value ->
-                            if (value.length <= 2 && value.all(Char::isDigit)) {
-                                minute = value
-                                showError = false
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("Minutes") },
-                        placeholder = { Text("00–59") },
-                        singleLine = true,
-                        isError = showError && (parsedMinute == null || parsedMinute !in 0..59),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                    )
-                }
-                if (showError) {
-                    Text(
-                        "Enter a time between 00:00 and 23:59.",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                if (isValid) onConfirm(LocalTime.of(parsedHour, parsedMinute))
-                else showError = true
-            }) { Text("Confirm") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+    TimeWheelPickerDialog(title, time, onDismiss, onConfirm)
 }
 
 private fun defaultStartTime(): LocalTime {
@@ -435,14 +396,14 @@ private fun defaultStartTime(): LocalTime {
 
 private fun validationMessage(validation: BlockValidation): String? = when (validation) {
     BlockValidation.Valid -> null
-    is BlockValidation.MissingName -> "Enter an activity name to save this block."
-    is BlockValidation.InvalidTimeRange -> "The end time must be after the start time."
-    is BlockValidation.NoteTooLong -> "The note is too long."
-    is BlockValidation.Overlapping -> "This block overlaps with “${validation.firstBlockName}” or “${validation.secondBlockName}”. Change the time."
+    is BlockValidation.MissingName -> "Escribe una actividad para guardar el bloque."
+    is BlockValidation.InvalidTimeRange -> "La hora de fin debe ser posterior al inicio."
+    is BlockValidation.NoteTooLong -> "La nota es demasiado larga."
+    is BlockValidation.Overlapping -> "Este bloque se superpone con “${validation.firstBlockName}” o “${validation.secondBlockName}”. Cambia la hora."
 }
 
 private fun accessProfileDescription(profile: AccessProfile): String = when (profile) {
-    AccessProfile.ESSENTIALS_ONLY -> "Phone, messages, emergency calls, home screen, Settings, keyboard, and JP Freedom."
-    AccessProfile.ESSENTIALS_WITH_CHATGPT -> "Essential apps and ChatGPT."
-    AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> "Essential apps, ChatGPT, and Google Search."
+    AccessProfile.ESSENTIALS_ONLY -> "Teléfono, mensajes, emergencias, inicio, Ajustes, teclado y Dimky."
+    AccessProfile.ESSENTIALS_WITH_CHATGPT -> "Apps esenciales y ChatGPT."
+    AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> "Apps esenciales, ChatGPT y Google Search."
 }

@@ -30,9 +30,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            splashScreen.setOnExitAnimationListener { it.remove() }
+        }
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         repository = FocusRepository(applicationContext)
         PolicyAlarmScheduler.scheduleNext(this)
@@ -53,6 +56,7 @@ class MainActivity : ComponentActivity() {
                     openSessionTimerVersion = openSessionTimerVersion,
                     openDailyReviewVersion = openDailyReviewVersion,
                     requestedDailyReviewDate = requestedDailyReviewDate,
+                    showLaunchSplash = savedInstanceState == null && intent.action == android.content.Intent.ACTION_MAIN,
                 )
             }
         }

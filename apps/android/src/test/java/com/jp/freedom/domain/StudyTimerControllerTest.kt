@@ -26,7 +26,7 @@ class StudyTimerControllerTest {
         assertFalse(reviewController.canStartAnother())
         assertNull(reviewController.start(Duration.ofMinutes(60), AccessProfile.ESSENTIALS_ONLY))
 
-        assertNotNull(reviewController.review("Read chapter 4", CompletionStatus.PARTLY_DONE, "Good progress", "Exercises"))
+        assertNotNull(reviewController.review("Read chapter 4", SessionOutcome.NOT_FINISHED, "Good progress"))
         assertFalse(reviewController.canStartAnother())
         assertNotNull(reviewController.endBreak("Review exercises"))
         assertTrue(reviewController.canStartAnother())
@@ -39,7 +39,7 @@ class StudyTimerControllerTest {
         val controller = controller(store, "2026-11-10T12:00:00Z")
         controller.start(Duration.ofMinutes(45), AccessProfile.ESSENTIALS_ONLY)
         controller.stop()
-        val reviewed = controller.review("Math", CompletionStatus.FINISHED, "", "", Duration.ofMinutes(15))
+        val reviewed = controller.review("Math", SessionOutcome.FINISHED, "", Duration.ofMinutes(15))
 
         assertEquals(StudySessionState.BREAKING, reviewed?.state)
         assertFalse(controller.canStartAnother())
@@ -48,6 +48,16 @@ class StudyTimerControllerTest {
         assertEquals(StudySessionState.REVIEWED, controller.endBreak("Read biology" )?.state)
         assertTrue(controller.canStartAnother())
     }
+
+    @Test fun startingAStudySessionKeepsItsSelectedFocusArea() {
+        val store = MemorySessionStore()
+        val started = controller(store, "2026-11-10T12:00:00Z")
+            .start(Duration.ofMinutes(45), AccessProfile.ESSENTIALS_ONLY, focusAreaId = "english")
+
+        assertEquals("english", started?.focusAreaId)
+        assertEquals("english", store.activeStudySession()?.focusAreaId)
+    }
+
     @Test fun returningToAStoppedSessionRestoresItsOriginalDeadline() {
         val store = MemorySessionStore()
         val timer = controller(store, "2026-11-10T12:00:00Z")

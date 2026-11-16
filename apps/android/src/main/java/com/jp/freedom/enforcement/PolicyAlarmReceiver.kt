@@ -16,6 +16,9 @@ class PolicyAlarmReceiver : BroadcastReceiver() {
 class PolicyBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         completeExpiredStudySession(context)
+        com.jp.freedom.data.FocusRepository(context).activeStudySession()
+            ?.takeIf { it.state == com.jp.freedom.domain.StudySessionState.ACTIVE }
+            ?.let { StudySessionNotifier.showActive(context, it) }
         PolicyAlarmScheduler.scheduleNext(context)
         PolicyAlarmScheduler.broadcastRecheck(context)
         DailyReviewReminder.schedule(context)
