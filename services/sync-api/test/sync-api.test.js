@@ -116,6 +116,35 @@ test('the revisioned sync contract preserves an Android-started session for Chro
   assert.deepEqual((await api(request('/v1/snapshot')).then(response => response.json())).snapshot.activeStudySession, snapshot.activeStudySession);
 });
 
+test('the revisioned sync contract retains competing offline session starts', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const sessionStartCandidates = [
+    { id: 'phone-start', taskName: 'Read', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' },
+    { id: 'chrome-start', taskName: 'Write', startedAt: '2026-11-05T10:01:00.000Z', endsAt: '2026-11-05T11:01:00.000Z', accessProfile: 'ESSENTIALS_ONLY' },
+  ];
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot: { ...emptySnapshot, sessionStartCandidates } },
+  }));
+
+  assert.equal(write.status, 200);
+  const read = await api(request('/v1/snapshot'));
+  assert.deepEqual((await read.json()).snapshot.sessionStartCandidates, sessionStartCandidates);
+});
+
+test('the revisioned sync contract retains both values for same-field conflicts', async () => {
+  const store = fakeStore();
+  const api = createSyncApi({ store, token });
+  const fieldConflicts = [{ path: 'settings.requiredBlockCount', remoteValue: '3', localValue: '4' }];
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot: { ...emptySnapshot, fieldConflicts } },
+  }));
+
+  assert.equal(write.status, 200);
+  const read = await api(request('/v1/snapshot'));
+  assert.deepEqual((await read.json()).snapshot.fieldConflicts, fieldConflicts);
+});
+
 test('the revisioned sync contract imports, retains, and explicitly clears reviewed study history', async () => {
   const store = fakeStore();
   const api = createSyncApi({ store, token });

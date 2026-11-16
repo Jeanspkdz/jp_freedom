@@ -14,6 +14,7 @@ export const DEFAULT_SNAPSHOT = Object.freeze({
   activeStudySession: null,
   phoneReceivedStudySessionId: null,
   pendingStudyReviewSessionId: null,
+  sessionStartCandidates: Object.freeze([]),
   studyHistory: Object.freeze([]),
 });
 
@@ -90,6 +91,28 @@ export function validateSnapshot(snapshot) {
       || !Number.isFinite(startedAt) || !Number.isFinite(endsAt) || startedAt >= endsAt) {
       return 'invalid_study_session';
     }
+  }
+  const sessionStartCandidates = snapshot.sessionStartCandidates ?? [];
+  if (!Array.isArray(sessionStartCandidates) || sessionStartCandidates.length > 2
+    || sessionStartCandidates.some(candidate => {
+      const startedAt = typeof candidate?.startedAt === 'string' ? Date.parse(candidate.startedAt) : NaN;
+      const endsAt = typeof candidate?.endsAt === 'string' ? Date.parse(candidate.endsAt) : NaN;
+      return !candidate || typeof candidate !== 'object' || Array.isArray(candidate)
+        || typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 80
+        || typeof candidate.taskName !== 'string' || candidate.taskName.length > 200
+        || !accessProfiles.has(candidate.accessProfile)
+        || !Number.isFinite(startedAt) || !Number.isFinite(endsAt) || startedAt >= endsAt;
+    }) || new Set(sessionStartCandidates.map(candidate => candidate.id)).size !== sessionStartCandidates.length) {
+    return 'invalid_session_start_candidates';
+  }
+  const fieldConflicts = snapshot.fieldConflicts ?? [];
+  if (!Array.isArray(fieldConflicts) || fieldConflicts.length > 1000
+    || fieldConflicts.some(conflict => !conflict || typeof conflict !== 'object' || Array.isArray(conflict)
+      || typeof conflict.path !== 'string' || conflict.path.length === 0 || conflict.path.length > 240
+      || typeof conflict.remoteValue !== 'string' || conflict.remoteValue.length > 2000
+      || typeof conflict.localValue !== 'string' || conflict.localValue.length > 2000)
+    || new Set(fieldConflicts.map(conflict => conflict.path)).size !== fieldConflicts.length) {
+    return 'invalid_field_conflicts';
   }
   const receivedSessionId = snapshot.phoneReceivedStudySessionId;
   if (receivedSessionId !== undefined && receivedSessionId !== null

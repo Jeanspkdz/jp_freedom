@@ -27,6 +27,22 @@ function validActiveStudySession(session) {
     && Number.isFinite(startedAt) && Number.isFinite(endsAt) && startedAt < endsAt;
 }
 
+function validSessionStartCandidates(candidates) {
+  if (candidates === undefined) return true;
+  return Array.isArray(candidates) && candidates.length <= 2
+    && candidates.every(candidate => candidate && validActiveStudySession(candidate))
+    && new Set(candidates.map(candidate => candidate.id)).size === candidates.length;
+}
+
+function validFieldConflicts(conflicts) {
+  return conflicts === undefined || (Array.isArray(conflicts) && conflicts.length <= 1000
+    && conflicts.every(conflict => conflict && typeof conflict === 'object'
+      && typeof conflict.path === 'string' && conflict.path.length > 0 && conflict.path.length <= 240
+      && typeof conflict.remoteValue === 'string' && conflict.remoteValue.length <= 2000
+      && typeof conflict.localValue === 'string' && conflict.localValue.length <= 2000)
+    && new Set(conflicts.map(conflict => conflict.path)).size === conflicts.length);
+}
+
 function validSnapshot(snapshot) {
   return snapshot?.version === 1
     && Number.isInteger(snapshot.settings?.requiredBlockCount)
@@ -36,6 +52,8 @@ function validSnapshot(snapshot) {
     && snapshot.desktopBlockedDomains.length <= 100
     && snapshot.desktopBlockedDomains.every(isValidDomain)
     && validActiveStudySession(snapshot.activeStudySession)
+    && validSessionStartCandidates(snapshot.sessionStartCandidates)
+    && validFieldConflicts(snapshot.fieldConflicts)
     && [snapshot.phoneReceivedStudySessionId, snapshot.pendingStudyReviewSessionId].every(value =>
       value === undefined || value === null || (typeof value === 'string' && value.length > 0 && value.length <= 80))
     && Array.isArray(snapshot.blocks)

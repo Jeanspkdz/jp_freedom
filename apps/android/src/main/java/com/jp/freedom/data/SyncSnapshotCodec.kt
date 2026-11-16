@@ -51,6 +51,26 @@ object SyncSnapshotCodec {
                 put("accessProfile", session.accessProfile.name)
             }
         } ?: JSONObject.NULL)
+        put("sessionStartCandidates", JSONArray().apply {
+            snapshot.sessionStartCandidates.forEach { session ->
+                put(JSONObject().apply {
+                    put("id", session.id)
+                    put("taskName", session.taskName)
+                    put("startedAt", session.startedAt.toString())
+                    put("endsAt", session.endsAt.toString())
+                    put("accessProfile", session.accessProfile.name)
+                })
+            }
+        })
+        put("fieldConflicts", JSONArray().apply {
+            snapshot.fieldConflicts.forEach { conflict ->
+                put(JSONObject().apply {
+                    put("path", conflict.path)
+                    put("remoteValue", conflict.remoteValue)
+                    put("localValue", conflict.localValue)
+                })
+            }
+        })
         put("phoneReceivedStudySessionId", snapshot.phoneReceivedStudySessionId ?: JSONObject.NULL)
         put("pendingStudyReviewSessionId", snapshot.pendingStudyReviewSessionId ?: JSONObject.NULL)
         put("studyHistory", JSONArray().apply {
@@ -114,6 +134,30 @@ object SyncSnapshotCodec {
                 accessProfile = AccessProfile.valueOf(it.getString("accessProfile")),
             )
         }
+        val candidatesJson = snapshot.optJSONArray("sessionStartCandidates") ?: JSONArray()
+        val candidates = buildList {
+            for (index in 0 until candidatesJson.length()) {
+                val item = candidatesJson.getJSONObject(index)
+                add(SharedStudySession(
+                    id = item.getString("id"),
+                    taskName = item.getString("taskName"),
+                    startedAt = Instant.parse(item.getString("startedAt")),
+                    endsAt = Instant.parse(item.getString("endsAt")),
+                    accessProfile = AccessProfile.valueOf(item.getString("accessProfile")),
+                ))
+            }
+        }
+        val fieldConflictJson = snapshot.optJSONArray("fieldConflicts") ?: JSONArray()
+        val fieldConflicts = buildList {
+            for (index in 0 until fieldConflictJson.length()) {
+                val item = fieldConflictJson.getJSONObject(index)
+                add(com.jp.freedom.domain.SyncFieldConflict(
+                    path = item.getString("path"),
+                    remoteValue = item.getString("remoteValue"),
+                    localValue = item.getString("localValue"),
+                ))
+            }
+        }
         val receivedSessionId = snapshot.optString("phoneReceivedStudySessionId", "")
             .takeIf { it.isNotEmpty() && it != "null" }
         val pendingReviewId = snapshot.optString("pendingStudyReviewSessionId", "")
@@ -148,6 +192,8 @@ object SyncSnapshotCodec {
             phoneReceivedStudySessionId = receivedSessionId,
             pendingStudyReviewSessionId = pendingReviewId,
             studyHistory = history,
+            sessionStartCandidates = candidates,
+            fieldConflicts = fieldConflicts,
         )
     }
 

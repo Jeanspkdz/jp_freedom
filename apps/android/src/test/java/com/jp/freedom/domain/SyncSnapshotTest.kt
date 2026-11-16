@@ -64,6 +64,33 @@ class SyncSnapshotTest {
             setOf("settings.requiredBlockCount", "desktopBlockedDomains.reddit.com"),
             result.conflictedPaths,
         )
+        assertEquals(
+            mapOf("settings.requiredBlockCount" to ("3" to "4"), "desktopBlockedDomains.reddit.com" to ("excluded" to "included")),
+            result.fieldConflicts.associate { it.path to (it.remoteValue to it.localValue) },
+        )
+    }
+
+    @Test
+    fun concurrentOfflineSessionStartsRemainAvailableAsCandidates() {
+        val phone = SharedStudySession(
+            "phone-start", "Read", Instant.parse("2026-11-05T10:00:00Z"),
+            Instant.parse("2026-11-05T11:00:00Z"), AccessProfile.ESSENTIALS_ONLY,
+        )
+        val chrome = phone.copy(
+            id = "chrome-start", taskName = "Write",
+            startedAt = Instant.parse("2026-11-05T10:01:00Z"),
+            endsAt = Instant.parse("2026-11-05T11:01:00Z"),
+        )
+
+        val result = SyncSnapshotReconciler.merge(
+            remote = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, emptyList(), activeStudySession = phone),
+            local = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, emptyList(), activeStudySession = chrome),
+            pendingPaths = setOf("activeStudySession"),
+        )
+
+        assertEquals(phone, result.snapshot.activeStudySession)
+        assertEquals(setOf("phone-start", "chrome-start"), result.snapshot.sessionStartCandidates.map(SharedStudySession::id).toSet())
+        assertEquals(setOf("activeStudySession"), result.conflictedPaths)
     }
 
     @Test
