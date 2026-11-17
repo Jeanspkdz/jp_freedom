@@ -200,6 +200,13 @@ function render(documentRef, state, now) {
       ? (state.newEmptyBlocklist ? [...DEFAULT_DESKTOP_DOMAINS] : [...new Set(snapshot.desktopBlockedDomains)])
       : [...DEFAULT_DESKTOP_DOMAINS];
     state.displayedDomains = displayedDomains;
+    const count = String(displayedDomains.length).padStart(2, '0');
+    documentRef.querySelectorAll?.('.sites-digit')?.forEach((digit, index) => {
+      digit.textContent = count[index] ?? '';
+      digit.dataset.digit = count[index] ?? '';
+    });
+    const countLive = documentRef.getElementById('sites-count-live');
+    if (countLive?.textContent !== undefined) countLive.textContent = `${displayedDomains.length} sites selected`;
     const canEdit = Boolean(state.connected && state.online && snapshot && !state.saving);
     for (const domain of COMMON_DOMAINS) {
       const checkbox = documentRef.getElementById(`domain-${domain}`);
@@ -343,6 +350,58 @@ export async function initializeManagement({
   const navigateToPage = target => {
     openPage(target, `${target === 'plan' ? 'management' : target}.html`);
   };
+  let switchingTab = false;
+  const slideTabThenOpen = (target, href) => {
+    if (switchingTab || leaving) return;
+    switchingTab = true;
+    const nav = documentRef.querySelector?.('.view-nav');
+    const currentTab = documentRef.querySelector?.('.view-nav [aria-current="page"]');
+    const nextTab = [...(documentRef.querySelectorAll?.('.view-nav a') ?? [])]
+      .find(tab => tab.getAttribute('href') === href);
+    const from = currentTab?.getBoundingClientRect?.();
+    const to = nextTab?.getBoundingClientRect?.();
+    const activate = () => {
+      for (const tab of documentRef.querySelectorAll?.('.view-nav a') ?? []) {
+        const selected = tab.getAttribute('href') === href;
+        tab.classList.toggle('is-selected', selected);
+        if (selected) tab.setAttribute('aria-current', 'page');
+        else tab.removeAttribute('aria-current');
+      }
+    };
+    const openTabDocument = () => {
+      setNavigationDirection(target);
+      documentRef.documentElement.classList.add('tab-pill-only');
+      try { documentRef.defaultView?.sessionStorage?.setItem('dimky-tab-pill-only', '1'); } catch { /* Direct navigation still works. */ }
+      (documentRef.defaultView?.location ?? documentRef.location ?? globalThis.location).href = href;
+    };
+    if (!nav || !from || !to || documentRef.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      activate();
+      openTabDocument();
+      return;
+    }
+    const pill = documentRef.createElement('span');
+    pill.className = 'nav-pill';
+    pill.setAttribute('aria-hidden', 'true');
+    const navLeft = nav.getBoundingClientRect().left;
+    const fromX = from.left - navLeft + nav.scrollLeft;
+    const toX = to.left - navLeft + nav.scrollLeft;
+    pill.style.width = `${from.width}px`;
+    pill.style.transform = `translateX(${fromX}px)`;
+    nav.prepend(pill);
+    documentRef.documentElement.classList.add('nav-pill-ready');
+    activate();
+    const finishNavigation = () => {
+      pill.style.width = `${to.width}px`;
+      pill.style.transform = `translateX(${toX}px)`;
+      openTabDocument();
+    };
+    if (!pill.animate) return finishNavigation();
+    pill.animate([
+      { width: `${from.width}px`, transform: `translateX(${fromX}px)` },
+      { width: `${to.width}px`, transform: `translateX(${toX}px)` },
+    ], { duration: 300, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'forwards' }).finished
+      .then(finishNavigation, finishNavigation);
+  };
   for (const link of documentRef.querySelectorAll?.('.view-nav a') ?? []) {
     link.addEventListener('click', event => {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button > 0) return;
@@ -351,7 +410,7 @@ export async function initializeManagement({
       if (pageOrder.includes(target)) {
         if (documentRef.defaultView?.location?.protocol === 'chrome-extension:' && target !== page) {
           event.preventDefault();
-          openPage(target, href);
+          slideTabThenOpen(target, href);
         } else setNavigationDirection(target);
       }
     });

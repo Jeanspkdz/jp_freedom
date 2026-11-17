@@ -19,7 +19,7 @@ test('separate management pages follow the approved focus, sites, and connection
   assert.match(connection, /id="view-connection"/);
   assert.match(html, /class="brand-icon" viewBox="0 0 100 100"/);
   assert.equal((html.match(/class="brand-icon-piece brand-icon-piece--/g) ?? []).length, 3);
-  assert.match(connection, /class="connection-flow" aria-hidden="true"><\/div>/);
+  assert.match(connection, /class="connection-flow" aria-hidden="true"><div class="connection-beams">/);
 
   const root = css.match(/:root\s*\{([^}]+)\}/)?.[1];
   assert.ok(root, 'management.css defines root palette tokens');
@@ -43,17 +43,17 @@ test('separate management pages follow the approved focus, sites, and connection
   assert.match(css, /#common-sites, #custom-sites\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
   assert.match(css, /\.site-row input:checked ~ \.site-action\s*\{[^}]*background:\s*var\(--purple\)/s);
   assert.match(css, /\.connection-rail\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.2fr\) minmax\(340px, \.9fr\)/s);
-  assert.match(css, /\.connection-flow::after\s*\{[^}]*border-top:\s*2px solid var\(--amber\)/s);
-  assert.match(css, /\.connection-flow::before\s*\{[^}]*background:\s*linear-gradient\(90deg, transparent, var\(--amber\), transparent\)/s);
+  assert.match(css, /\.connection-diamond\s*\{[^}]*border-top:\s*2px solid var\(--amber\)/s);
+  assert.match(css, /\.connection-beams \.seg\s*\{[^}]*background:\s*linear-gradient\(90deg,[^}]*#ffe2bd/s);
   assert.match(css, /\.view-tab\.is-selected:hover:not\(:disabled\)\s*\{[^}]*color:\s*var\(--on-purple\)/s);
   assert.match(css, /font:\s*400 18px\/1\.5/);
-  assert.match(css, /@view-transition\s*\{\s*navigation:\s*auto/);
+  assert.doesNotMatch(css, /@view-transition\s*\{\s*navigation:\s*auto/);
   assert.match(css, /html\[data-nav="back"\]::view-transition-new\(root\)/);
   assert.match(css, /\.page-header\s*\{\s*view-transition-name:\s*page-header/);
   assert.match(css, /\.brand:hover \.brand-icon-piece--left\s*\{[^}]*transform:/s);
   assert.match(css, /\.brand:hover \.brand-icon-piece--top\s*\{[^}]*transform:/s);
   assert.match(css, /\.brand:hover \.brand-icon-piece--bottom\s*\{[^}]*transform:/s);
-  assert.match(css, /@keyframes connection-data-flow\s*\{/);
+  assert.match(css, /@keyframes connection-beam\s*\{/);
   assert.match(css, /\.connection-device svg\s*\{\s*width:\s*58px;\s*height:\s*58px;/);
   assert.doesNotMatch(css, /#faf6ee|#f7f6[26]|#fffdf8|#fffefe|#fff7eb|#fff0dd|#eee7f8|#76599b|rgb\(170\s+185\s+255/i);
 });

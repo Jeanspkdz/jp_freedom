@@ -108,22 +108,37 @@ try {
   await cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   assert.equal(await evaluate('document.documentElement.classList.contains("js")'), true,
     'The CSP-safe page entry script did not run');
-  const leaving = await evaluate(`(document.querySelector('a[href="sites.html"]').click(),
-    document.documentElement.classList.contains('is-leaving'))`);
-  assert.equal(leaving, true, 'The outgoing extension page did not start its fallback animation');
-  assert.notEqual(await evaluate('getComputedStyle(document.querySelector(".view-panel")).animationName'), 'none');
+  const pill = await evaluate(`(document.querySelector('a[href="sites.html"]').click(),
+    document.documentElement.classList.contains('nav-pill-ready'))`);
+  assert.equal(pill, true, 'The selected tab did not begin its pill transition');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.view-nav [aria-current="page"] .tab-pill-bg')).opacity`), '0',
+    'The destination pill background overlaps the moving pill');
+  await new Promise(resolveWait => setTimeout(resolveWait, 110));
+  const pillHeight = await evaluate(`document.querySelector('.nav-pill').getBoundingClientRect().height`);
+  assert.ok(pillHeight <= 54, `The pill grew vertically to ${pillHeight}px`);
+  const pillScaleY = await evaluate(`new DOMMatrix(getComputedStyle(document.querySelector('.nav-pill')).transform).m22`);
+  assert.ok(Math.abs(pillScaleY - 1) < .03, `The pill scaled vertically by ${pillScaleY}`);
   await waitFor(() => evaluate('document.documentElement.dataset.page === "sites"'));
+  await waitFor(() => evaluate('Boolean(document.querySelector("[data-page-heading]"))'));
+  assert.equal(await evaluate('document.documentElement.classList.contains("page-fallback-enter")'), false,
+    'A full-page entrance ran after the tab pill finished');
   const transition = await waitFor(() => evaluate('sessionStorage.getItem("smoke-view-transition")'), 3_000).catch(() => null);
+  assert.equal(transition, 'false', 'A cross-document View Transition still scales the Sites page');
   if (process.env.DEBUG_BROWSER_SMOKE) console.log(await evaluate(`JSON.stringify({
     url: location.href, pagereveal: 'onpagereveal' in window, startViewTransition: 'startViewTransition' in document,
     storage: {...sessionStorage}, classes: document.documentElement.className,
     nav: performance.getEntriesByType('navigation')[0]?.type,
   })`));
-  const fallback = await waitFor(() => evaluate('document.documentElement.classList.contains("page-fallback-enter")'), 3_000).catch(() => false);
-  await waitFor(() => evaluate('getComputedStyle(document.querySelector(".view-panel")).animationName !== "none"'));
-  if (fallback) assert.equal(await evaluate('document.querySelector("[data-page-heading]").classList.contains("is-entering")'), false,
-    'The heading began its own entrance before the page transition finished');
+  const fallback = await evaluate('document.documentElement.classList.contains("tab-pill-only")');
+  assert.equal(await evaluate('document.querySelector("[data-page-heading]").classList.contains("is-entering")'), false,
+    'The heading moved after the pill transition');
   await waitFor(() => evaluate('document.activeElement?.id === "blocklist-heading"'));
+  if (process.env.SITES_SCREENSHOT_PATH) {
+    await new Promise(resolveWait => setTimeout(resolveWait, 700));
+    await cdp('Emulation.setDeviceMetricsOverride', { width: 1465, height: 930, deviceScaleFactor: 1, mobile: false });
+    const shot = await cdp('Page.captureScreenshot', { format: 'png' });
+    await writeFile(process.env.SITES_SCREENSHOT_PATH, Buffer.from(shot.data, 'base64'));
+  }
   assert.equal(await evaluate('getComputedStyle(document.activeElement).outlineStyle'), 'none',
     'Programmatic heading focus drew the white rectangle');
   assert.equal(await evaluate('getComputedStyle(document.activeElement).viewTransitionName'), 'none',
@@ -132,14 +147,30 @@ try {
     'Chrome displayed the new page without a View Transition or fallback animation');
   await waitFor(() => evaluate(`document.querySelector('#sync-state')?.textContent?.startsWith('Not connected')`));
   await evaluate(`document.querySelector('a[href="connection.html"]').click()`);
+  await new Promise(resolveWait => setTimeout(resolveWait, 110));
+  const connectionPillHeight = await evaluate(`document.querySelector('.nav-pill').getBoundingClientRect().height`);
+  const connectionPillScaleY = await evaluate(`new DOMMatrix(getComputedStyle(document.querySelector('.nav-pill')).transform).m22`);
+  assert.ok(connectionPillHeight <= 54 && Math.abs(connectionPillScaleY - 1) < .03,
+    `Sites → Connection pill grew: ${connectionPillHeight}px, scale ${connectionPillScaleY}`);
   await waitFor(() => evaluate('document.documentElement.dataset.page === "connection"'));
-  await waitFor(() => evaluate('document.documentElement.classList.contains("page-fallback-enter")'));
+  assert.equal(await evaluate('sessionStorage.getItem("smoke-view-transition")'), 'false',
+    'A cross-document View Transition still scales the Connection page');
+  await waitFor(() => evaluate('document.documentElement.classList.contains("tab-pill-only")'));
   await waitFor(() => evaluate('document.activeElement?.id === "connection-heading"'));
   assert.equal(await evaluate('document.documentElement.dataset.nav'), 'forward');
   await waitFor(() => evaluate(`document.querySelector('#sync-state')?.textContent?.startsWith('Not connected')`));
   await evaluate(`document.querySelector('a[href="management.html"]').click()`);
+  await new Promise(resolveWait => setTimeout(resolveWait, 110));
+  if (process.env.PILL_MID_SCREENSHOT_PATH) {
+    const shot = await cdp('Page.captureScreenshot', { format: 'png' });
+    await writeFile(process.env.PILL_MID_SCREENSHOT_PATH, Buffer.from(shot.data, 'base64'));
+  }
+  const planPillHeight = await evaluate(`document.querySelector('.nav-pill').getBoundingClientRect().height`);
+  const planPillScaleY = await evaluate(`new DOMMatrix(getComputedStyle(document.querySelector('.nav-pill')).transform).m22`);
+  assert.ok(planPillHeight <= 54 && Math.abs(planPillScaleY - 1) < .03,
+    `Connection → Plan pill grew: ${planPillHeight}px, scale ${planPillScaleY}`);
   await waitFor(() => evaluate('document.documentElement.dataset.page === "plan"'));
-  await waitFor(() => evaluate('document.documentElement.classList.contains("page-fallback-enter")'));
+  await waitFor(() => evaluate('document.documentElement.classList.contains("tab-pill-only")'));
   await waitFor(() => evaluate('document.activeElement?.id === "focus-heading"'));
   assert.equal(await evaluate('document.documentElement.dataset.nav'), 'back');
   await waitFor(() => evaluate(`document.querySelector('#sync-state')?.textContent?.startsWith('Not connected')`));
@@ -156,7 +187,7 @@ try {
   await waitFor(() => evaluate('document.querySelector("#study-timer-remaining").hidden'));
   const rulesAfterStop = await evaluate('(async () => (await chrome.declarativeNetRequest.getDynamicRules()).length)()');
   assert.equal(rulesAfterStop, 0, 'Stopping the timer left desktop blocking active');
-  console.log(`PASS: Plan → Sites → Connection → Plan animated in Chromium (${transition === 'true' ? 'View Transition' : 'extension fallback'}).`);
+  console.log('PASS: Plan → Sites → Connection → Plan slides the tab pill without a full-page entrance.');
   console.log('PASS: Offline study timer displayed its countdown and activated/released site blocking.');
 } finally {
   socket?.close();

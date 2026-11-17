@@ -21,15 +21,15 @@
           <span>Dimky</span>
         </div>
         <nav class="view-nav" aria-label="Extension sections">
-          <a href="management.html" class="view-tab">Plan</a>
-          <a href="sites.html" class="view-tab is-selected" aria-current="page">Sites</a>
-          <a href="connection.html" class="view-tab">Connection</a>
+          <a href="management.html" class="view-tab"><span class="tab-pill-bg" aria-hidden="true"></span>Plan</a>
+          <a href="sites.html" class="view-tab is-selected" aria-current="page"><span class="tab-pill-bg" aria-hidden="true"></span>Sites</a>
+          <a href="connection.html" class="view-tab"><span class="tab-pill-bg" aria-hidden="true"></span>Connection</a>
         </nav>
         <div class="header-actions"><p id="sync-state" role="status">Checking sync…</p><button id="sync-now" type="button">Sync now</button></div>
       </header>
       <div id="view-sites" class="view-panel">
         <section class="blocklist" aria-labelledby="blocklist-heading">
-          <div class="blocklist-controls">
+          <div class="sites-hero"><div class="blocklist-controls">
             <h1 id="blocklist-heading" tabindex="-1" data-page-heading data-enter data-i="0">Blocked sites</h1>
             <p class="section-description" data-enter data-i="1">Selected sites are blocked in Chrome during a focus block. Each domain includes its subdomains. Selected sites stay locked until the block ends.</p>
             <div class="permission-line" data-enter data-i="2"><p id="permission-state" role="status">Chrome blocks selected sites during active focus blocks. Site access permission is not needed.</p></div>
@@ -39,7 +39,7 @@
               <p id="domain-help" class="field-help">Enter a bare domain such as example.com. URLs and paths are not accepted.</p>
             </form>
             <p id="blocklist-status" role="status"></p>
-          </div>
+          </div><aside class="sites-count" aria-label="Selected sites"><div class="sites-count-digits" aria-hidden="true"><span class="sites-digit" data-digit="0">0</span><span class="sites-digit" data-digit="5">5</span></div><strong>SITES BLOCKED</strong><span id="sites-count-live" class="sr-only" role="status">5 sites selected</span></aside></div>
           <div class="blocklist-choices" role="region" aria-label="Site choices" tabindex="0" data-enter data-i="4">
             <fieldset id="common-sites">
               <legend>Common sites</legend>

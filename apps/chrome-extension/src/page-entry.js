@@ -1,6 +1,10 @@
 // Mark scripted pages before CSS paints so entry motion never flashes content.
 document.documentElement.classList.add('js');
 try {
+  if (sessionStorage.getItem('dimky-tab-pill-only')) {
+    document.documentElement.classList.add('tab-pill-only');
+    sessionStorage.removeItem('dimky-tab-pill-only');
+  }
   if (sessionStorage.getItem('dimky-nav-fallback')) {
     document.documentElement.classList.add('page-fallback-enter');
     document.documentElement.dataset.nav = sessionStorage.getItem('dimky-nav-direction') ?? 'forward';
@@ -12,6 +16,11 @@ let entered = false;
 const enterCurrentPage = () => {
   if (entered) return;
   entered = true;
+  if (document.documentElement.classList.contains('tab-pill-only')) {
+    for (const element of document.querySelectorAll('[data-enter]')) element.classList.add('is-entered');
+    document.querySelector('[data-page-heading], #blocked-heading')?.focus();
+    return;
+  }
   for (const element of document.querySelectorAll('[data-enter]')) {
     element.classList.add('is-entering');
     const onEnterEnd = event => {
@@ -26,7 +35,11 @@ const enterCurrentPage = () => {
 };
 
 // Native MPA transitions finish before the page cascade and focus movement.
+addEventListener('pageswap', event => {
+  if (document.documentElement.classList.contains('tab-pill-only')) event.viewTransition?.skipTransition();
+});
 addEventListener('pagereveal', event => {
+  if (document.documentElement.classList.contains('tab-pill-only')) event.viewTransition?.skipTransition();
   let direction = null;
   try {
     direction = sessionStorage.getItem('dimky-nav-direction');

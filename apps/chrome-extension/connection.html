@@ -21,9 +21,9 @@
           <span>Dimky</span>
         </div>
         <nav class="view-nav" aria-label="Extension sections">
-          <a href="management.html" class="view-tab">Plan</a>
-          <a href="sites.html" class="view-tab">Sites</a>
-          <a href="connection.html" class="view-tab is-selected" aria-current="page">Connection</a>
+          <a href="management.html" class="view-tab"><span class="tab-pill-bg" aria-hidden="true"></span>Plan</a>
+          <a href="sites.html" class="view-tab"><span class="tab-pill-bg" aria-hidden="true"></span>Sites</a>
+          <a href="connection.html" class="view-tab is-selected" aria-current="page"><span class="tab-pill-bg" aria-hidden="true"></span>Connection</a>
         </nav>
         <div class="header-actions"><p id="sync-state" role="status">Checking sync…</p><button id="sync-now" type="button">Sync now</button></div>
       </header>
@@ -32,8 +32,8 @@
           <div class="connection-overview">
             <div class="connection-intro"><h1 id="connection-heading" tabindex="-1" data-page-heading data-enter data-i="0">Connection</h1><p data-enter data-i="1">Your focus plan travels from your phone to Chrome.</p></div>
           <div class="connection-path" aria-label="Phone syncs the plan to this computer">
-            <div class="connection-device"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="13" y="5" width="22" height="38" rx="5"/><path d="M21 37h6"/></svg><span>Phone</span></div>
-            <div class="connection-flow" aria-hidden="true"></div>
+            <div class="connection-device"><span class="connection-phone-icon"><i class="ring"></i><i class="ring"></i><i class="ring"></i><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="13" y="5" width="22" height="38" rx="5"/><path d="M21 37h6"/></svg></span><span>Phone</span></div>
+            <div class="connection-flow" aria-hidden="true"><div class="connection-beams"><i class="seg"></i><i class="seg"></i><i class="seg"></i></div><i class="connection-diamond"></i></div>
             <div class="connection-device"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="7" width="38" height="27" rx="3"/><path d="M17 41h14m-7-7v7"/></svg><span>This PC</span></div>
           </div>
           <p class="connection-caption">Chrome keeps the last plan received from your phone so it can continue working offline.</p>
