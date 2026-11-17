@@ -24,6 +24,19 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class FocusFlowAndroidTest {
+    @Test fun versionTwentyDatabaseWithoutFocusAreasRecoversOnUpgrade() {
+        val context = isolatedContext()
+        context.deleteDatabase("jp-freedom.db")
+        try {
+            SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath("jp-freedom.db"), null).use { db ->
+                db.version = 20
+            }
+            assertEquals(emptyList<FocusArea>(), FocusRepository(context).focusAreas())
+        } finally {
+            context.deleteDatabase("jp-freedom.db")
+        }
+    }
+
     @Test fun legacyFocusAreaTableMigratesAndKeepsSessionAssignments() {
         val context = isolatedContext()
         context.deleteDatabase("jp-freedom.db")
@@ -41,7 +54,7 @@ class FocusFlowAndroidTest {
             assertEquals("English", area.name)
 
             SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath("jp-freedom.db"), null).use { db ->
-                assertEquals(20, db.version)
+                assertEquals(21, db.version)
                 db.query("focus_areas", arrayOf("id", "name", "position"), null, null, null, null, null).use { cursor ->
                     assertEquals(1, cursor.count)
                     assertEquals(setOf("id", "name", "position"), (0 until cursor.columnCount).map { cursor.getColumnName(it) }.toSet())

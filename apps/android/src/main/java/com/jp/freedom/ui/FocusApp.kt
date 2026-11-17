@@ -144,6 +144,16 @@ fun FocusApp(
     val currentDate = LocalDate.now()
     val selectedDate = currentDate.plusDays(dayOffset.toLong())
 
+    // Keep the shared timer current while the Android app stays open.
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            if (com.jp.freedom.sync.SyncConfigurationStore(context).configuration().hasWriteToken) {
+                com.jp.freedom.sync.SyncScheduler.schedule(context)
+            }
+            delay(60_000)
+        }
+    }
+
     LaunchedEffect(dayOffset, activityResumeVersion, refreshVersion, page) {
         while (isActive) {
             val snapshot = withContext(Dispatchers.IO) {
@@ -389,6 +399,18 @@ fun FocusApp(
                 }
             },
             onSyncNow = syncNow,
+            onResolveReviewConflict = { keepPhone ->
+                scope.launch {
+                    syncState = syncState.copy(status = SyncStatus.SYNCING, message = null)
+                    val result = withContext(Dispatchers.IO) {
+                        runCatching { AndroidSyncJobService.resolveReviewConflict(context, keepPhone) }
+                    }
+                    if (result.isFailure) withContext(Dispatchers.IO) {
+                        repository.markSyncError(result.exceptionOrNull()?.message ?: "Couldn't resolve the review conflict.")
+                    }
+                    refreshVersion++
+                }
+            },
             onOpenAccessibilitySettings = { openAccessibilitySettings(context) },
             onRequestExactAlarmAccess = { openExactAlarmSettings(context) },
             onRequestSiteFilter = {

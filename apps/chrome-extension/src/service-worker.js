@@ -1,5 +1,6 @@
 import { applySnapshotRules } from './enforcement.js';
 import { readSnapshot } from './sync-client.js';
+import { readStudySession, activeStudySession, finishStudySessionIfDue, publishPendingStudySession } from './study-session.js';
 import {
   PLANNING_REMINDER_ALARM,
   PLANNING_REMINDER_CUTOFF_ALARM,
@@ -8,6 +9,7 @@ import {
 
 const STATE_ALARM = 'focus-state-refresh';
 const SNAPSHOT_SYNC_ALARM = 'snapshot-sync-refresh';
+const INITIAL_DESKTOP_DOMAINS = ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com'];
 let remoteRefreshInFlight = null;
 let focusRefreshQueue = Promise.resolve();
 
@@ -50,18 +52,22 @@ function nextBoundary(snapshot, now) {
 
 export function refreshFocusState(chromeApi = globalThis.chrome, now = new Date()) {
   const refresh = async () => {
-    const { lastValidSnapshot, apiUrl, apiToken } = await chromeApi.storage.local.get(['lastValidSnapshot', 'apiUrl', 'apiToken']);
+    const { lastValidSnapshot, lastStudySession, apiUrl, apiToken } = await chromeApi.storage.local.get(['lastValidSnapshot', 'lastStudySession', 'apiUrl', 'apiToken']);
     const snapshot = lastValidSnapshot?.version === 1 && Array.isArray(lastValidSnapshot.blocks)
       ? lastValidSnapshot
       : null;
-    await applySnapshotRules(chromeApi, snapshot, now);
+    await applySnapshotRules(chromeApi, snapshot ?? (lastStudySession
+      ? { desktopBlockedDomains: INITIAL_DESKTOP_DOMAINS, blocks: [] } : null), now, lastStudySession);
 
     await chromeApi.alarms.clear(STATE_ALARM);
     if (apiUrl && apiToken) await chromeApi.alarms.create(SNAPSHOT_SYNC_ALARM, { periodInMinutes: 1 });
     else await chromeApi.alarms.clear(SNAPSHOT_SYNC_ALARM);
-    if (snapshot) {
-      const boundary = nextBoundary(snapshot, now);
-      if (boundary) await chromeApi.alarms.create(STATE_ALARM, { when: boundary });
+    if (snapshot || lastStudySession) {
+      const boundary = snapshot ? nextBoundary(snapshot, now) : null;
+      const sessionEnd = activeStudySession(lastStudySession, now)
+        ? Date.parse(lastStudySession.startedAt) + lastStudySession.durationMillis : null;
+      const next = Math.min(...[boundary, sessionEnd].filter(value => value != null));
+      if (Number.isFinite(next)) await chromeApi.alarms.create(STATE_ALARM, { when: next });
       else await chromeApi.alarms.create(STATE_ALARM, { periodInMinutes: 1 });
     }
     await refreshPlanningReminders(chromeApi, now);
@@ -73,16 +79,27 @@ export function refreshFocusState(chromeApi = globalThis.chrome, now = new Date(
 export async function refreshRemoteSnapshot(chromeApi = globalThis.chrome, fetchImpl = globalThis.fetch, now = new Date()) {
   if (remoteRefreshInFlight) return remoteRefreshInFlight;
   remoteRefreshInFlight = (async () => {
-    const { apiUrl, apiToken, lastSnapshotRevision = -1 } = await chromeApi.storage.local.get([
-      'apiUrl', 'apiToken', 'lastSnapshotRevision',
+    const { apiUrl, apiToken, lastSnapshotRevision = -1, studyPending, lastStudySession } = await chromeApi.storage.local.get([
+      'apiUrl', 'apiToken', 'lastSnapshotRevision', 'studyPending', 'lastStudySession',
     ]);
     if (!apiUrl || !apiToken) return false;
     try {
       const payload = await readSnapshot(apiUrl, apiToken, fetchImpl);
       if (payload.revision < lastSnapshotRevision) return false;
+      let studyConflict = false;
+      const study = await (studyPending && lastStudySession
+        ? publishPendingStudySession(apiUrl, apiToken, lastStudySession, fetchImpl)
+        : readStudySession(apiUrl, apiToken, fetchImpl))
+        .then(current => finishStudySessionIfDue(apiUrl, apiToken, current, fetchImpl, now))
+        .catch(error => {
+          studyConflict = /Another study session/.test(error.message);
+          return null;
+        });
       const lastSuccessfulSync = now.toISOString();
       await chromeApi.storage.local.set({
         lastValidSnapshot: payload.snapshot,
+        ...(study ? { lastStudySession: study.session, lastStudyRevision: study.revision, studyPending: false } : {}),
+        studyConflict,
         lastSnapshotRevision: payload.revision,
         lastSuccessfulSync,
       });

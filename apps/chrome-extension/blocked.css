@@ -1,0 +1,84 @@
+/* Keep MPA transitions aligned with the management page motion tokens. */
+      @view-transition { navigation: auto; }
+      :root { --dur-fast: 200ms; --dur-page-in: 320ms; --dur-base: 440ms; --ease-page: cubic-bezier(.4, 0, .2, 1); --ease-out: cubic-bezier(.16, 1, .3, 1); --stagger: 70ms; --page-shift: 24px; --page-exit-y: -8px; --page-entry-y: 12px; --element-entry-y: 16px; }
+      ::view-transition-old(root) { animation: blocked-out-forward var(--dur-fast) var(--ease-page) both; }
+      ::view-transition-new(root) { animation: blocked-in-forward var(--dur-page-in) var(--ease-page) both; }
+      html[data-nav="back"]::view-transition-old(root) { animation-name: blocked-out-back; }
+      html[data-nav="back"]::view-transition-new(root) { animation-name: blocked-in-back; }
+      #blocked-heading { view-transition-name: page-title; }
+      @keyframes blocked-out-forward { to { opacity: 0; transform: translateX(calc(-1 * var(--page-shift))) translateY(var(--page-exit-y)); } }
+      @keyframes blocked-in-forward { from { opacity: 0; transform: translateX(var(--page-shift)) translateY(var(--page-entry-y)); } to { opacity: 1; transform: translate(0); } }
+      @keyframes blocked-out-back { to { opacity: 0; transform: translateX(var(--page-shift)) translateY(var(--page-exit-y)); } }
+      @keyframes blocked-in-back { from { opacity: 0; transform: translateX(calc(-1 * var(--page-shift))) translateY(var(--page-entry-y)); } to { opacity: 1; transform: translate(0); } }
+      @keyframes blocked-element-in { from { opacity: 0; transform: translateY(var(--element-entry-y)); } to { opacity: 1; transform: translateY(0); } }
+      .js [data-enter] { animation: blocked-element-in var(--dur-base) var(--ease-out) both; animation-delay: calc(var(--i, 0) * var(--stagger)); }
+      [data-i="0"] { --i: 0; } [data-i="1"] { --i: 1; } [data-i="2"] { --i: 2; }
+      [data-i="3"] { --i: 3; } [data-i="4"] { --i: 4; }
+      html.page-transitioning.js [data-enter] { animation-play-state: paused; }
+      @media (prefers-reduced-motion: reduce) {
+        ::view-transition-old(root), ::view-transition-new(root), .js [data-enter] { animation-duration: 100ms; animation-delay: 0ms; }
+        @keyframes blocked-out-forward { to { opacity: 0; } }
+        @keyframes blocked-in-forward { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes blocked-out-back { to { opacity: 0; } }
+        @keyframes blocked-in-back { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes blocked-element-in { from { opacity: 0; } to { opacity: 1; } }
+      }
+      :root {
+        color-scheme: dark;
+        --background: #10182b;
+        --surface: #18233a;
+        --surface-variant: #222e47;
+        --ink: #f2f0ea;
+        --muted: #b4bed8;
+        --line: #34415d;
+        --amber: #ffc27a;
+        --on-amber: #402d12;
+        --purple: #b39ddb;
+        --on-purple: #2e243d;
+        --purple-container: #47395f;
+        --on-purple-container: #ebddff;
+        font: 400 16px/1.5 "JP Roboto", Roboto, Arial, sans-serif;
+        background: var(--background);
+        color: var(--ink);
+      }
+      @font-face {
+        font-family: "JP Roboto";
+        src: url("Roboto.ttf") format("truetype");
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { width: 100%; min-height: 100%; margin: 0; background: var(--background); }
+      body { min-height: 100vh; }
+      iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; opacity: .08; pointer-events: none; }
+      main { position: relative; display: grid; min-height: 100vh; place-items: center; padding: 24px; }
+      .blocked-card {
+        width: min(680px, 100%);
+        padding: clamp(24px, 5vw, 48px);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        text-align: center;
+      }
+      .brand { margin-bottom: 22px; font-size: 1.1rem; font-weight: 700; }
+      .blocked-symbol { width: 36px; height: 36px; margin: 0 auto 12px; color: var(--amber); }
+      h1 { max-width: 25ch; margin: 0 auto 22px; font-size: clamp(1.5rem, 4vw, 2.1rem); line-height: 1.16; letter-spacing: -.025em; }
+      p { margin: 0; overflow-wrap: anywhere; }
+      .blocked-info { display: grid; gap: 8px; max-width: 500px; margin: 0 auto; }
+      .blocked-info-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 16px; border-radius: 12px; background: var(--surface-variant); text-align: left; }
+      .blocked-label { color: var(--muted); font-size: .9rem; }
+      #blocked-activity, #blocked-end { color: var(--ink); font-weight: 700; }
+      #blocked-activity { max-width: 25ch; }
+      #blocked-end[hidden] { display: none; }
+      a { display: inline-block; margin-top: 22px; padding: 6px 2px; color: var(--amber); font-weight: 700; text-underline-offset: 4px; }
+      a:focus-visible, select:focus-visible { outline: 3px solid var(--purple); outline-offset: 3px; }
+      .appearance { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 22px; color: var(--muted); font-size: .84rem; }
+      .appearance select { min-height: 40px; padding: 6px 12px; border: 1px solid var(--purple); border-radius: 12px; background: var(--purple-container); color: var(--on-purple-container); font: inherit; }
+      @media (max-width: 480px) {
+        main { padding: 16px; }
+        .blocked-card { padding: 24px 18px; }
+        .blocked-info-row { align-items: flex-start; flex-direction: column; gap: 3px; }
+      }
+      @media (max-height: 380px) { main { min-height: 380px; padding-block: 12px; } .blocked-card { padding: 18px; } }
+      @media (prefers-reduced-motion: reduce) { iframe { opacity: .04; } }

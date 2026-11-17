@@ -112,6 +112,7 @@ class FocusRepository(context: Context) : StudySessionStore {
             session.focusAreaId?.let { put("focus_area_id", it) } ?: putNull("focus_area_id")
         }
         database.writableDatabase.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        scheduleSync()
     }
 
     override fun startStudySession(session: StudyTimerSession): Boolean {
@@ -130,7 +131,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
     override fun finishStudySession(session: StudyTimerSession): Boolean {
         val db = database.writableDatabase
-        return db.update(
+        val changed = db.update(
             "study_sessions",
             ContentValues().apply {
                 put("ended_at", session.endedAt?.toEpochMilli())
@@ -140,6 +141,8 @@ class FocusRepository(context: Context) : StudySessionStore {
             "id = ? AND state = ?",
             arrayOf(session.id, StudySessionState.ACTIVE.name),
         ) == 1
+        if (changed) scheduleSync()
+        return changed
     }
 
     private fun readStudySession(db: SQLiteDatabase, where: String, args: Array<String>): StudyTimerSession? =
@@ -652,6 +655,7 @@ class FocusRepository(context: Context) : StudySessionStore {
                 createFocusAreaTable(db)
             }
             if (oldVersion < 20) migrateFocusAreaTable(db)
+            if (oldVersion < 21) createFocusAreaTable(db)
         }
 
         private fun migrateFocusAreaTable(db: SQLiteDatabase) {
@@ -795,7 +799,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 20
+            private const val DATABASE_VERSION = 21
         }
     }
 

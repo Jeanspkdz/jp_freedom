@@ -38,3 +38,14 @@ test('active desktop blocks use DNR block rules even without Facebook host permi
     condition: { requestDomains: ['facebook.com'], resourceTypes: ['main_frame'] },
   }]);
 });
+
+test('a manually started study session blocks selected sites without a planned block', async () => {
+  const updates = [];
+  const chromeApi = { declarativeNetRequest: {
+    getDynamicRules: async () => [], updateDynamicRules: async update => updates.push(update),
+  } };
+  const snapshot = { desktopBlockedDomains: ['facebook.com'], blocks: [] };
+  const session = { id: 'study-1', state: 'ACTIVE', startedAt: '2026-11-16T12:00:00.000Z', durationMillis: 1_800_000 };
+  await applySnapshotRules(chromeApi, snapshot, new Date('2026-11-16T12:05:00.000Z'), session);
+  assert.equal(updates[0].addRules[0].condition.requestDomains[0], 'facebook.com');
+});

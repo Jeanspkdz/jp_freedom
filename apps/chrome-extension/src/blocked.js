@@ -1,16 +1,19 @@
 import { getCurrentAndNext } from './policy.js';
+import { activeStudySession } from './study-session.js';
 
 export async function initializeBlockedPage({
   chromeApi = globalThis.chrome,
   documentRef = globalThis.document,
   now = () => new Date(),
 } = {}) {
-  const { lastValidSnapshot, blockedVariant } = await chromeApi.storage.local.get(['lastValidSnapshot', 'blockedVariant']);
+  const { lastValidSnapshot, lastStudySession, blockedVariant } = await chromeApi.storage.local.get(['lastValidSnapshot', 'lastStudySession', 'blockedVariant']);
   const block = getCurrentAndNext(lastValidSnapshot, now()).current;
-  documentRef.getElementById('blocked-activity').textContent = block?.name ?? 'No active focus block';
+  const timer = activeStudySession(lastStudySession, now()) ? lastStudySession : null;
+  documentRef.getElementById('blocked-activity').textContent = block?.name ?? (timer ? 'Study timer' : 'No active focus block');
   const plannedEnd = documentRef.getElementById('blocked-end');
-  documentRef.getElementById('blocked-end-row').hidden = !block;
-  plannedEnd.textContent = block ? block.endTime : '';
+  documentRef.getElementById('blocked-end-row').hidden = !block && !timer;
+  plannedEnd.textContent = block ? block.endTime : timer
+    ? new Date(Date.parse(timer.startedAt) + timer.durationMillis).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '';
   const variant = documentRef.getElementById('blocked-variant');
   const scene = documentRef.getElementById('blocked-scene');
   if (variant && scene) {

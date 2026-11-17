@@ -22,4 +22,9 @@ The existing Android study history is imported on the first rollout of shared se
 
 ## Existing implementation boundary
 
-The current extension sync contract and code only apply the shared blocklist during planned blocks. This spec records the agreed target behavior; the snapshot schema, Android sync, Chrome timer, and rule scheduler still need implementation changes.
+The extension has a manual timer, a separately versioned `/v1/session` API
+resource, desktop enforcement for active sessions, and Android client sync.
+The session resource stores the latest session and a separate history resource
+imports prior Android sessions. Chrome offers a choice when two offline timers
+conflict, and Android offers a choice for divergent reviews. End-to-end device
+verification remains before this specification is fully met.

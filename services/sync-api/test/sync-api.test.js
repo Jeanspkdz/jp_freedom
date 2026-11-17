@@ -111,6 +111,70 @@ test('concurrent edits receive a conflict instead of overwriting newer data', as
   assert.deepEqual(await stale.json(), { error: 'revision_conflict', currentRevision: 1 });
 });
 
+test('a Chrome study session is shared with Android without changing the plan', async () => {
+  const store = fakeStore();
+  let session = { revision: 0, updatedAt: null, session: null };
+  store.readSession = async () => session;
+  store.replaceSession = async (expectedRevision, next) => {
+    if (expectedRevision !== session.revision) return { conflict: true, revision: session.revision };
+    session = { revision: session.revision + 1, updatedAt: '2026-11-16T12:00:00.000Z', session: next };
+    return { conflict: false, ...session };
+  };
+  const api = createSyncApi({ store, token });
+  const started = {
+    id: 'study-1', startedAt: '2026-11-16T12:00:00.000Z', durationMillis: 30 * 60_000,
+    state: 'ACTIVE', accessProfile: 'ESSENTIALS_ONLY', taskName: '',
+  };
+  const write = await api(request('/v1/session', { method: 'PUT', body: { expectedRevision: 0, session: started } }));
+  assert.equal(write.status, 200);
+  const read = await api(request('/v1/session'));
+  assert.deepEqual((await read.json()).session, started);
+  assert.deepEqual((await api(request('/v1/snapshot')).then(response => response.json())).snapshot, emptySnapshot);
+  const conflict = await api(request('/v1/session', { method: 'PUT', body: { expectedRevision: 0, session: started } }));
+  assert.equal(conflict.status, 409);
+});
+
+test('study session writes require authorization and a valid duration', async () => {
+  const api = createSyncApi({ store: fakeStore(), token });
+  const session = { id: 'study-1', startedAt: '2026-11-16T12:00:00.000Z',
+    durationMillis: -1, state: 'ACTIVE', accessProfile: 'ESSENTIALS_ONLY', taskName: '' };
+  const body = { expectedRevision: 0, session };
+  assert.equal((await api(request('/v1/session', { method: 'PUT', body, authorized: false }))).status, 401);
+  const invalid = await api(request('/v1/session', { method: 'PUT', body }));
+  assert.equal(invalid.status, 422);
+  assert.deepEqual(await invalid.json(), { error: 'invalid_session' });
+});
+
+test('Android can import past study sessions without replacing an existing session', async () => {
+  const store = fakeStore();
+  const history = new Map();
+  store.readHistory = async () => [...history.values()];
+  store.importHistory = async sessions => {
+    for (const session of sessions) if (!history.has(session.id)) history.set(session.id, session);
+    return [...history.values()];
+  };
+  const api = createSyncApi({ store, token });
+  const older = { id: 'study-old', startedAt: '2026-11-10T12:00:00.000Z',
+    durationMillis: 1_800_000, state: 'REVIEWED', accessProfile: 'ESSENTIALS_ONLY', taskName: 'Reading' };
+  const imported = await api(request('/v1/history', { method: 'PUT', body: { sessions: [older] } }));
+  assert.equal(imported.status, 200);
+  const read = await api(request('/v1/history'));
+  assert.deepEqual((await read.json()).sessions, [older]);
+});
+
+test('an explicit review choice replaces one shared history record', async () => {
+  const store = fakeStore();
+  const remote = { id: 'study-1', startedAt: '2026-11-16T12:00:00.000Z', durationMillis: 1_800_000,
+    state: 'REVIEWED', accessProfile: 'ESSENTIALS_ONLY', taskName: 'Reading', outcome: 'FINISHED' };
+  let history = [remote];
+  store.resolveHistory = async session => { history = [session]; return session; };
+  const api = createSyncApi({ store, token });
+  const phone = { ...remote, taskName: 'Math' };
+  const response = await api(request('/v1/history/resolve', { method: 'PUT', body: { session: phone } }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(history, [phone]);
+});
+
 test('invalid, overlapping blocks are rejected before storage', async () => {
   let writes = 0;
   const store = fakeStore();

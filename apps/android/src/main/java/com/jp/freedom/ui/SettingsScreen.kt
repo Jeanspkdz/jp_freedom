@@ -85,6 +85,7 @@ fun SettingsScreen(
     onDesktopDomainsChange: (List<String>) -> Unit,
     onConfigureSync: (String, String) -> Unit,
     onSyncNow: () -> Unit,
+    onResolveReviewConflict: (Boolean) -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
     onRequestExactAlarmAccess: () -> Unit,
     onRequestSiteFilter: () -> Unit,
@@ -467,6 +468,13 @@ fun SettingsScreen(
                             }
                         }
                         if (syncRevision >= 0) Text("Shared revision: $syncRevision", style = MaterialTheme.typography.bodySmall)
+                        if (syncStatus == SyncStatus.ERROR && syncMessage?.startsWith("The review for ") == true) {
+                            Text("Choose which review to keep for this session.", style = MaterialTheme.typography.bodySmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { onResolveReviewConflict(true) }) { Text("Keep phone review") }
+                                OutlinedButton(onClick = { onResolveReviewConflict(false) }) { Text("Use synced review") }
+                            }
+                        }
                     }
                 }
 

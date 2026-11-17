@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-page="plan">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dimky · Focus plan</title>
+    <script src="src/page-entry.js"></script>
     <link rel="stylesheet" href="management.css">
   </head>
   <body>
@@ -20,32 +21,70 @@
           <span>Dimky</span>
         </div>
         <nav class="view-nav" aria-label="Extension sections">
-          <button id="tab-plan" class="view-tab is-selected" type="button" aria-controls="view-plan" aria-current="page">Plan</button>
-          <button id="tab-sites" class="view-tab" type="button" aria-controls="view-sites">Sites</button>
-          <button id="tab-connection" class="view-tab" type="button" aria-controls="view-connection">Connection</button>
+          <a href="management.html" class="view-tab is-selected" aria-current="page">Plan</a>
+          <a href="sites.html" class="view-tab">Sites</a>
+          <a href="connection.html" class="view-tab">Connection</a>
         </nav>
         <div class="header-actions"><p id="sync-state" role="status">Checking sync…</p><button id="sync-now" type="button">Sync now</button></div>
       </header>
       <div id="view-plan" class="view-panel">
         <div class="plan-hero">
         <img class="hero-illustration" src="illustrations/focus-landscape.png" alt="" aria-hidden="true">
-        <div class="plan-intro"><p id="today-intro-date"></p><div class="focus-title"><h1 id="focus-heading">Focus plan</h1><span id="focus-live" class="focus-live" aria-hidden="true" hidden></span></div><p id="protection-state" role="status">Checking protection…</p></div>
-        <section class="focus-board" aria-labelledby="plan-heading">
+        <div class="plan-intro"><p id="today-intro-date"></p><span id="focus-live" class="focus-live" aria-hidden="true" hidden></span><p id="protection-state" role="status">Checking protection…</p></div>
+        <section class="focus-board" aria-labelledby="plan-heading" data-enter data-i="2">
           <div class="focus-main"><h2 id="plan-heading">Current focus block</h2><p id="current-block">Loading plan…</p></div>
           <div class="focus-meta"><p id="planned-end" hidden></p><p id="focus-remaining" hidden><strong id="focus-remaining-value"></strong> left</p></div>
           <div id="focus-progress" class="focus-progress" role="progressbar" aria-label="Focus block progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span id="focus-progress-fill"></span></div>
         </section>
         </div>
+        <section class="study-timer" aria-labelledby="focus-heading" data-enter data-i="2">
+          <div class="timer-heading-row"><h1 id="focus-heading" tabindex="-1" data-page-heading data-enter data-i="0">Focus session</h1><span id="timer-date"></span></div>
+          <div class="timer-panel">
+            <div class="clock-side">
+              <div class="clock-display" role="timer" aria-label="30 minutes, 0 seconds">
+                <div id="flip-minutes" class="flip-card" data-value="30" aria-hidden="true">
+                  <span class="flip-half flip-static-top"><span class="flip-face flip-face--top">30</span></span>
+                  <span class="flip-half flip-static-bottom"><span class="flip-face flip-face--bottom">30</span></span>
+                  <span class="flip-half flip-flap-top"><span class="flip-face flip-face--top">30</span></span>
+                  <span class="flip-half flip-flap-bottom"><span class="flip-face flip-face--bottom">30</span></span>
+                </div>
+                <span class="clock-colon" aria-hidden="true">:</span>
+                <div id="flip-seconds" class="flip-card" data-value="00" aria-hidden="true">
+                  <span class="flip-half flip-static-top"><span class="flip-face flip-face--top">00</span></span>
+                  <span class="flip-half flip-static-bottom"><span class="flip-face flip-face--bottom">00</span></span>
+                  <span class="flip-half flip-flap-top"><span class="flip-face flip-face--top">00</span></span>
+                  <span class="flip-half flip-flap-bottom"><span class="flip-face flip-face--bottom">00</span></span>
+                </div>
+              </div>
+              <span class="clock-unit">MINUTES</span>
+              <strong id="study-timer-remaining" class="sr-only" hidden></strong>
+            </div>
+            <div class="timer-controls">
+              <form id="study-timer-form">
+                <label for="study-duration">Study duration</label>
+                <div class="duration-presets" role="group" aria-label="Study duration">
+                  <button type="button" data-duration="25">25 min</button><button type="button" data-duration="30" aria-pressed="true">30 min</button><button type="button" data-duration="45">45 min</button><button type="button" data-duration="60">60 min</button>
+                </div>
+                <input id="study-duration" class="sr-only" type="number" min="1" max="1440" value="30" required tabindex="-1" aria-label="Duration in minutes">
+                <button id="start-study-timer" type="submit"><span aria-hidden="true">▶</span> Start study session</button>
+              </form>
+              <button id="stop-study-timer" type="button" hidden>Stop study session</button>
+              <p class="timer-help">Your focus block starts and selected sites stay blocked until it ends.</p>
+            </div>
+          </div>
+          <div class="timer-state-row"><span class="timer-state-label">Not connected</span><p id="study-timer-status" role="status">Connect to the sync API at least once before starting a study session.</p><a href="connection.html">Open Connection</a></div>
+          <div id="study-conflict-actions" hidden><button id="keep-chrome-timer" type="button">Continue Chrome timer</button><button id="keep-android-timer" type="button">Continue Android timer</button></div>
+        </section>
         <section class="schedule" aria-labelledby="schedule-heading">
-        <div class="schedule-intro"><h2 id="schedule-heading">Your schedule</h2><p>Today and tomorrow from your phone.</p></div>
+        <div class="schedule-intro" data-enter data-i="3"><h2 id="schedule-heading">Your schedule</h2><p>Today and tomorrow from your phone.</p></div>
       <div class="day-plans">
-        <section class="day-plan" aria-labelledby="today-plan-heading">
+        <section class="day-plan" data-reveal aria-labelledby="today-plan-heading">
             <div class="day-plan-header"><h2 id="today-plan-heading">Today’s schedule</h2><time id="today-plan-date"></time></div>
           <img id="today-plan-art" class="empty-art" src="illustrations/open-plan.png" alt="" aria-hidden="true" hidden>
           <p id="today-plan-empty" class="day-plan-empty" role="status">Loading plan…</p>
           <ol id="today-plan-list" class="day-plan-list"></ol>
         </section>
-        <section id="tomorrow-plan" class="day-plan" aria-labelledby="tomorrow-plan-heading">
+        <section id="tomorrow-plan" class="day-plan" data-reveal aria-labelledby="tomorrow-plan-heading">
             <div class="day-plan-header"><h2 id="tomorrow-plan-heading">Tomorrow’s schedule</h2><time id="tomorrow-plan-date"></time></div>
           <img id="tomorrow-plan-art" class="empty-art" src="illustrations/open-plan.png" alt="" aria-hidden="true" hidden>
           <p id="tomorrow-plan-empty" class="day-plan-empty" role="status">Loading plan…</p>
@@ -53,60 +92,6 @@
         </section>
       </div>
         </section>
-      </div>
-      <div id="view-sites" class="view-panel" hidden>
-        <section class="blocklist" aria-labelledby="blocklist-heading">
-          <div class="blocklist-controls">
-            <h1 id="blocklist-heading">Blocked sites</h1>
-            <p class="section-description">Selected sites are blocked in Chrome during a focus block. Each domain includes its subdomains. Selected sites stay locked until the block ends.</p>
-            <div class="permission-line"><p id="permission-state" role="status">Chrome blocks selected sites during active focus blocks. Site access permission is not needed.</p></div>
-            <form id="add-domain-form">
-              <label for="custom-domain">Add a domain</label>
-              <div class="domain-input-row"><input id="custom-domain" name="custom-domain" type="text" autocomplete="off" placeholder="example.com" aria-describedby="domain-help"><button id="add-domain" type="submit">Add site</button></div>
-              <p id="domain-help" class="field-help">Enter a bare domain such as example.com. URLs and paths are not accepted.</p>
-            </form>
-            <p id="blocklist-status" role="status"></p>
-          </div>
-          <div class="blocklist-choices" role="region" aria-label="Site choices" tabindex="0">
-            <fieldset id="common-sites">
-              <legend>Common sites</legend>
-              <label class="site-row" data-monogram="F"><input id="domain-facebook.com" type="checkbox" data-domain="facebook.com"><span class="site-name">Facebook</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-              <label class="site-row" data-monogram="I"><input id="domain-instagram.com" type="checkbox" data-domain="instagram.com"><span class="site-name">Instagram</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-              <label class="site-row" data-monogram="T"><input id="domain-tiktok.com" type="checkbox" data-domain="tiktok.com"><span class="site-name">TikTok</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-              <label class="site-row" data-monogram="X"><input id="domain-x.com" type="checkbox" data-domain="x.com"><span class="site-name">X</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-              <label class="site-row" data-monogram="R"><input id="domain-reddit.com" type="checkbox" data-domain="reddit.com"><span class="site-name">Reddit</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-              <label class="site-row" data-monogram="Y"><input id="domain-youtube.com" type="checkbox" data-domain="youtube.com"><span class="site-name">YouTube</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-              <label class="site-row" data-monogram="W"><input id="domain-web.whatsapp.com" type="checkbox" data-domain="web.whatsapp.com"><span class="site-name">WhatsApp Web</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
-            </fieldset>
-            <div id="custom-sites" aria-label="Custom sites"></div>
-          </div>
-        </section>
-      </div>
-      <div id="view-connection" class="view-panel" hidden>
-        <div class="connection-rail">
-          <div class="connection-overview">
-            <div class="connection-intro"><h1>Connection</h1><p>Your focus plan travels from your phone to Chrome.</p></div>
-          <div class="connection-path" aria-label="Phone syncs the plan to this computer">
-            <div class="connection-device"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="13" y="5" width="22" height="38" rx="5"/><path d="M21 37h6"/></svg><span>Phone</span></div>
-            <div class="connection-flow" aria-hidden="true"></div>
-            <div class="connection-device"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="7" width="38" height="27" rx="3"/><path d="M17 41h14m-7-7v7"/></svg><span>This PC</span></div>
-          </div>
-          <p class="connection-caption">Chrome keeps the last plan received from your phone so it can continue working offline.</p>
-          <section class="sync" aria-label="Recent sync">
-            <div class="sync-timestamp"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M16 9v8l5 3"/></svg><p id="last-sync">Last successful sync: Never</p></div>
-            <p id="sync-error" class="error" role="alert" hidden></p>
-          </section>
-          </div>
-          <section class="connection" aria-labelledby="settings-heading">
-            <h2 id="settings-heading">Sync settings</h2>
-            <p>Enter the sync API URL and bearer token shown in the phone's sync settings.</p>
-            <form id="settings-form">
-              <label for="api-url">Sync API URL</label><input id="api-url" name="api-url" type="url" autocomplete="url" placeholder="https://your-sync-api.example" required>
-              <label for="api-token">Bearer token</label><input id="api-token" name="api-token" type="password" autocomplete="off" required>
-              <button type="submit">Save and sync</button>
-            </form>
-          </section>
-        </div>
       </div>
     </main>
     <svg class="planner-wave" viewBox="0 0 1440 160" preserveAspectRatio="none" aria-hidden="true" focusable="false">

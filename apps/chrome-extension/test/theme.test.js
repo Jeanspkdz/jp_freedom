@@ -5,19 +5,21 @@ import test from 'node:test';
 const extensionFile = name => new URL(`../${name}`, import.meta.url);
 const readExtensionFile = name => readFile(extensionFile(name), 'utf8');
 
-test('management pages follow the approved focus, sites, and connection compositions', async () => {
-  const [html, css] = await Promise.all([
+test('separate management pages follow the approved focus, sites, and connection compositions', async () => {
+  const [html, sites, connection, css] = await Promise.all([
     readExtensionFile('management.html'),
+    readExtensionFile('sites.html'),
+    readExtensionFile('connection.html'),
     readExtensionFile('management.css'),
   ]);
 
   assert.match(html, /href="management\.css"/);
   assert.match(html, /id="view-plan"/);
-  assert.match(html, /id="view-sites"/);
-  assert.match(html, /id="view-connection"/);
+  assert.match(sites, /id="view-sites"/);
+  assert.match(connection, /id="view-connection"/);
   assert.match(html, /class="brand-icon" viewBox="0 0 100 100"/);
   assert.equal((html.match(/class="brand-icon-piece brand-icon-piece--/g) ?? []).length, 3);
-  assert.match(html, /class="connection-flow" aria-hidden="true"><\/div>/);
+  assert.match(connection, /class="connection-flow" aria-hidden="true"><\/div>/);
 
   const root = css.match(/:root\s*\{([^}]+)\}/)?.[1];
   assert.ok(root, 'management.css defines root palette tokens');
@@ -45,6 +47,9 @@ test('management pages follow the approved focus, sites, and connection composit
   assert.match(css, /\.connection-flow::before\s*\{[^}]*background:\s*linear-gradient\(90deg, transparent, var\(--amber\), transparent\)/s);
   assert.match(css, /\.view-tab\.is-selected:hover:not\(:disabled\)\s*\{[^}]*color:\s*var\(--on-purple\)/s);
   assert.match(css, /font:\s*400 18px\/1\.5/);
+  assert.match(css, /@view-transition\s*\{\s*navigation:\s*auto/);
+  assert.match(css, /html\[data-nav="back"\]::view-transition-new\(root\)/);
+  assert.match(css, /\.page-header\s*\{\s*view-transition-name:\s*page-header/);
   assert.match(css, /\.brand:hover \.brand-icon-piece--left\s*\{[^}]*transform:/s);
   assert.match(css, /\.brand:hover \.brand-icon-piece--top\s*\{[^}]*transform:/s);
   assert.match(css, /\.brand:hover \.brand-icon-piece--bottom\s*\{[^}]*transform:/s);
@@ -53,24 +58,52 @@ test('management pages follow the approved focus, sites, and connection composit
   assert.doesNotMatch(css, /#faf6ee|#f7f6[26]|#fffdf8|#fffefe|#fff7eb|#fff0dd|#eee7f8|#76599b|rgb\(170\s+185\s+255/i);
 });
 
+test('plan, sites, and connection are separate extension documents', async () => {
+  const [plan, sites, connection] = await Promise.all([
+    readExtensionFile('management.html'),
+    readExtensionFile('sites.html'),
+    readExtensionFile('connection.html'),
+  ]);
+
+  assert.match(plan, /href="sites\.html"/);
+  assert.match(plan, /href="connection\.html"/);
+  assert.match(sites, /href="management\.html"/);
+  assert.match(connection, /href="management\.html"/);
+  assert.match(plan, /id="view-plan"/);
+  assert.match(sites, /id="view-sites"/);
+  assert.match(connection, /id="view-connection"/);
+  assert.doesNotMatch(plan, /id="view-sites"|id="view-connection"/);
+  assert.doesNotMatch(sites, /id="view-plan"|id="view-connection"/);
+  assert.doesNotMatch(connection, /id="view-plan"|id="view-sites"/);
+  for (const html of [plan, sites, connection]) {
+    assert.match(html, /href="management\.css"/);
+    assert.match(html, /src="src\/page-entry\.js"/);
+    assert.doesNotMatch(html, /<script>/);
+    assert.match(html, /src="src\/management\.js"/);
+  }
+});
+
 test('blocked page and both scenes use the amber and purple roles', async () => {
-  const [blocked, terrain, puddle] = await Promise.all([
+  const [blocked, blockedCss, terrain, puddle] = await Promise.all([
     readExtensionFile('blocked.html'),
+    readExtensionFile('blocked.css'),
     readExtensionFile('focus-terrain.html'),
     readExtensionFile('water-puddle.html'),
   ]);
 
   assert.match(blocked, /focus-terrain\.html\?blocked/);
   assert.match(blocked, /water/);
-  assert.match(blocked, /--background:\s*#10182b\b/i);
-  assert.match(blocked, /--surface:\s*#18233a\b/i);
-  assert.match(blocked, /\.blocked-card\s*\{/);
+  assert.match(blocked, /href="blocked\.css"/);
+  assert.match(blocked, /src="src\/page-entry\.js"/);
+  assert.match(blockedCss, /--background:\s*#10182b\b/i);
+  assert.match(blockedCss, /--surface:\s*#18233a\b/i);
+  assert.match(blockedCss, /\.blocked-card\s*\{/);
   assert.match(blocked, /Current activity/);
   assert.match(blocked, /Available again at/);
   assert.match(blocked, /Particles/);
   assert.match(blocked, /Rainy puddle/);
-  assert.match(blocked, /color:\s*var\(--amber\)/i);
-  assert.match(blocked, /background:\s*var\(--purple-container\)/i);
+  assert.match(blockedCss, /color:\s*var\(--amber\)/i);
+  assert.match(blockedCss, /background:\s*var\(--purple-container\)/i);
   assert.match(terrain, /html, body \{[^}]*background: #10182b/);
   assert.match(terrain, /body \{ color: #f2f0ea/);
   assert.match(terrain, /STEAM\s*=\s*vec3\(180,\s*190,\s*216\)\s*\/\s*255\.0/);

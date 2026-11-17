@@ -1,8 +1,26 @@
 # Desktop extension and personal sync
 
-This document describes the current sync contract. The agreed next behavior for
-shared study timers is in [Chrome study sessions](specs/chrome-study-session.md)
-and ADR-0003; it requires a new API contract and client implementation.
+This document describes the sync contract. The agreed behavior for shared study
+timers is in [Chrome study sessions](specs/chrome-study-session.md) and ADR-0003.
+
+## Study timer contract
+
+`GET /v1/session` returns `{ revision, updatedAt, session }`. `session` is null
+before the first timer is shared. `PUT /v1/session` accepts
+`{ expectedRevision, session }` and returns `409 revision_conflict` if another
+device wrote first. This resource is separate from `/v1/snapshot`, so a timer
+update cannot replace plan or blocklist changes. A Chrome-started session uses
+the `ESSENTIALS_ONLY` profile. Chrome measures its remaining time from
+`startedAt` and `durationMillis`; stopping or reaching the deadline moves it
+to `PENDING_REVIEW`, with review performed on Android.
+
+`GET /v1/history` returns all recorded sessions; Android uses
+`PUT /v1/history` to import existing local study history without overwriting
+server records with the same ID. The `/v1/session` resource stores the latest
+session and records each accepted update in shared history. Chrome asks which
+timer to continue when both devices started one offline; the other attempt is
+retained in history. Android shows a choice for divergent reviews of the same
+session in sync settings.
 
 The Android app remains the source of truth for plans, settings, and completion
 states. The desktop site blocklist is shared and can be edited from Android or
