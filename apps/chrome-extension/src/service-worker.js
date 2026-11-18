@@ -17,7 +17,7 @@ export async function refreshPlanningReminders(chromeApi = globalThis.chrome, no
     'planningReminderDate',
   ]);
   const scheduler = createPlanningReminderScheduler({
-    getSnapshot: async () => lastValidSnapshot?.version === 1 && Array.isArray(lastValidSnapshot.blocks)
+    getSnapshot: async () => lastValidSnapshot?.version === 1
       ? lastValidSnapshot
       : null,
     getReminderDate: async () => planningReminderDate ?? null,
@@ -36,15 +36,6 @@ export async function refreshPlanningReminders(chromeApi = globalThis.chrome, no
 
 function nextBoundary(snapshot, now) {
   const boundaries = [];
-  for (const block of snapshot.blocks) {
-    if (block.completionStatus === 'FINISHED') continue;
-    const [year, month, day] = block.date.split('-').map(Number);
-    for (const time of [block.startTime, block.endTime]) {
-      const [hours, minutes] = time.split(':').map(Number);
-      const boundary = new Date(year, month - 1, day, hours, minutes).getTime();
-      if (boundary > now.getTime()) boundaries.push(boundary);
-    }
-  }
   const session = snapshot.activeStudySession;
   if (session) {
     for (const value of [session.startedAt, session.endsAt]) {
@@ -58,7 +49,7 @@ function nextBoundary(snapshot, now) {
 export function refreshFocusState(chromeApi = globalThis.chrome, now = new Date()) {
   const refresh = async () => {
     const { lastValidSnapshot, apiUrl, apiToken } = await chromeApi.storage.local.get(['lastValidSnapshot', 'apiUrl', 'apiToken']);
-    const snapshot = lastValidSnapshot?.version === 1 && Array.isArray(lastValidSnapshot.blocks)
+    const snapshot = lastValidSnapshot?.version === 1
       ? lastValidSnapshot
       : null;
     await applySnapshotRules(chromeApi, snapshot, now);

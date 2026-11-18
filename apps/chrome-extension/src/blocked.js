@@ -1,4 +1,4 @@
-import { getActiveStudySession, getCurrentAndNext } from './policy.js';
+import { getActiveStudySession } from './policy.js';
 import { activeStudySession } from './study-session.js';
 
 export async function initializeBlockedPage({
@@ -14,15 +14,14 @@ export async function initializeBlockedPage({
     taskName: localSession.taskName || 'Study timer',
     endsAt: new Date(Date.parse(localSession.startedAt) + localSession.durationMillis).toISOString(),
   } : null);
-  const block = session ? null : getCurrentAndNext(lastValidSnapshot, currentTime).current;
-  documentRef.getElementById('blocked-activity').textContent = session?.taskName ?? block?.name ?? 'No active focus block';
+  documentRef.getElementById('blocked-activity').textContent = session?.taskName ?? 'No active focus session';
   const plannedEnd = documentRef.getElementById('blocked-end');
   const endRow = documentRef.getElementById('blocked-end-row');
-  if (endRow) endRow.hidden = !session && !block;
-  else plannedEnd.hidden = !session && !block;
+  if (endRow) endRow.hidden = !session;
+  else plannedEnd.hidden = !session;
   plannedEnd.textContent = session
     ? new Date(session.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    : block ? block.endTime : '';
+    : '';
   const variant = documentRef.getElementById('blocked-variant');
   const scene = documentRef.getElementById('blocked-scene');
   if (variant && scene) {

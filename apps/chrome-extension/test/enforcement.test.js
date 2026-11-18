@@ -2,7 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applySnapshotRules } from '../src/enforcement.js';
 
-test('active desktop blocks use DNR block rules even without Facebook host permission', async () => {
+test('a legacy planned block does not activate website blocking', async () => {
+  const updates = [];
+  const chromeApi = { declarativeNetRequest: {
+    getDynamicRules: async () => [], updateDynamicRules: async update => updates.push(update),
+  } };
+  const snapshot = {
+    desktopBlockedDomains: ['facebook.com'],
+    blocks: [{ id: 'old', date: '2026-11-18', startTime: '10:00', endTime: '11:00', completionStatus: 'NOT_STARTED' }],
+  };
+  await applySnapshotRules(chromeApi, snapshot, new Date(2026, 10, 18, 10, 30));
+  assert.deepEqual(updates[0].addRules, []);
+});
+
+test('active study sessions use DNR block rules even without Facebook host permission', async () => {
   const updates = [];
   const chromeApi = {
     declarativeNetRequest: {
@@ -17,14 +30,12 @@ test('active desktop blocks use DNR block rules even without Facebook host permi
     version: 1,
     settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
     desktopBlockedDomains: ['facebook.com'],
-    blocks: [{
-      id: 'focus',
-      date: '2026-11-08',
-      name: 'Study',
-      startTime: '19:30',
-      endTime: '21:00',
-      completionStatus: 'NOT_STARTED',
-    }],
+    blocks: [],
+    activeStudySession: {
+      id: 'focus', taskName: 'Study',
+      startedAt: '2026-11-09T00:30:00.000Z',
+      endsAt: '2026-11-09T02:00:00.000Z',
+    },
   };
 
   await applySnapshotRules(chromeApi, snapshot, new Date(2026, 10, 8, 20, 0));

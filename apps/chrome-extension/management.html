@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="src/page-entry.js"></script>
-    <title>Tally · Focus plan</title>
+    <title>Tally · Focus session</title>
     <link rel="stylesheet" href="management.css">
     <link rel="stylesheet" href="sync-visual.css">
   </head>
@@ -104,9 +104,9 @@
             <button id="resolve-field-conflict" type="button">Use selected value</button>
           </div>
           <button id="stop-session" class="secondary-button" type="button" hidden>Stop study session</button>
-          <div id="focus-main" class="focus-main"><h2 id="plan-heading">Current focus block</h2><p id="current-block">Loading plan…</p></div>
+          <div id="focus-main" class="focus-main"><h2 id="plan-heading">Current study session</h2><p id="current-block">Loading session…</p></div>
           <div class="focus-meta"><p id="planned-end" hidden></p><p id="focus-remaining" hidden><strong id="focus-remaining-value"></strong> left</p></div>
-          <div id="focus-progress" class="focus-progress" role="progressbar" aria-label="Focus block progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span id="focus-progress-fill"></span></div>
+          <div id="focus-progress" class="focus-progress" role="progressbar" aria-label="Study session progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span id="focus-progress-fill"></span></div>
         </section>
         </div>
         <section class="study-timer" aria-labelledby="focus-heading" data-enter data-i="2">
@@ -141,28 +141,11 @@
                 <button id="start-study-timer" type="submit"><span aria-hidden="true">▶</span> Start study session</button>
               </form>
               <button id="stop-study-timer" type="button" hidden>Stop study session</button>
-              <p class="timer-help">Your focus block starts and selected sites stay blocked until it ends.</p>
+              <p class="timer-help">Selected sites stay blocked until your study session ends.</p>
             </div>
           </div>
           <div class="timer-state-row"><span class="timer-state-label">Not connected</span><p id="study-timer-status" role="status">Connect to the sync API at least once before starting a study session.</p><a href="connection.html">Open Connection</a></div>
           <div id="study-conflict-actions" hidden><button id="keep-chrome-timer" type="button">Continue Chrome timer</button><button id="keep-android-timer" type="button">Continue Android timer</button></div>
-        </section>
-        <section class="schedule" aria-labelledby="schedule-heading">
-        <div class="schedule-intro" data-enter data-i="3"><h2 id="schedule-heading">Your schedule</h2><p>Today and tomorrow from your phone.</p></div>
-      <div class="day-plans">
-        <section class="day-plan" data-reveal aria-labelledby="today-plan-heading">
-            <div class="day-plan-header"><h2 id="today-plan-heading">Today’s schedule</h2><time id="today-plan-date"></time></div>
-          <img id="today-plan-art" class="empty-art" src="illustrations/open-plan.png" alt="" aria-hidden="true" hidden>
-          <p id="today-plan-empty" class="day-plan-empty" role="status">Loading plan…</p>
-          <ol id="today-plan-list" class="day-plan-list"></ol>
-        </section>
-        <section id="tomorrow-plan" class="day-plan" data-reveal aria-labelledby="tomorrow-plan-heading">
-            <div class="day-plan-header"><h2 id="tomorrow-plan-heading">Tomorrow’s schedule</h2><time id="tomorrow-plan-date"></time></div>
-          <img id="tomorrow-plan-art" class="empty-art" src="illustrations/open-plan.png" alt="" aria-hidden="true" hidden>
-          <p id="tomorrow-plan-empty" class="day-plan-empty" role="status">Loading plan…</p>
-          <ol id="tomorrow-plan-list" class="day-plan-list"></ol>
-        </section>
-      </div>
         </section>
       </div>
     </main>

@@ -191,7 +191,7 @@ test('management initializes from browser globals when called without explicit a
   }
 });
 
-test('a new empty server snapshot starts with the common sites selected', async () => {
+test('a new empty server snapshot selects common sites without blocking until a session', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
   const snapshot = {
@@ -223,7 +223,7 @@ test('a new empty server snapshot starts with the common sites selected', async 
   assert.deepEqual(writes[0].snapshot.desktopBlockedDomains, ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com']);
   assert.deepEqual(harness.storage.lastValidSnapshot.desktopBlockedDomains, writes[0].snapshot.desktopBlockedDomains);
   assert.equal(writes[0].expectedRevision, 0);
-  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com']);
+  assert.deepEqual(harness.rules, []);
 });
 
 test('an intentionally empty list at a later revision stays empty', async () => {
@@ -242,13 +242,14 @@ test('an intentionally empty list at a later revision stays empty', async () => 
   assert.deepEqual(harness.rules, []);
 });
 
-test('selected sites cannot be removed during a focus block while new sites save immediately', async () => {
+test('selected sites cannot be removed during a study session while new sites save immediately', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const snapshot = {
     version: 1,
     settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
     desktopBlockedDomains: ['reddit.com'],
     blocks: [{ id: 'focus', date: '2026-11-05', name: 'Study', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+    activeStudySession: { id: 'session', taskName: 'Study', startedAt: new Date(2026, 10, 5, 10, 0).toISOString(), endsAt: new Date(2026, 10, 5, 11, 0).toISOString(), accessProfile: 'ESSENTIALS_ONLY' },
   };
   const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
   const writes = [];
@@ -384,7 +385,7 @@ test('a cached plan without a configured connection is visibly offline', async (
 
   assert.match(harness.nodes.get('sync-state').textContent, /offline.*cached plan/i);
   assert.match(harness.nodes.get('sync-error').textContent, /enter the sync API URL and bearer token/i);
-  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+  assert.deepEqual(harness.rules, []);
 });
 
 test('Plan exposes the manual timer and shows its countdown after starting', async () => {
@@ -452,7 +453,7 @@ test('Plan lets the user choose between conflicting shared session starts', asyn
   assert.deepEqual(chosen.sessionStartCandidates, []);
 });
 
-test('a successful sync shows the active block and planned end, saves the snapshot, and installs its rules', async () => {
+test('a successful sync shows the active session and end, saves the snapshot, and installs its rules', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const snapshot = {
@@ -460,6 +461,7 @@ test('a successful sync shows the active block and planned end, saves the snapsh
     settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
     desktopBlockedDomains: ['facebook.com', 'youtube.com'],
     blocks: [{ id: 'focus', date: today, name: 'Deep work', startTime: '10:00', endTime: '11:30', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+    activeStudySession: { id: 'session', taskName: 'Deep work', startedAt: new Date(2026, 10, 5, 10, 0).toISOString(), endsAt: new Date(2026, 10, 5, 11, 30).toISOString(), accessProfile: 'ESSENTIALS_ONLY' },
   };
   const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'secret-token' });
   let request;
@@ -476,7 +478,7 @@ test('a successful sync shows the active block and planned end, saves the snapsh
   assert.equal(request.url, 'https://sync.example/v1/snapshot');
   assert.equal(request.options.headers.Authorization, 'Bearer secret-token');
   assert.equal(harness.nodes.get('current-block').textContent, 'Deep work');
-  assert.equal(harness.nodes.get('planned-end').textContent, 'Planned end: 11:30');
+  assert.equal(harness.nodes.get('planned-end').textContent, `Planned end: ${new Date(snapshot.activeStudySession.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`);
   assert.match(harness.nodes.get('last-sync').textContent, /Last successful sync: (?!Never)/);
   assert.deepEqual(harness.storage.lastValidSnapshot, snapshot);
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['facebook.com', 'youtube.com']);
@@ -1040,31 +1042,6 @@ test('connection status distinguishes browser enforcement from confirmed phone r
   assert.match(confirmedHarness.nodes.get('phone-receipt-state').textContent, /phone received/i);
 });
 
-test('management shows the full plan for today and tomorrow from the synced snapshot', async () => {
-  const now = new Date(2026, 10, 6, 10, 30);
-  const snapshot = {
-    version: 1,
-    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
-    desktopBlockedDomains: ['facebook.com'],
-    blocks: [
-      { id: 'current', date: '2026-11-06', name: 'Deep work', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' },
-      { id: 'later', date: '2026-11-06', name: 'Reading', startTime: '13:00', endTime: '14:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' },
-      { id: 'tomorrow', date: '2026-11-07', name: 'Project', startTime: '09:00', endTime: '10:30', accessProfile: 'ESSENTIALS_WITH_CHATGPT', completionStatus: 'NOT_STARTED' },
-    ],
-  };
-  const harness = createHarness({ lastValidSnapshot: snapshot, lastSnapshotRevision: 3 });
-
-  await initializeManagement({ ...harness, now: () => now, fetchImpl: async () => { throw new Error('unexpected request'); } });
-
-  const todayRows = harness.nodes.get('today-plan-list').children;
-  const tomorrowRows = harness.nodes.get('tomorrow-plan-list').children;
-  assert.equal(todayRows.length, 2);
-  assert.deepEqual(todayRows.map(row => row.children[1].textContent), ['Deep work', 'Reading']);
-  assert.equal(todayRows[0].children[2].textContent, 'In progress');
-  assert.equal(tomorrowRows.length, 1);
-  assert.equal(tomorrowRows[0].children[1].textContent, 'Project');
-});
-
 test('saving the connection form stores the API URL and bearer token and starts a sync', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const snapshot = {
@@ -1102,6 +1079,7 @@ test('a failed sync keeps cached enforcement and explains the offline state', as
     settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
     desktopBlockedDomains: ['reddit.com'],
     blocks: [{ id: 'focus', date: today, name: 'Study', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+    activeStudySession: { id: 'session', taskName: 'Study', startedAt: new Date(2026, 10, 5, 10, 0).toISOString(), endsAt: new Date(2026, 10, 5, 11, 0).toISOString(), accessProfile: 'ESSENTIALS_ONLY' },
   };
   const lastSuccessfulSync = '2026-11-05T09:00:00.000Z';
   const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'secret-token', lastValidSnapshot: cachedSnapshot, lastSuccessfulSync });
@@ -1122,28 +1100,6 @@ test('a failed sync keeps cached enforcement and explains the offline state', as
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
 });
 
-test('a Finished block is released when its newer snapshot syncs', async () => {
-  const now = new Date(2026, 10, 5, 10, 30);
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const active = {
-    version: 1,
-    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
-    desktopBlockedDomains: ['reddit.com'],
-    blocks: [{ id: 'focus', date: today, name: 'Study', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
-  };
-  const finished = { ...active, blocks: [{ ...active.blocks[0], completionStatus: 'FINISHED' }] };
-  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'secret-token', lastValidSnapshot: active });
-
-  await initializeManagement({
-    ...harness,
-    now: () => now,
-    fetchImpl: async () => ({ ok: true, json: async () => ({ revision: 5, updatedAt: now.toISOString(), snapshot: finished }) }),
-  });
-
-  assert.equal(harness.nodes.get('current-block').textContent, 'No active focus block');
-  assert.deepEqual(harness.rules, []);
-});
-
 test('management applies active DNR blocks without site permissions', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const snapshot = {
@@ -1151,6 +1107,7 @@ test('management applies active DNR blocks without site permissions', async () =
     settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
     desktopBlockedDomains: ['reddit.com'],
     blocks: [{ id: 'focus', date: '2026-11-05', name: 'Study', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
+    activeStudySession: { id: 'session', taskName: 'Study', startedAt: new Date(2026, 10, 5, 10, 0).toISOString(), endsAt: new Date(2026, 10, 5, 11, 0).toISOString(), accessProfile: 'ESSENTIALS_ONLY' },
   };
   const harness = createHarness({ lastValidSnapshot: snapshot });
   harness.chromeApi.permissions = {
@@ -1164,25 +1121,6 @@ test('management applies active DNR blocks without site permissions', async () =
   assert.equal(harness.rules.length, 1);
   assert.deepEqual(harness.rules[0].action, { type: 'block' });
   assert.deepEqual(harness.rules[0].condition.requestDomains, ['reddit.com']);
-});
-
-test('the blocked page shows the active activity and planned end without a bypass control', async () => {
-  const now = new Date(2026, 10, 5, 10, 30);
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const snapshot = {
-    version: 1,
-    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
-    desktopBlockedDomains: ['reddit.com'],
-    blocks: [{ id: 'focus', date: today, name: 'Write project proposal', startTime: '10:00', endTime: '11:15', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
-  };
-  const harness = createHarness({ lastValidSnapshot: snapshot });
-
-  await initializeBlockedPage({ ...harness, now: () => now });
-
-  assert.equal(harness.nodes.get('blocked-activity').textContent, 'Write project proposal');
-  assert.equal(harness.nodes.get('blocked-end').textContent, '11:15');
-  assert.equal(harness.nodes.get('blocked-end-row').hidden, false);
-  assert.equal(harness.nodes.has('bypass'), false);
 });
 
 test('the blocked page explains an Android-started session and its planned end without a bypass', async () => {
@@ -1212,7 +1150,7 @@ test('the blocked page hides the return-time row when no block is active', async
 
   await initializeBlockedPage({ ...harness, now: () => new Date(2026, 10, 5, 10, 30) });
 
-  assert.equal(harness.nodes.get('blocked-activity').textContent, 'No active focus block');
+  assert.equal(harness.nodes.get('blocked-activity').textContent, 'No active focus session');
   assert.equal(harness.nodes.get('blocked-end').textContent, '');
   assert.equal(harness.nodes.get('blocked-end-row').hidden, true);
 });
@@ -1250,28 +1188,7 @@ test('an invalid newer snapshot does not replace the last valid cached plan', as
   assert.match(harness.nodes.get('sync-state').textContent, /offline.*cached plan/i);
   assert.match(harness.nodes.get('sync-error').textContent, /unsupported or incomplete plan/i);
   assert.deepEqual(harness.storage.lastValidSnapshot, cachedSnapshot);
-  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
-});
-
-test('offline enforcement refreshes its dynamic rules at the cached block boundaries', async () => {
-  const now = new Date(2026, 10, 5, 9, 59);
-  const snapshot = {
-    version: 1,
-    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
-    desktopBlockedDomains: ['youtube.com'],
-    blocks: [{
-      id: 'focus', date: '2026-11-05', name: 'Study', startTime: '10:00', endTime: '11:00',
-      accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED',
-    }],
-  };
-  const harness = createHarness({ lastValidSnapshot: snapshot });
-  await refreshFocusState(harness.chromeApi, now);
   assert.deepEqual(harness.rules, []);
-  assert.equal(harness.alarms.get('focus-state-refresh').when, new Date(2026, 10, 5, 10, 0).getTime());
-
-  await refreshFocusState(harness.chromeApi, new Date(2026, 10, 5, 10, 0));
-  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['youtube.com']);
-  assert.equal(harness.alarms.get('focus-state-refresh').when, new Date(2026, 10, 5, 11, 0).getTime());
 });
 
 test('a synced Android timer installs site rules in the background until its absolute end', async () => {
@@ -1352,33 +1269,9 @@ test('the background worker publishes automatic expiry and preserves the session
   assert.equal(published.activeStudySession, null);
   assert.equal(published.pendingStudyReviewSessionId, 'phone-session-expiring');
   assert.deepEqual(published.blocks, snapshot.blocks);
-  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+  assert.deepEqual(harness.rules, []);
   assert.equal(harness.storage.lastValidSnapshot.activeStudySession, null);
   assert.equal(harness.storage.lastSnapshotRevision, 5);
-});
-
-test('the background worker polls for Android completion and releases rules with the management page closed', async () => {
-  const now = new Date(2026, 10, 5, 10, 30);
-  const active = {
-    version: 1,
-    settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
-    desktopBlockedDomains: ['reddit.com'],
-    blocks: [{ id: 'focus', date: '2026-11-05', name: 'Study', startTime: '10:00', endTime: '11:00', accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED' }],
-  };
-  const finished = { ...active, blocks: [{ ...active.blocks[0], completionStatus: 'FINISHED' }] };
-  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', lastValidSnapshot: active, lastSnapshotRevision: 1 });
-  await refreshFocusState(harness.chromeApi, now);
-  assert.equal(harness.alarms.get('snapshot-sync-refresh').periodInMinutes, 1);
-  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
-
-  await refreshRemoteSnapshot(harness.chromeApi, async () => ({
-    ok: true,
-    json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: finished }),
-  }), now);
-
-  assert.deepEqual(harness.storage.lastValidSnapshot, finished);
-  assert.equal(harness.storage.lastSnapshotRevision, 2);
-  assert.deepEqual(harness.rules, []);
 });
 
 test('background sync publishes an offline Chrome timer without changing its start time', async () => {
@@ -1446,7 +1339,7 @@ test('overlapping background refreshes share one request and cannot replace a ne
   assert.deepEqual(harness.storage.lastValidSnapshot, cached);
 });
 
-test('the worker reminds from cached plan data offline without installing browsing blocks', async () => {
+test('the worker reminds from cached data offline without installing browsing blocks', async () => {
   const now = new Date(2026, 10, 5, 21, 0);
   const cachedSnapshot = {
     version: 1,
@@ -1459,24 +1352,20 @@ test('the worker reminds from cached plan data offline without installing browsi
   await refreshFocusState(harness.chromeApi, now);
 
   assert.equal(harness.notifications.shown.length, 1);
-  assert.match(harness.notifications.shown[0].options.message, /Open Tally on your phone/);
-  assert.equal(harness.alarms.get('planning-reminder-repeat').periodInMinutes, 30);
+  assert.match(harness.notifications.shown[0].options.message, /Start a focus session/);
+  assert.equal(harness.alarms.get('study-reminder-repeat').periodInMinutes, 30);
   assert.deepEqual(harness.rules, []);
 });
 
-test('the worker keeps the same plan target when a repeating reminder crosses midnight', async () => {
-  const cachedSnapshot = {
-    version: 1,
-    settings: { requiredBlockCount: 2, eveningCutoff: '21:00' },
-    desktopBlockedDomains: [],
-    blocks: [],
+test('the Chrome reminder invites a study session without requiring planned blocks', async () => {
+  const snapshot = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [],
   };
-  const harness = createHarness({ lastValidSnapshot: cachedSnapshot });
-
-  await refreshFocusState(harness.chromeApi, new Date(2026, 10, 5, 21, 0));
-  await refreshPlanningReminders(harness.chromeApi, new Date(2026, 10, 6, 0, 30), 'planning-reminder-repeat');
-
-  assert.equal(harness.storage.planningReminderDate, '2026-11-06');
-  assert.match(harness.notifications.shown[0].options.message, /2026-11-06 has 0 of 2/);
-  assert.match(harness.notifications.shown[1].options.message, /2026-11-06 has 0 of 2/);
+  const harness = createHarness({ lastValidSnapshot: snapshot });
+  await refreshFocusState(harness.chromeApi, new Date(2026, 10, 18, 21, 0));
+  assert.equal(harness.notifications.shown.length, 1);
+  assert.match(harness.notifications.shown[0].options.title, /study session/i);
+  assert.deepEqual(harness.rules, []);
 });
+

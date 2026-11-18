@@ -27,7 +27,7 @@ function createChromeBoundaries() {
   };
 }
 
-test('Chrome reminds at the cutoff, asks the user to plan on Android, and repeats every 30 minutes', async () => {
+test('Chrome reminds at 21:00 to start studying and repeats every 30 minutes', async () => {
   const chrome = createChromeBoundaries();
   const scheduler = createPlanningReminderScheduler({
     getSnapshot: async () => ({
@@ -44,7 +44,7 @@ test('Chrome reminds at the cutoff, asks the user to plan on Android, and repeat
 
   assert.equal(chrome.notifications.shown.length, 1);
   assert.equal(chrome.notifications.shown[0].id, PLANNING_REMINDER_NOTIFICATION);
-  assert.match(chrome.notifications.shown[0].options.message, /Open Tally on your phone/);
+  assert.match(chrome.notifications.shown[0].options.message, /Start a focus session/);
   assert.equal(chrome.alarms.records.get(PLANNING_REMINDER_ALARM).periodInMinutes, 30);
   assert.equal(chrome.alarms.records.get(PLANNING_REMINDER_ALARM).delayInMinutes, 30);
   assert.equal(
@@ -53,7 +53,7 @@ test('Chrome reminds at the cutoff, asks the user to plan on Android, and repeat
   );
 });
 
-test('Chrome stops reminders when the plan is complete and resumes after it falls below the minimum', async () => {
+test('Chrome stops reminders after a study session starts', async () => {
   const chrome = createChromeBoundaries();
   let snapshot = { settings: { requiredBlockCount: 2, eveningCutoff: '21:00' }, blocks: [] };
   let reminderDate = null;
@@ -71,18 +71,16 @@ test('Chrome stops reminders when the plan is complete and resumes after it fall
   await scheduler.onAlarm(PLANNING_REMINDER_ALARM);
   assert.equal(chrome.notifications.shown.length, 2);
 
-  snapshot = { ...snapshot, blocks: [{ date: '2026-11-06' }, { date: '2026-11-06' }] };
+  snapshot = { ...snapshot, activeStudySession: { startedAt: '2026-11-05T21:00:00', endsAt: '2026-11-05T21:30:00' } };
   await scheduler.reconcile();
   assert.equal(chrome.alarms.records.has(PLANNING_REMINDER_ALARM), false);
   assert.deepEqual(chrome.notifications.cleared, [PLANNING_REMINDER_NOTIFICATION]);
 
-  snapshot = { ...snapshot, blocks: snapshot.blocks.slice(0, 1) };
   await scheduler.reconcile();
-  assert.equal(chrome.notifications.shown.length, 3);
-  assert.equal(chrome.alarms.records.get(PLANNING_REMINDER_ALARM).periodInMinutes, 30);
+  assert.equal(chrome.notifications.shown.length, 2);
 });
 
-test('the cutoff alarm checks Monday after Sunday and Saturday does not require Sunday', async () => {
+test('the study reminder runs on weekends too', async () => {
   const chrome = createChromeBoundaries();
   let now = new Date(2026, 10, 7, 20, 59);
   let snapshot = {
@@ -100,10 +98,10 @@ test('the cutoff alarm checks Monday after Sunday and Saturday does not require 
   await scheduler.reconcile();
   assert.equal(
     chrome.alarms.records.get(PLANNING_REMINDER_CUTOFF_ALARM).when,
-    new Date(2026, 10, 8, 21, 0).getTime(),
+    new Date(2026, 10, 7, 21, 0).getTime(),
   );
   now = new Date(2026, 10, 8, 21, 0);
   snapshot = { ...snapshot, blocks: [] };
   await scheduler.onAlarm(PLANNING_REMINDER_CUTOFF_ALARM);
-  assert.match(chrome.notifications.shown[0].options.message, /2026-11-09 has 0 of 1/);
+  assert.match(chrome.notifications.shown[0].options.message, /Start a focus session/);
 });

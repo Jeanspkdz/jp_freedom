@@ -1,5 +1,5 @@
 import { applySnapshotRules } from './enforcement.js';
-import { getActiveStudySession, getCurrentAndNext } from './policy.js';
+import { getActiveStudySession } from './policy.js';
 import { readSnapshot, snapshotEndpoint, validSnapshotResponse } from './sync-client.js';
 import { isValidDomain } from './domain.js';
 import { readStudySession, startStudySession, stopStudySession, activeStudySession, makeLocalStudySession, publishPendingStudySession, resolveStudyConflict } from './study-session.js';
@@ -57,21 +57,6 @@ function withFieldValue(snapshot, conflict, value) {
     return { ...result, studyHistory: (snapshot.studyHistory ?? []).filter(session => session.id !== rejectedId) };
   }
   return result;
-}
-
-function localDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatPlanTime(value) {
-  const [hours, minutes] = value.split(':').map(Number);
-  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 function pendingReviewFromSession(session, endedAt) {
@@ -240,53 +225,6 @@ function renderStudyTimer(documentRef, state, now) {
   if (stateLabel) stateLabel.textContent = running ? 'Focus session active' : state.connected ? 'Connected' : 'Not connected';
 }
 
-function renderDayPlan(documentRef, snapshot, date, prefix, currentBlockId) {
-  const dateElement = documentRef.getElementById(`${prefix}-plan-date`);
-  const emptyElement = documentRef.getElementById(`${prefix}-plan-empty`);
-  const art = documentRef.getElementById(`${prefix}-plan-art`);
-  const list = documentRef.getElementById(`${prefix}-plan-list`);
-  dateElement.textContent = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  list.replaceChildren();
-
-  if (!snapshot) {
-    art.hidden = false;
-    emptyElement.hidden = false;
-    emptyElement.textContent = 'Sync to load the plan from your phone.';
-    return;
-  }
-
-  const dateKey = localDateKey(date);
-  const blocks = snapshot.blocks
-    .filter(block => block.date === dateKey)
-    .sort((first, second) => first.startTime.localeCompare(second.startTime));
-  emptyElement.hidden = blocks.length > 0;
-  art.hidden = blocks.length > 0;
-  emptyElement.textContent = `No blocks planned for ${prefix}.`;
-
-  for (const block of blocks) {
-    const row = documentRef.createElement('li');
-    row.className = `day-plan-row${block.id === currentBlockId ? ' is-current' : ''}`;
-    row.setAttribute?.('data-list-item', '');
-    row.classList?.add('is-entering');
-    row.addEventListener?.('animationend', () => row.classList?.remove('is-entering'), { once: true });
-    const time = documentRef.createElement('time');
-    time.className = 'day-plan-time';
-    time.textContent = `${formatPlanTime(block.startTime)}–${formatPlanTime(block.endTime)}`;
-    const name = documentRef.createElement('span');
-    name.className = 'day-plan-name';
-    name.textContent = block.name;
-    const status = documentRef.createElement('span');
-    status.className = 'day-plan-status';
-    status.textContent = block.id === currentBlockId
-      ? 'In progress'
-      : block.completionStatus === 'FINISHED' ? 'Finished'
-        : block.completionStatus === 'PARTLY_DONE' ? 'Partly done'
-          : block.completionStatus === 'NOT_DONE' ? 'Not done' : 'Planned';
-    row.append(time, name, status);
-    list.append(row);
-  }
-}
-
 function render(documentRef, state, now) {
   const { snapshot, lastSuccessfulSync, error, connected } = state;
   const page = documentRef.documentElement.dataset.page ?? 'all';
@@ -299,10 +237,9 @@ function render(documentRef, state, now) {
   const plannedEnd = documentRef.getElementById('planned-end');
   const session = snapshot ? getActiveStudySession(snapshot, now) : null;
   const candidates = snapshot?.sessionStartCandidates ?? [];
-  const plannedBlock = snapshot ? getCurrentAndNext(snapshot, now).current : null;
   const current = session
     ? { id: session.id, name: session.taskName, studySession: true, startedAt: session.startedAt, endsAt: session.endsAt }
-    : plannedBlock;
+    : null;
   const active = Boolean(current);
   const sharedSessionPending = Boolean(snapshot?.activeStudySession);
   const pendingReviewRecord = snapshot?.studyHistory?.find(item => item.id === snapshot.pendingStudyReviewSessionId) ?? null;
@@ -436,16 +373,14 @@ function render(documentRef, state, now) {
     documentRef.getElementById('today-intro-date').textContent = now.toLocaleDateString(undefined, {
       weekday: 'long', month: 'long', day: 'numeric',
     });
-    renderDayPlan(documentRef, snapshot, now, 'today', current?.id ?? null);
-    renderDayPlan(documentRef, snapshot, tomorrow, 'tomorrow', current?.id ?? null);
     if (!snapshot) {
-      protection.textContent = 'Protection inactive. No valid plan has synced.';
-      currentBlock.textContent = 'No active focus block';
+      protection.textContent = 'Protection inactive. No valid snapshot has synced.';
+      currentBlock.textContent = 'No active focus session';
       plannedEnd.hidden = true;
       plannedEnd.textContent = '';
     } else {
-      protection.textContent = 'Protection is active during a study session or scheduled focus block.';
-      currentBlock.textContent = current?.name ?? 'No active focus block';
+      protection.textContent = 'Protection is active during a study session.';
+      currentBlock.textContent = current?.name ?? 'No active focus session';
       plannedEnd.hidden = !current;
       plannedEnd.textContent = !current ? '' : current.studySession
         ? `Planned end: ${new Date(current.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
@@ -726,7 +661,7 @@ export async function initializeManagement({
   });
   const focusClock = globalThis.setInterval(() => {
     if (documentRef.visibilityState === 'hidden') return;
-    const current = state.snapshot ? getCurrentAndNext(state.snapshot, now()).current : null;
+    const current = state.snapshot ? getActiveStudySession(state.snapshot, now()) : null;
     if ((current?.id ?? null) !== state.focusBlockId) {
       show();
       return;
@@ -1080,7 +1015,7 @@ export async function initializeManagement({
   };
   const persistDomainIntent = async (domain, included, initialDomains = state.displayedDomains) => {
     if (!state.connected || !state.online || !state.snapshot || state.saving) return;
-    const current = getCurrentAndNext(state.snapshot, now()).current;
+    const current = getActiveStudySession(state.snapshot, now());
     if (current && !included && (state.snapshot.desktopBlockedDomains ?? []).includes(domain)) {
       state.blocklistMessage = 'Selected sites cannot be removed during an active focus block.';
       show();
@@ -1106,7 +1041,7 @@ export async function initializeManagement({
       });
       if (response.status === 409) {
         const latest = await readLatest();
-        const latestCurrent = getCurrentAndNext(latest.snapshot, now()).current;
+        const latestCurrent = getActiveStudySession(latest.snapshot, now());
         if (latestCurrent && !included && latest.snapshot.desktopBlockedDomains.includes(domain)) {
           state.snapshot = latest.snapshot;
           state.revision = latest.revision;
