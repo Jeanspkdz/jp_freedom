@@ -58,8 +58,8 @@ class FocusPolicyTest {
 
     @Test
     fun blockIsActiveFromItsStartUntilItsEnd() {
-        assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 0)).blockedReason)
-        assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 59)).blockedReason)
+        assertNull(evaluate(LocalTime.of(10, 0)).blockedReason)
+        assertNull(evaluate(LocalTime.of(10, 59)).blockedReason)
         assertNull(evaluate(LocalTime.of(11, 0)).blockedReason)
     }
 
@@ -74,7 +74,7 @@ class FocusPolicyTest {
     @Test
     fun otherCompletionStatusesDoNotEndAnActiveBlockEarly() {
         listOf(CompletionStatus.PARTLY_DONE, CompletionStatus.NOT_DONE).forEach { status ->
-            assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 30), block.copy(completionStatus = status)).blockedReason)
+            assertNull(evaluate(LocalTime.of(10, 30), block.copy(completionStatus = status)).blockedReason)
         }
     }
 
@@ -227,8 +227,12 @@ class FocusPolicyTest {
     private fun evaluate(time: LocalTime, candidate: PlannedBlock = block) =
         FocusPolicy.evaluate(date.atTime(time), listOf(candidate), settings())
 
-    private fun activeState(profile: AccessProfile) =
-        FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, profile)
+    private fun activeState(profile: AccessProfile) = FocusPolicyState(
+        blockedReason = BlockedReason.FOCUS_BLOCK,
+        activeBlock = null,
+        allowedAppPackages = com.jp.freedom.domain.AllowedAppsList.fromLegacyAccessProfile(profile.name).packageNames +
+            if (profile == AccessProfile.ESSENTIALS_ONLY) emptySet() else setOf("com.android.chrome"),
+    )
 
     private fun settings(targetMinutes: Int = 180) = FocusSettings(studyHoursTargetMinutes = targetMinutes)
 }

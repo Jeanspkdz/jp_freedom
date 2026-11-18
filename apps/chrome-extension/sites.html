@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en" data-page="sites">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tally · Blocked sites</title>
+    <script src="src/page-entry.js"></script>
+    <link rel="stylesheet" href="management.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="page-header">
+        <div class="brand">
+          <svg class="brand-icon" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+            <g class="brand-icon-shapes" transform="translate(17 17) scale(.66)">
+              <path class="brand-icon-piece brand-icon-piece--left" d="M11 28h9q11 0 11 11v50q0 11-11 11h-9q-11 0-11-11v-50q0-11 11-11z"/>
+              <path class="brand-icon-piece brand-icon-piece--top" d="M46 0h41q13 0 13 13v34q0 13-13 13h-26q-4 0-4-4v-14h-11q-13 0-13-13v-16q0-13 13-13z"/>
+              <path class="brand-icon-piece brand-icon-piece--bottom" d="M47 65h42q11 0 11 11v13q0 11-11 11h-42q-11 0-11-11v-13q0-11 11-11z"/>
+            </g>
+          </svg>
+          <span>Tally</span>
+        </div>
+        <nav class="view-nav" aria-label="Extension sections">
+          <a href="management.html" class="view-tab"><span class="tab-pill-bg" aria-hidden="true"></span>Plan</a>
+          <a href="sites.html" class="view-tab is-selected" aria-current="page"><span class="tab-pill-bg" aria-hidden="true"></span>Sites</a>
+          <a href="connection.html" class="view-tab"><span class="tab-pill-bg" aria-hidden="true"></span>Connection</a>
+        </nav>
+        <div class="header-actions"><p id="sync-state" role="status">Checking sync…</p><button id="sync-now" type="button">Sync now</button></div>
+      </header>
+      <div id="view-sites" class="view-panel">
+        <section class="blocklist" aria-labelledby="blocklist-heading">
+          <div class="sites-hero"><div class="blocklist-controls">
+            <h1 id="blocklist-heading" tabindex="-1" data-page-heading data-enter data-i="0">Blocked sites</h1>
+            <p class="section-description" data-enter data-i="1">Selected sites are blocked in Chrome during a focus block. Each domain includes its subdomains. Selected sites stay locked until the block ends.</p>
+            <div class="permission-line" data-enter data-i="2"><p id="permission-state" role="status">Chrome blocks selected sites during active focus blocks. Site access permission is not needed.</p></div>
+            <form id="add-domain-form" data-enter data-i="3">
+              <label for="custom-domain">Add a domain</label>
+              <div class="domain-input-row"><input id="custom-domain" name="custom-domain" type="text" autocomplete="off" placeholder="example.com" aria-describedby="domain-help"><button id="add-domain" type="submit">Add site</button></div>
+              <p id="domain-help" class="field-help">Enter a bare domain such as example.com. URLs and paths are not accepted.</p>
+            </form>
+            <p id="blocklist-status" role="status"></p>
+          </div><aside class="sites-count" aria-label="Selected sites"><div class="sites-count-digits" aria-hidden="true"><span class="sites-digit" data-digit="0">0</span><span class="sites-digit" data-digit="5">5</span></div><strong>SITES BLOCKED</strong><span id="sites-count-live" class="sr-only" role="status">5 sites selected</span></aside></div>
+          <div class="blocklist-choices" role="region" aria-label="Site choices" tabindex="0" data-enter data-i="4">
+            <fieldset id="common-sites">
+              <legend>Common sites</legend>
+              <label class="site-row" data-monogram="F"><input id="domain-facebook.com" type="checkbox" data-domain="facebook.com"><span class="site-name">Facebook</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="I"><input id="domain-instagram.com" type="checkbox" data-domain="instagram.com"><span class="site-name">Instagram</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="T"><input id="domain-tiktok.com" type="checkbox" data-domain="tiktok.com"><span class="site-name">TikTok</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="X"><input id="domain-x.com" type="checkbox" data-domain="x.com"><span class="site-name">X</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="R"><input id="domain-reddit.com" type="checkbox" data-domain="reddit.com"><span class="site-name">Reddit</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="Y"><input id="domain-youtube.com" type="checkbox" data-domain="youtube.com"><span class="site-name">YouTube</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+              <label class="site-row" data-monogram="W"><input id="domain-web.whatsapp.com" type="checkbox" data-domain="web.whatsapp.com"><span class="site-name">WhatsApp Web</span><span class="site-action" aria-hidden="true"><span class="when-off">Block</span><span class="when-on">Blocking</span></span></label>
+            </fieldset>
+            <div id="custom-sites" aria-label="Custom sites"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <svg class="planner-wave" viewBox="0 0 1440 160" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <path d="M0 0 C260 28 480 110 770 132 C1045 154 1240 120 1440 116 V160 H0 Z" fill="currentColor"/>
+    </svg>
+    <script type="module" src="src/management.js"></script>
+  </body>
+</html>

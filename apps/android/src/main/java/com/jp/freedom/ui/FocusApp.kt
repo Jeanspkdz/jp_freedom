@@ -26,15 +26,18 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.jp.freedom.data.FocusRepository
-import com.jp.freedom.data.InstalledAppInventory
-import com.jp.freedom.domain.SavedAccessProfile
+import com.jp.freedom.data.AllowedAppsCatalog
 import com.jp.freedom.data.PendingSyncState
 import com.jp.freedom.data.SyncStatus
 import com.jp.freedom.domain.BlockValidation
+import com.jp.freedom.domain.AllowedAppsList
+import com.jp.freedom.domain.AllowedAppsListPolicy
+import com.jp.freedom.domain.AllowedAppsListValidation
 import com.jp.freedom.domain.FocusSettings
+import com.jp.freedom.domain.FocusArea
+import com.jp.freedom.domain.InstalledApp
 import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.StudyTimerSession
-import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.StudyTimerController
 import com.jp.freedom.domain.StudyTimerDestination
 import com.jp.freedom.enforcement.BlockedReason
@@ -60,6 +63,8 @@ private enum class AppPage {
     PLANNER,
     BLOCK_EDITOR,
     SETTINGS,
+    ALLOWED_APPS_LISTS,
+    ALLOWED_APPS_LIST_EDITOR,
     BLOCKED,
     STUDY_TIMER,
     SESSION_REVIEW,
@@ -100,25 +105,20 @@ fun FocusApp(
     var studySession by remember { mutableStateOf<StudyTimerSession?>(null) }
     var pendingReview by remember { mutableStateOf<StudyTimerSession?>(null) }
     var studySessions by remember { mutableStateOf(emptyList<StudyTimerSession>()) }
+    var focusAreas by remember { mutableStateOf(emptyList<FocusArea>()) }
+    var allowedAppsLists by remember { mutableStateOf(emptyList<AllowedAppsList>()) }
+    var installedApps by remember { mutableStateOf(emptyList<InstalledApp>()) }
+    var selectedAllowedAppsList by remember { mutableStateOf(AllowedAppsList.ESSENTIALS) }
+    var allowedAppsListsReturnPage by remember { mutableStateOf(AppPage.SETTINGS) }
+    var editingAllowedAppsList by remember { mutableStateOf<AllowedAppsList?>(null) }
     var dailyReviewDate by remember { mutableStateOf(requestedDailyReviewDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()) }
     var dailyReviewReminderTime by remember { mutableStateOf(com.jp.freedom.enforcement.DailyReviewReminder.time(context).toString()) }
     val studyTimerController = remember(repository) { StudyTimerController(repository) }
-    var queuedTimerStart by remember { mutableStateOf<Pair<Duration, SavedAccessProfile?>?>(null) }
-    var timerStartError by remember { mutableStateOf<String?>(null) }
-    fun persistTimerStart(duration: Duration, profile: SavedAccessProfile?) {
+    var queuedTimerStart by remember { mutableStateOf<Triple<Duration, AllowedAppsList, String?>?>(null) }
+    fun persistTimerStart(duration: Duration, allowedAppsList: AllowedAppsList, focusAreaId: String?) {
         scope.launch {
-            val resolved = withContext(Dispatchers.IO) {
-                val current = repository.reconcileAccessProfiles(InstalledAppInventory.list(context).map { it.packageName }.toSet())
-                if (profile == null) null else current.firstOrNull { it.id == profile.id }
-            }
-            if (profile != null && resolved == null) {
-                timerStartError = "That access profile is no longer available. Choose another profile."
-                refreshVersion++
-                return@launch
-            }
-            val started = withContext(Dispatchers.IO) { studyTimerController.start(duration, resolved) }
+            val started = withContext(Dispatchers.IO) { studyTimerController.start(duration, allowedAppsList, focusAreaId) }
             if (started != null) {
-                timerStartError = null
                 com.jp.freedom.enforcement.StudySessionNotifier.showActive(context, started)
                 PolicyAlarmScheduler.scheduleNext(context)
                 PolicyAlarmScheduler.broadcastRecheck(context)
@@ -130,15 +130,24 @@ fun FocusApp(
             }
         }
     }
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        queuedTimerStart?.let { (duration, profile) -> persistTimerStart(duration, profile) }
+    var notificationPermissionDenied by remember { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        notificationPermissionDenied = !granted
+        if (granted) queuedTimerStart?.let { (duration, list, focusAreaId) -> persistTimerStart(duration, list, focusAreaId) }
         queuedTimerStart = null
     }
-    val startTimer: (Duration, SavedAccessProfile?) -> Unit = { duration, profile ->
+    val startTimer: (Duration, AllowedAppsList, String?) -> Unit = { duration, allowedAppsList, focusAreaId ->
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            queuedTimerStart = duration to profile
+            queuedTimerStart = Triple(duration, allowedAppsList, focusAreaId)
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else persistTimerStart(duration, profile)
+        } else persistTimerStart(duration, allowedAppsList, focusAreaId)
+    }
+    val notificationsAllowed = (Build.VERSION.SDK_INT < 33 ||
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) &&
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).areNotificationsEnabled()
+    val requestNotificationPermission: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= 33) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        else context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
     val siteFilterPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -149,6 +158,16 @@ fun FocusApp(
     }
     val currentDate = LocalDate.now()
     val selectedDate = currentDate.plusDays(dayOffset.toLong())
+
+    // Keep the shared timer current while the Android app stays open.
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            if (com.jp.freedom.sync.SyncConfigurationStore(context).configuration().hasWriteToken) {
+                com.jp.freedom.sync.SyncScheduler.schedule(context)
+            }
+            delay(60_000)
+        }
+    }
 
     LaunchedEffect(dayOffset, activityResumeVersion, refreshVersion, page) {
         while (isActive) {
@@ -170,6 +189,7 @@ fun FocusApp(
                 val timer = repository.activeStudySession()
                 val review = repository.pendingStudyReview()
                 val sessions = repository.studySessions()
+                val areas = repository.focusAreas()
                 val policy = FocusPolicy.evaluate(
                     now = LocalDateTime.now(),
                     blocks = blocks,
@@ -178,7 +198,7 @@ fun FocusApp(
                 )
                 val restricted = policy.blockedReason == BlockedReason.EVENING_RESTRICTION
                 val policyBlocked = policy.blockedReason != null
-            PlannerSnapshot(blocks, settings, domains, sync, restricted, policyBlocked, timer, review, sessions)
+            PlannerSnapshot(blocks, settings, domains, sync, restricted, policyBlocked, timer, review, sessions, areas)
             }
             allBlocks = snapshot.blocks
             focusSettings = snapshot.settings
@@ -189,8 +209,24 @@ fun FocusApp(
             studySession = snapshot.studySession
             pendingReview = snapshot.pendingReview
             studySessions = snapshot.studySessions
+            focusAreas = snapshot.focusAreas
             stateLoaded = true
             delay(if (studySession != null || page == AppPage.STUDY_TIMER) 1_000 else if (page == AppPage.SETTINGS) 1_500 else 60_000)
+        }
+    }
+
+    LaunchedEffect(activityResumeVersion, page) {
+        if (page in setOf(AppPage.SETTINGS, AppPage.STUDY_TIMER, AppPage.ALLOWED_APPS_LISTS, AppPage.ALLOWED_APPS_LIST_EDITOR)) {
+            val loaded = withContext(Dispatchers.IO) {
+                val apps = AllowedAppsCatalog.installedLaunchableApps(context)
+                repository.removeUninstalledAllowedApps(apps.mapTo(mutableSetOf(), InstalledApp::packageName))
+                apps to repository.allowedAppsLists()
+            }
+            installedApps = loaded.first
+            allowedAppsLists = loaded.second
+            if (selectedAllowedAppsList.id != AllowedAppsList.ESSENTIALS_ID &&
+                loaded.second.none { it.id == selectedAllowedAppsList.id }
+            ) selectedAllowedAppsList = AllowedAppsList.ESSENTIALS
         }
     }
 
@@ -237,6 +273,8 @@ fun FocusApp(
     BackHandler(enabled = page != AppPage.PLANNER) {
         page = when (page) {
             AppPage.BLOCK_EDITOR, AppPage.SETTINGS, AppPage.BLOCKED, AppPage.STUDY_TIMER, AppPage.SESSION_REVIEW, AppPage.DAILY_REVIEW -> AppPage.PLANNER
+            AppPage.ALLOWED_APPS_LISTS -> allowedAppsListsReturnPage
+            AppPage.ALLOWED_APPS_LIST_EDITOR -> AppPage.ALLOWED_APPS_LISTS
             AppPage.PLANNER -> AppPage.PLANNER
         }
     }
@@ -282,7 +320,10 @@ fun FocusApp(
             onSelectToday = { dayOffset = 0 },
             onSelectTomorrow = { dayOffset = 1 },
             onOpenSettings = { page = AppPage.SETTINGS },
-            onOpenStudyTimer = { page = if (pendingReview != null) AppPage.SESSION_REVIEW else AppPage.STUDY_TIMER },
+            onOpenStudyTimer = {
+                if (studySession == null && pendingReview == null) selectedAllowedAppsList = AllowedAppsList.ESSENTIALS
+                page = if (pendingReview != null) AppPage.SESSION_REVIEW else AppPage.STUDY_TIMER
+            },
             onOpenDailyReview = { page = AppPage.DAILY_REVIEW },
             onSyncNow = syncNow,
             onOpenTomorrowPlan = {
@@ -338,6 +379,8 @@ fun FocusApp(
             siteFilterEnabled = siteFilterEnabled,
             dailyReviewReminderTime = dailyReviewReminderTime,
             studyHistoryCount = studySessions.count { it.state == com.jp.freedom.domain.StudySessionState.REVIEWED },
+            focusAreas = focusAreas,
+            notificationsAllowed = notificationsAllowed,
             onDailyReviewReminderTimeChange = { value ->
                 dailyReviewReminderTime = value
                 runCatching { com.jp.freedom.enforcement.DailyReviewReminder.saveTime(context, java.time.LocalTime.parse(value)) }
@@ -348,6 +391,14 @@ fun FocusApp(
                     refreshVersion++
                 }
             },
+            onFocusAreasChange = { updated ->
+                focusAreas = updated
+                scope.launch {
+                    withContext(Dispatchers.IO) { repository.saveFocusAreas(updated) }
+                    refreshVersion++
+                }
+            },
+            onRequestNotificationPermission = requestNotificationPermission,
             onBack = { page = AppPage.PLANNER },
             onSettingsChange = { updated ->
                 focusSettings = updated
@@ -393,7 +444,23 @@ fun FocusApp(
                 }
             },
             onSyncNow = syncNow,
+            onResolveReviewConflict = { keepPhone ->
+                scope.launch {
+                    syncState = syncState.copy(status = SyncStatus.SYNCING, message = null)
+                    val result = withContext(Dispatchers.IO) {
+                        runCatching { AndroidSyncJobService.resolveReviewConflict(context, keepPhone) }
+                    }
+                    if (result.isFailure) withContext(Dispatchers.IO) {
+                        repository.markSyncError(result.exceptionOrNull()?.message ?: "Couldn't resolve the review conflict.")
+                    }
+                    refreshVersion++
+                }
+            },
             onOpenAccessibilitySettings = { openAccessibilitySettings(context) },
+            onOpenAllowedAppsLists = {
+                allowedAppsListsReturnPage = AppPage.SETTINGS
+                page = AppPage.ALLOWED_APPS_LISTS
+            },
             onRequestExactAlarmAccess = { openExactAlarmSettings(context) },
             onRequestSiteFilter = {
                 SiteFilterVpnService.requestPermission(context) { intent ->
@@ -402,29 +469,69 @@ fun FocusApp(
             },
         )
 
+        AppPage.ALLOWED_APPS_LISTS -> AllowedAppsListsScreen(
+            lists = allowedAppsLists,
+            installedApps = installedApps,
+            selectedListId = selectedAllowedAppsList.id,
+            selectionMode = allowedAppsListsReturnPage == AppPage.STUDY_TIMER,
+            lockedListId = studySession?.allowedAppsListId ?: pendingReview?.allowedAppsListId,
+            onBack = { page = allowedAppsListsReturnPage },
+            onSelect = { list ->
+                if (allowedAppsListsReturnPage == AppPage.STUDY_TIMER) {
+                    selectedAllowedAppsList = list
+                    page = AppPage.STUDY_TIMER
+                }
+            },
+            onCreate = {
+                editingAllowedAppsList = null
+                page = AppPage.ALLOWED_APPS_LIST_EDITOR
+            },
+            onEdit = { list ->
+                editingAllowedAppsList = list
+                page = AppPage.ALLOWED_APPS_LIST_EDITOR
+            },
+            onDelete = { list ->
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { repository.deleteAllowedAppsList(list.id) }
+                    if (result == AllowedAppsListValidation.Valid) {
+                        allowedAppsLists = withContext(Dispatchers.IO) { repository.allowedAppsLists() }
+                        if (selectedAllowedAppsList.id == list.id) selectedAllowedAppsList = AllowedAppsList.ESSENTIALS
+                    }
+                }
+            },
+        )
+
+        AppPage.ALLOWED_APPS_LIST_EDITOR -> AllowedAppsListEditorScreen(
+            existingList = editingAllowedAppsList,
+            lists = allowedAppsLists,
+            installedApps = installedApps,
+            locked = AllowedAppsListPolicy.isEditorLocked(
+                editorListId = editingAllowedAppsList?.id,
+                activeSessionListId = studySession?.allowedAppsListId ?: pendingReview?.allowedAppsListId,
+            ),
+            onBack = { page = AppPage.ALLOWED_APPS_LISTS },
+            onSave = { list ->
+                val result = withContext(Dispatchers.IO) { repository.saveAllowedAppsList(list) }
+                if (result == AllowedAppsListValidation.Valid) {
+                    allowedAppsLists = withContext(Dispatchers.IO) { repository.allowedAppsLists() }
+                }
+                result
+            },
+        )
+
         AppPage.STUDY_TIMER, AppPage.SESSION_REVIEW -> StudyTimerScreen(
             session = studySession,
             pendingReview = pendingReview,
-            profiles = remember(refreshVersion, activityResumeVersion) {
-                repository.reconcileAccessProfiles(InstalledAppInventory.list(context).map { it.packageName }.toSet())
-            },
-            startError = timerStartError,
-            installedApps = remember(activityResumeVersion) { InstalledAppInventory.list(context) },
-            onCreateProfile = { name, packages ->
-                repository.saveAccessProfile(SavedAccessProfile(java.util.UUID.randomUUID().toString(), name, packages))
-                refreshVersion++
-            },
-            onUpdateProfile = { profile ->
-                if (studyTimerController.canMaintainProfile(profile.id)) {
-                    repository.saveAccessProfile(profile)
-                    refreshVersion++
-                }
-            },
-            onDeleteProfile = { profileId ->
-                if (studyTimerController.canMaintainProfile(profileId) && repository.deleteAccessProfile(profileId)) refreshVersion++
-            },
+            focusAreas = focusAreas,
+            notificationPermissionDenied = notificationPermissionDenied,
+            selectedAllowedAppsList = selectedAllowedAppsList,
             onBack = { page = AppPage.PLANNER },
-            onStart = { duration, profile -> timerStartError = null; startTimer(duration, profile) },
+            onStart = startTimer,
+            onOpenAllowedAppsLists = {
+                allowedAppsListsReturnPage = AppPage.STUDY_TIMER
+                page = AppPage.ALLOWED_APPS_LISTS
+            },
+            onOpenFocusAreaSettings = { page = AppPage.SETTINGS },
             onStop = {
                 scope.launch {
                     val stopped = withContext(Dispatchers.IO) {
@@ -546,6 +653,7 @@ private data class PlannerSnapshot(
     val studySession: StudyTimerSession?,
     val pendingReview: StudyTimerSession?,
     val studySessions: List<StudyTimerSession>,
+    val focusAreas: List<FocusArea>,
 )
 
 private fun isAccessibilityServiceEnabled(context: Context): Boolean {

@@ -59,8 +59,12 @@ class StudyTimerPolicyTest {
     }
 
     private fun reviewed(id: String, startedAt: Instant, actualMinutes: Long, task: String, status: CompletionStatus, note: String, remaining: String) =
-        StudyTimerSession(id, task, 3_600_000, AccessProfile.ESSENTIALS_ONLY, startedAt, startedAt.plusSeconds(3600), actualMinutes * 60_000,
-            StudySessionState.REVIEWED, status, note, remaining)
+        StudyTimerSession(
+            id = id, taskName = task, durationMillis = 3_600_000,
+            startedAt = startedAt, endedAt = startedAt.plusSeconds(3600),
+            actualMillis = actualMinutes * 60_000, state = StudySessionState.REVIEWED,
+            completionStatus = status, note = note, remaining = remaining,
+        )
 
     @Test fun dailyReminderUsesTheNextOccurrenceOfItsConfiguredLocalTime() {
         val zone = ZoneId.of("America/Lima")

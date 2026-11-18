@@ -38,6 +38,16 @@ class AndroidSyncJobService : JobService() {
         /** Runs the same sync engine as the background job, without waiting for JobScheduler. */
         fun syncNow(context: android.content.Context): Boolean = runSync(context.applicationContext)
 
+        fun resolveReviewConflict(context: android.content.Context, keepPhone: Boolean): Boolean {
+            val appContext = context.applicationContext
+            val configuration = SyncConfigurationStore(appContext).configuration()
+            val token = SyncConfigurationStore(appContext).writeToken()
+                ?: throw SyncFailure("Enter the sync key before resolving this review.")
+            val api = SyncApiClient(configuration.endpoint, token)
+            StudySessionSync(appContext).resolveReviewConflict(api, FocusRepository(appContext), keepPhone)
+            return runSync(appContext)
+        }
+
         private fun runSync(context: android.content.Context): Boolean = synchronized(syncLock) {
             SyncEngine(context).run()
         }
@@ -62,6 +72,9 @@ private class SyncEngine(private val context: android.content.Context) {
         val repository = FocusRepository(context)
         val api = SyncApiClient(configuration.endpoint, token)
         repository.markSyncing()
+
+        // Session state has its own revision and never replaces plan fields.
+        StudySessionSync(context).run(api, repository)
 
         var conflictResolved = false
         repeat(MAX_ATTEMPTS) {

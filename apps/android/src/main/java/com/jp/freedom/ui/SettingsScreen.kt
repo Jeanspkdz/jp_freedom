@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -23,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,6 +51,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.jp.freedom.domain.FocusSettings
+import com.jp.freedom.domain.FocusArea
 import com.jp.freedom.domain.BlocklistValidation
 import com.jp.freedom.domain.DesktopSiteBlocklist
 import com.jp.freedom.domain.SUPPORTED_EVENING_CUTOFFS
@@ -73,14 +76,20 @@ fun SettingsScreen(
     siteFilterEnabled: Boolean,
     dailyReviewReminderTime: String,
     studyHistoryCount: Int,
+    focusAreas: List<FocusArea>,
+    notificationsAllowed: Boolean,
     onDailyReviewReminderTimeChange: (String) -> Unit,
+    onRequestNotificationPermission: () -> Unit,
+    onFocusAreasChange: (List<FocusArea>) -> Unit,
     onClearStudyHistory: () -> Unit,
     onBack: () -> Unit,
     onSettingsChange: (FocusSettings) -> Unit,
     onDesktopDomainsChange: (List<String>) -> Unit,
     onConfigureSync: (String, String) -> Unit,
     onSyncNow: () -> Unit,
+    onResolveReviewConflict: (Boolean) -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
+    onOpenAllowedAppsLists: () -> Unit,
     onRequestExactAlarmAccess: () -> Unit,
     onRequestSiteFilter: () -> Unit,
 ) {
@@ -88,6 +97,8 @@ fun SettingsScreen(
     var writeToken by remember { mutableStateOf("") }
     var newDomain by rememberSaveable { mutableStateOf("") }
     var reminderDraft by rememberSaveable(dailyReviewReminderTime) { mutableStateOf(dailyReviewReminderTime) }
+    var newFocusArea by rememberSaveable { mutableStateOf("") }
+    var showReminderTimePicker by rememberSaveable { mutableStateOf(false) }
     var formError by remember { mutableStateOf<String?>(null) }
     var confirmHistoryClear by remember { mutableStateOf(false) }
     Scaffold(
@@ -261,7 +272,7 @@ fun SettingsScreen(
                     enabled = accessibilityEnabled,
                     status = if (accessibilityEnabled) "On" else "Off",
                     description = if (accessibilityEnabled) {
-                        "JP Freedom can keep allowed apps available and return other apps to your plan."
+                        "Tally can keep allowed apps available and return other apps to your plan."
                     } else {
                         "Turn on the accessibility service to restrict other apps during focus blocks or the evening restriction."
                     },
@@ -307,19 +318,144 @@ fun SettingsScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SectionHeading("04", "Daily review reminder")
-                Text("Choose when the phone reminds you to review today's timer sessions. Default: 9:00 PM.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedTextField(
-                    value = reminderDraft,
-                    onValueChange = { input ->
-                        reminderDraft = input.filter { it.isDigit() || it == ':' }.take(5)
-                        if (reminderDraft.matches(Regex("\\d{2}:\\d{2}")) && runCatching { LocalTime.parse(reminderDraft) }.isSuccess) onDailyReviewReminderTimeChange(reminderDraft)
-                    },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Reminder time (24-hour)") },
-                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Choose when the phone reminds you to review today's timer sessions. Default: 9:00 PM.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Surface(
+                            onClick = { showReminderTimePicker = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 56.dp)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        "Reminder time (24-hour)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(reminderDraft, style = MaterialTheme.typography.bodyLarge)
+                                }
+                                Icon(
+                                    Icons.Outlined.Alarm,
+                                    contentDescription = "Choose reminder time",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+                if (!notificationsAllowed) {
+                    PermissionCard(
+                        icon = Icons.Outlined.Alarm,
+                        title = "Review notifications",
+                        enabled = false,
+                        status = "Permission needed",
+                        description = "Allow notifications so the daily reminder can open today's review.",
+                        actionLabel = "Allow notifications",
+                        onAction = onRequestNotificationPermission,
+                    )
+                }
+                if (showReminderTimePicker) {
+                    TimeWheelPickerDialog(
+                        title = "Daily review reminder",
+                        time = runCatching { LocalTime.parse(reminderDraft) }.getOrDefault(LocalTime.of(21, 0)),
+                        onDismiss = { showReminderTimePicker = false },
+                        onConfirm = { selected ->
+                            reminderDraft = String.format(java.util.Locale.ROOT, "%02d:%02d", selected.hour, selected.minute)
+                            onDailyReviewReminderTimeChange(reminderDraft)
+                            showReminderTimePicker = false
+                        },
+                    )
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("05", "Sync with Chrome")
+                SectionHeading("05", "Allowed apps")
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            "Create reusable lists of apps to keep available during your sessions.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedButton(onClick = onOpenAllowedAppsLists, modifier = Modifier.fillMaxWidth()) {
+                            Text("Manage lists")
+                        }
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionHeading("06", "Focus areas")
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Create up to two areas and assign each study session to one.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (focusAreas.isEmpty()) {
+                            Text("No focus areas yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        focusAreas.forEachIndexed { index, area ->
+                            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(area.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                                IconButton(onClick = { onFocusAreasChange(focusAreas - area) }) {
+                                    Icon(Icons.Outlined.Remove, contentDescription = "Remove ${area.name}")
+                                }
+                            }
+                        }
+                        if (focusAreas.size < 2) {
+                            if (focusAreas.isNotEmpty()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            OutlinedTextField(
+                                value = newFocusArea,
+                                onValueChange = { newFocusArea = it.take(40) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { Text("New focus area") },
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    val name = newFocusArea.trim()
+                                    if (name.isNotEmpty() && focusAreas.none { it.name.equals(name, ignoreCase = true) }) {
+                                        onFocusAreasChange(focusAreas + FocusArea(java.util.UUID.randomUUID().toString(), name))
+                                        newFocusArea = ""
+                                    }
+                                },
+                                enabled = newFocusArea.isNotBlank() && focusAreas.none { it.name.equals(newFocusArea.trim(), ignoreCase = true) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("Add focus area") }
+                        }
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionHeading("07", "Sync with Chrome")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),
@@ -398,6 +534,13 @@ fun SettingsScreen(
                             Text("Sync changes now")
                         }
                         if (syncRevision >= 0) Text("Shared revision: $syncRevision", style = MaterialTheme.typography.bodySmall)
+                        if (syncStatus == SyncStatus.ERROR && syncMessage?.startsWith("The review for ") == true) {
+                            Text("Choose which review to keep for this session.", style = MaterialTheme.typography.bodySmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { onResolveReviewConflict(true) }) { Text("Keep phone review") }
+                                OutlinedButton(onClick = { onResolveReviewConflict(false) }) { Text("Use synced review") }
+                            }
+                        }
                     }
                 }
 

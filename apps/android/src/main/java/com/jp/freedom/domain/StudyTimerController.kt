@@ -37,20 +37,26 @@ class StudyTimerController(
     fun canMaintainProfile(profileId: String): Boolean =
         store.activeStudySession()?.profileId != profileId
 
-    fun start(duration: Duration, profile: AccessProfile, focusAreaId: String? = null): StudyTimerSession? {
+    fun start(duration: Duration, allowedAppsList: AllowedAppsList, focusAreaId: String? = null): StudyTimerSession? {
         if (!canStartAnother()) return null
-        return StudyTimerSession.start("", duration, profile, Instant.now(clock))
+        return StudyTimerSession.start("", duration, allowedAppsList, Instant.now(clock))
             .copy(focusAreaId = focusAreaId)
             .takeIf(store::startStudySession)
     }
 
+    fun start(duration: Duration, profile: AccessProfile, focusAreaId: String? = null): StudyTimerSession? =
+        start(duration, AllowedAppsList.fromLegacyAccessProfile(profile.name), focusAreaId)
+
     fun start(duration: Duration, profile: SavedAccessProfile?, focusAreaId: String? = null): StudyTimerSession? {
         if (!canStartAnother()) return null
-        val session = StudyTimerSession.start("", duration, AccessProfile.ESSENTIALS_ONLY, Instant.now(clock))
+        val session = StudyTimerSession.start("", duration, AllowedAppsList.ESSENTIALS, Instant.now(clock))
             .copy(
                 profileId = profile?.id,
                 profileName = profile?.name ?: "Essentials only",
                 allowedPackages = profile?.packages ?: emptySet(),
+                allowedAppsListId = profile?.id ?: AllowedAppsList.ESSENTIALS_ID,
+                allowedAppsListName = profile?.name ?: "Essentials",
+                allowedAppPackages = profile?.packages ?: emptySet(),
                 focusAreaId = focusAreaId,
             )
         return session.takeIf(store::startStudySession)
@@ -84,7 +90,7 @@ class StudyTimerController(
             ).also(store::saveStudySession)
         }
 
-    fun review(taskName: String, status: CompletionStatus, note: String, remaining: String, breakDuration: Duration): StudyTimerSession? =
+    fun review(taskName: String, status: CompletionStatus, note: String, remaining: String = "", breakDuration: Duration = Duration.ofMinutes(15)): StudyTimerSession? =
         store.pendingStudyReview()?.let {
             StudyTimerPolicy.review(it, taskName, status, note, remaining).copy(
                 outcome = if (status == CompletionStatus.FINISHED) SessionOutcome.FINISHED else SessionOutcome.NOT_FINISHED,

@@ -13,7 +13,6 @@ import android.os.ParcelFileDescriptor
 import android.content.pm.ServiceInfo
 import android.util.Log
 import com.jp.freedom.data.FocusRepository
-import com.jp.freedom.domain.AccessProfile
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.DatagramPacket

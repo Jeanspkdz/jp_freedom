@@ -1,6 +1,7 @@
 package com.jp.freedom.data
 
 import com.jp.freedom.domain.AccessProfile
+
 import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
@@ -35,7 +36,6 @@ object SyncSnapshotCodec {
                         put("name", block.name)
                         put("startTime", block.startTime.apiTime())
                         put("endTime", block.endTime.apiTime())
-                        put("accessProfile", block.accessProfile.name)
                         put("completionStatus", block.completionStatus.name)
                         block.note?.let { put("note", it) }
                     },
@@ -126,7 +126,6 @@ object SyncSnapshotCodec {
                         name = block.getString("name"),
                         startTime = LocalTime.parse(block.getString("startTime")),
                         endTime = LocalTime.parse(block.getString("endTime")),
-                        accessProfile = AccessProfile.valueOf(block.getString("accessProfile")),
                         completionStatus = CompletionStatus.valueOf(block.getString("completionStatus")),
                         note = if (block.has("note") && !block.isNull("note")) block.getString("note") else null,
                     ),

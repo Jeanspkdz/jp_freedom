@@ -26,6 +26,11 @@
 - After installing an Android build, launch it on the target device and confirm the main screen opens without a crash before reporting success.
 - When verifying uninstall behavior, first confirm the launch check passed, then uninstall the same package from the same target device and confirm Android reports success. Warn the user first if uninstalling would remove app data they asked to preserve.
 
+## Verification on main
+
+- Integrate every change into `main`, then run the applicable checks from `main` before reporting the change complete.
+- Build and install Android releases for user verification from `main`; confirm the installed build contains the change being reported.
+
 ## Agent skills
 
 ### Issue tracker

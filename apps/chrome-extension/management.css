@@ -6,8 +6,70 @@
   font-display: swap;
 }
 
+/* Shared page transitions and the management panel entry motion. */
+/* Tab links change documents after their own pill transition; no document morph. */
+::view-transition-old(root) { animation: page-out-forward var(--dur-fast) var(--ease-page) both; }
+::view-transition-new(root) { animation: page-in-forward var(--dur-page-in) var(--ease-page) both; }
+::view-transition-group(page-header), ::view-transition-old(page-header), ::view-transition-new(page-header) { animation: none; }
+html[data-nav="forward"]::view-transition-old(root) { animation-name: page-out-forward; }
+html[data-nav="forward"]::view-transition-new(root) { animation-name: page-in-forward; }
+html[data-nav="back"]::view-transition-old(root) { animation-name: page-out-back; }
+html[data-nav="back"]::view-transition-new(root) { animation-name: page-in-back; }
+@keyframes page-out-forward { to { opacity: 0; transform: translateX(calc(-1 * var(--page-shift))) translateY(var(--page-exit-y)); } }
+@keyframes page-in-forward { from { opacity: 0; transform: translateX(var(--page-shift)) translateY(var(--page-entry-y)); } to { opacity: 1; transform: translate(0); } }
+@keyframes page-out-back { to { opacity: 0; transform: translateX(var(--page-shift)) translateY(var(--page-exit-y)); } }
+@keyframes page-in-back { from { opacity: 0; transform: translateX(calc(-1 * var(--page-shift))) translateY(var(--page-entry-y)); } to { opacity: 1; transform: translate(0); } }
+@keyframes element-in { from { opacity: 0; transform: translateY(var(--element-entry-y)); } to { opacity: 1; transform: translateY(0); } }
+@keyframes item-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes item-out { to { opacity: 0; transform: scale(.98); } }
+.page-header { view-transition-name: page-header; }
+.view-panel:not([hidden]) h1 { view-transition-name: none; }
+/* The heading receives programmatic focus after navigation; it is not a control. */
+.view-panel [data-page-heading]:focus { outline: none; }
+.view-panel[hidden] { display: none; opacity: 0; transform: translateY(8px); }
+/* Chrome extension documents do not currently receive cross-document transitions. */
+.js.is-leaving .view-panel { animation: page-out-forward var(--dur-fast) var(--ease-page) both; }
+.js.is-leaving[data-nav="back"] .view-panel { animation-name: page-out-back; }
+.js.page-fallback-enter .view-panel { animation: page-in-forward var(--dur-page-in) var(--ease-page) both; }
+.js.page-fallback-enter[data-nav="back"] .view-panel { animation-name: page-in-back; }
+.js [data-enter]:not(.is-entering):not(.is-entered) { opacity: 0; }
+[data-i="0"] { --i: 0; } [data-i="1"] { --i: 1; } [data-i="2"] { --i: 2; }
+[data-i="3"] { --i: 3; } [data-i="4"] { --i: 4; }
+.js [data-enter].is-entering { will-change: transform, opacity; animation: element-in var(--dur-base) var(--ease-out) both; animation-delay: calc(var(--i, 0) * var(--stagger)); }
+html.page-transitioning.js [data-enter].is-entering { animation-play-state: paused; }
+.js [data-reveal]:not(.is-visible) { opacity: 0; transform: translateY(16px); }
+.js [data-reveal].is-visible { animation: element-in var(--dur-base) var(--ease-out) both; }
+.js [data-list-item].is-entering { will-change: transform, opacity; animation: item-in 220ms var(--ease-out) both; }
+.js [data-list-item].is-removing { will-change: transform, opacity; animation: item-out 150ms var(--ease-page) both; }
+.interactive-surface { transition: opacity 180ms var(--ease-page), transform 180ms var(--ease-page), display 180ms allow-discrete; }
+.interactive-surface[hidden] { display: none; opacity: 0; transform: scale(var(--interaction-exit-scale)); }
+@starting-style { .interactive-surface:not([hidden]) { opacity: 0; transform: scale(var(--interaction-entry-scale)); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 100ms; }
+  html[data-nav]::view-transition-old(root) { animation-name: fade-out; }
+  html[data-nav]::view-transition-new(root) { animation-name: fade-in; }
+  .interactive-surface { transition-duration: 100ms; }
+  .js.is-leaving .view-panel, .js.page-fallback-enter .view-panel { animation-duration: 100ms; animation-name: fade-out; }
+  .js.page-fallback-enter .view-panel { animation-name: fade-in; }
+  .js [data-enter].is-entering, .js [data-reveal].is-visible, .js [data-list-item].is-entering, .js [data-list-item].is-removing { animation-duration: 100ms; animation-delay: 0ms; }
+  @keyframes fade-out { to { opacity: 0; } }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+}
+
 :root {
   color-scheme: dark;
+  --dur-fast: 200ms;
+  --dur-base: 440ms;
+  --dur-page-in: 320ms;
+  --ease-page: cubic-bezier(.4, 0, .2, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --stagger: 70ms;
+  --page-shift: 24px;
+  --page-exit-y: -8px;
+  --page-entry-y: 12px;
+  --element-entry-y: 16px;
+  --interaction-entry-scale: .96;
+  --interaction-exit-scale: .98;
   font: 400 18px/1.5 "JP Roboto", Roboto, Arial, sans-serif;
   background: #10182b;
   color: #f2f0ea;
@@ -39,7 +101,7 @@ button { cursor: pointer; }
 button:disabled, input:disabled { cursor: not-allowed; }
 button[hidden], [hidden] { display: none !important; }
 ::selection { color: var(--on-amber); background: var(--amber); }
-button:focus-visible, input:focus-visible, .site-row:has(input:focus-visible) {
+button:focus-visible, input:focus-visible, .view-tab:focus-visible, .site-row:has(input:focus-visible) {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
@@ -72,8 +134,14 @@ button:focus-visible, input:focus-visible, .site-row:has(input:focus-visible) {
 .brand:hover .brand-icon-piece--left { transform: translateX(-2px) rotate(-3deg); }
 .brand:hover .brand-icon-piece--top { transform: translateY(-3px) rotate(2deg); }
 .brand:hover .brand-icon-piece--bottom { transform: translate(2px, 2px) rotate(-2deg); }
-.view-nav { display: flex; align-items: center; gap: 28px; }
+.view-nav { position: relative; display: flex; align-items: center; gap: 28px; }
 .view-tab {
+  position: relative;
+  isolation: isolate;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 52px;
   padding: 0 20px;
   border: 1px solid transparent;
@@ -82,10 +150,17 @@ button:focus-visible, input:focus-visible, .site-row:has(input:focus-visible) {
   color: var(--muted);
   font-size: 1rem;
   font-weight: 600;
+  text-decoration: none;
 }
 .view-tab:hover:not(:disabled) { color: var(--purple); }
-.view-tab.is-selected { background: var(--purple); color: var(--on-purple); }
-.view-tab.is-selected:hover:not(:disabled) { background: var(--purple); color: var(--on-purple); }
+.tab-pill-bg { position: absolute; inset: 0; z-index: -1; border-radius: 14px; background: var(--purple); opacity: 0; pointer-events: none; }
+.view-tab[aria-current="page"] .tab-pill-bg { opacity: 1; }
+.nav-pill { position: absolute; top: 0; left: 0; z-index: 0; height: 52px; border-radius: 14px; background: var(--purple); pointer-events: none; }
+html.nav-pill-ready .view-tab .tab-pill-bg { opacity: 0; }
+.view-tab.is-selected { color: var(--on-purple); }
+.view-tab.is-selected:hover:not(:disabled) { color: var(--on-purple); }
+/* A tab navigation changes documents without morphing their content. */
+html.tab-pill-only::view-transition-group(root), html.tab-pill-only::view-transition-old(root), html.tab-pill-only::view-transition-new(root) { animation: none; }
 .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
 #sync-state { max-width: 240px; color: var(--muted); font-size: .82rem; text-align: right; }
 #sync-state::before {
@@ -148,6 +223,18 @@ p { margin: 0; }
   background: var(--surface);
 }
 .focus-board.is-active { border-color: var(--purple); }
+/* The manual study timer shares the existing card and button palette. */
+.study-timer { margin: 24px 0; padding: 24px; border: 1px solid var(--line-soft); border-radius: 20px; background: var(--surface); }
+.study-timer h2 { margin: 0 0 8px; }
+.study-timer p { margin: 0 0 16px; color: var(--muted); }
+.study-timer strong { display: block; margin: 0 0 12px; font-size: 2rem; font-variant-numeric: tabular-nums; }
+.study-timer strong[hidden] { display: none; }
+.study-timer form { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.study-timer form[hidden], .study-timer button[hidden] { display: none; }
+.study-timer label { display: block; }
+.study-timer input { width: 120px; }
+.study-timer #study-conflict-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.study-timer #study-conflict-actions[hidden] { display: none; }
 .focus-main { min-width: 0; }
 .focus-main h2 { color: var(--muted); font-size: .86rem; font-weight: 600; }
 .focus-main h2::before {
@@ -344,13 +431,25 @@ legend { margin-bottom: 10px; padding: 0; color: var(--muted); font-size: .95rem
 .connection-path { display: flex; align-items: center; gap: 18px; padding: 22px 8px; }
 .connection-device { display: grid; min-width: 96px; justify-items: center; gap: 7px; color: var(--amber); font-weight: 700; }
 .connection-device svg { width: 58px; height: 58px; }
-.connection-flow { position: relative; height: 2px; flex: 1; background: var(--line-soft); }
-.connection-flow::before { position: absolute; top: 0; left: 0; width: 32%; height: 2px; background: linear-gradient(90deg, transparent, var(--amber), transparent); content: ""; animation: connection-data-flow 2.4s ease-in-out infinite; }
-.connection-flow::after { position: absolute; top: 50%; right: 1px; width: 10px; height: 10px; border-top: 2px solid var(--amber); border-right: 2px solid var(--amber); content: ""; transform: translateY(-50%) rotate(45deg); }
-@keyframes connection-data-flow {
-  from { left: 0; }
-  to { left: calc(100% - 32%); }
-}
+/* Radar originates behind the phone icon, outside document flow. */
+.connection-phone-icon { position: relative; display: grid; place-items: center; width: 58px; height: 58px; }
+.connection-phone-icon svg { position: relative; z-index: 1; }
+.connection-phone-icon .ring { position: absolute; width: 40px; height: 40px; border: 1.5px solid #a5b4fc; border-radius: 50%; opacity: 0; pointer-events: none; animation: connection-radar var(--ring-cycle, 3s) cubic-bezier(.2, .6, .3, 1) infinite; }
+.connection-phone-icon .ring:nth-child(2) { animation-delay: 1s; }
+.connection-phone-icon .ring:nth-child(3) { animation-delay: 2s; }
+/* Each ring fades before the next cycle begins. */
+@keyframes connection-radar { from { transform: scale(.6); opacity: .7; } to { transform: scale(2.4); opacity: 0; } }
+.connection-path { --ring-cycle: 3s; --beam-cycle: 1.8s; --beam-one: 56px; --beam-two: 44px; --beam-three: 36px; }
+.connection-flow { position: relative; height: 2px; flex: 1; min-width: 0; container-type: inline-size; background: var(--line-soft); }
+.connection-beams { position: absolute; inset: -2px 0; overflow: hidden; pointer-events: none; }
+.connection-beams .seg { position: absolute; top: 1px; left: 0; width: var(--beam-one); height: 3px; border-radius: 2px; background: linear-gradient(90deg, transparent, rgba(255,194,122,.55) 70%, #ffe2bd); box-shadow: 0 0 8px rgba(255,194,122,.7); opacity: 0; animation: connection-beam var(--beam-cycle) linear infinite; }
+.connection-beams .seg:nth-child(2) { width: var(--beam-two); animation-delay: .6s; }
+.connection-beams .seg:nth-child(3) { width: var(--beam-three); animation-delay: 1.2s; }
+/* Beams fade at both ends, so the repeat has no visible jump. */
+@keyframes connection-beam { 0% { transform: translateX(-56px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateX(calc(100cqw - 8px)); opacity: 0; } }
+.connection-diamond { position: absolute; top: 50%; right: 1px; width: 10px; height: 10px; border-top: 2px solid var(--amber); border-right: 2px solid var(--amber); transform: translateY(-50%) rotate(45deg); animation: connection-impact .6s linear 1.1s infinite; }
+/* The diamond briefly expands when a beam arrives. */
+@keyframes connection-impact { 0%, 70%, 100% { transform: translateY(-50%) rotate(45deg) scale(1); box-shadow: none; } 85% { transform: translateY(-50%) rotate(45deg) scale(1.3); box-shadow: 0 0 14px rgba(255,194,122,.95); } }
 .connection-caption { max-width: 62ch; color: var(--muted); font-size: 1.1rem; }
 .sync { margin-top: 22px; }
 .sync-timestamp {
@@ -415,8 +514,12 @@ legend { margin-bottom: 10px; padding: 0; color: var(--muted); font-size: .95rem
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
-  .connection-flow::before { left: 36%; animation: none; }
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 100ms !important; animation-duration: 100ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; }
+  .connection-phone-icon .ring { display: none; }
+  .connection-beams .seg { animation: none; opacity: .5; transform: translateX(30px); }
+  .connection-beams .seg:nth-child(2) { transform: translateX(120px); }
+  .connection-beams .seg:nth-child(3) { transform: translateX(210px); }
+  .connection-diamond { animation: none; }
 }
 
 /* Chrome uses the same fixed night roles as Android, at every OS theme. */

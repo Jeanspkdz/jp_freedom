@@ -6,7 +6,7 @@ The Chrome extension blocks selected websites during planned blocks from Android
 
 ## Solution
 
-In Chrome, choose any positive duration and start a study timer. The timer immediately blocks every selected desktop site. Android receives the same session and applies its Essentials-only access profile for the remaining duration. Android-started sessions also activate Chrome's selected-site blocking after sync. Chrome remains focused on its timer, shared site list, and connection; Android handles plans, reviews, and the remaining settings.
+In Chrome, choose any positive duration and start a study timer. The timer immediately blocks every selected desktop site. Android receives the same session and applies its Essentials list for the remaining duration. Android-started sessions also activate Chrome's selected-site blocking after sync. Chrome remains focused on its timer, shared site list, and connection; Android handles plans, reviews, and the remaining settings.
 
 ## User Stories
 
@@ -26,7 +26,7 @@ In Chrome, choose any positive duration and start a study timer. The timer immed
 14. As a Chrome user, I want sync status and the last successful sync visible, so that I know whether Android has received the session.
 15. As a Chrome user, I want a locally started session shown as pending on Android while the phone is offline, so that I do not mistake browser blocking for phone blocking.
 16. As a Chrome user, I want to start the local timer while Android is offline, so that desktop focus is immediate.
-17. As an Android user, I want a Chrome-started session to use Essentials-only, so that no Android profile selector is needed in Chrome.
+17. As an Android user, I want a Chrome-started session to use Essentials, so that no Android allowed apps list selector is needed in Chrome.
 18. As an Android user, I want the phone to apply a Chrome-started session after sync, so that both devices join the same focus period.
 19. As an Android user, I want delayed sync to apply only the remaining time, so that the phone does not restart the timer.
 20. As an Android user, I want an expired session recorded without a stale restriction, so that a late sync cannot interrupt me.
@@ -50,7 +50,7 @@ In Chrome, choose any positive duration and start a study timer. The timer immed
 
 - Chrome exposes the study timer, shared desktop site blocklist, and sync connection. Android owns planned-block editing, session reviews, and general settings.
 - Chrome accepts any positive duration. Starting creates a shared session with absolute start and end times, begins local browser enforcement immediately, and shows whether Android has received it.
-- A Chrome-started session uses the Essentials-only Android access profile. Android applies phone restrictions on receipt for the remaining duration. Chrome never applies Android access profiles or the evening restriction.
+- A Chrome-started session uses the Essentials list on Android. Android applies phone restrictions on receipt for the remaining duration. Chrome never applies allowed apps lists or the evening restriction.
 - Chrome blocks the shared desktop site list during a planned block or an active study timer, regardless of which device started the timer. Selected entries remain locked during either focus period; new entries take effect immediately. The blocked page has no bypass.
 - The sync API holds shared plans, settings, session state, study history, review data, and focus areas. Chrome writes session actions and the desktop site list. Android edits plans, reviews, and general settings. Credentials and device permissions stay local.
 - Extend the revisioned sync contract with session state and history. Queue offline actions with visible pending status. Merge independent edits; ask the user about same-field conflicts. Preserve competing offline starts until the user chooses one shared session.

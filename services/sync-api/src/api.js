@@ -23,6 +23,7 @@ const accessProfiles = new Set([
   'ESSENTIALS_WITH_CHATGPT',
   'ESSENTIALS_WITH_CHATGPT_AND_SEARCH',
 ]);
+const packageNamePattern = /^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/;
 const completionStatuses = new Set(['NOT_STARTED', 'FINISHED', 'PARTLY_DONE', 'NOT_DONE']);
 const studySessionStates = new Set(['ACTIVE', 'PENDING_REVIEW', 'BREAKING', 'REVIEWED']);
 const supportedCutoffs = new Set(['21:00', '22:00', '23:00']);
@@ -171,7 +172,7 @@ export function validateSnapshot(snapshot) {
       || typeof block.name !== 'string' || block.name.trim().length === 0 || block.name.length > 200
       || minutes(block.startTime) === null || minutes(block.endTime) === null
       || minutes(block.startTime) >= minutes(block.endTime)
-      || !accessProfiles.has(block.accessProfile)
+      || (block.accessProfile !== undefined && !accessProfiles.has(block.accessProfile))
       || !completionStatuses.has(block.completionStatus)
       || (block.note !== undefined && (typeof block.note !== 'string' || block.note.length > 2000))) {
       return 'invalid_blocks';
@@ -193,6 +194,33 @@ export function validateSnapshot(snapshot) {
   return null;
 }
 
+// A session is versioned separately so timer writes cannot replace plan edits.
+function validateSession(session) {
+  if (!session || typeof session !== 'object' || Array.isArray(session)) return false;
+  if (typeof session.id !== 'string' || !blockIdPattern.test(session.id)) return false;
+  if (!Number.isFinite(Date.parse(session.startedAt)) || !Number.isInteger(session.durationMillis)
+    || session.durationMillis < 60_000 || session.durationMillis > 24 * 60 * 60_000) return false;
+  const hasLegacyProfile = accessProfiles.has(session.accessProfile);
+  const hasAllowedAppsList = typeof session.allowedAppsListId === 'string'
+    && session.allowedAppsListId.length > 0 && session.allowedAppsListId.length <= 80
+    && typeof session.allowedAppsListName === 'string'
+    && session.allowedAppsListName.trim().length > 0 && session.allowedAppsListName.length <= 40
+    && Array.isArray(session.allowedAppPackages) && session.allowedAppPackages.length <= 500
+    && session.allowedAppPackages.every(name => typeof name === 'string'
+      && name.length <= 160 && packageNamePattern.test(name))
+    && new Set(session.allowedAppPackages).size === session.allowedAppPackages.length;
+  if (!['ACTIVE', 'PENDING_REVIEW', 'BREAKING', 'REVIEWED'].includes(session.state)
+    || (!hasLegacyProfile && !hasAllowedAppsList) || typeof session.taskName !== 'string'
+    || session.taskName.length > 200 || (session.note !== undefined && (typeof session.note !== 'string' || session.note.length > 2000))
+    || (session.actualMillis !== undefined && (!Number.isInteger(session.actualMillis)
+      || session.actualMillis < 0 || session.actualMillis > session.durationMillis))) return false;
+  if (session.supersededAttemptIds !== undefined
+    && (!Array.isArray(session.supersededAttemptIds) || session.supersededAttemptIds.length > 10
+      || session.supersededAttemptIds.some(id => !blockIdPattern.test(id)))) return false;
+  if (session.outcome !== undefined && !['FINISHED', 'NOT_FINISHED'].includes(session.outcome)) return false;
+  return session.endedAt == null || Number.isFinite(Date.parse(session.endedAt));
+}
+
 export function createSyncApi({ store, token }) {
   return async function handle(request) {
     const url = new URL(request.url);
@@ -200,8 +228,47 @@ export function createSyncApi({ store, token }) {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
     if (url.pathname === '/health' && request.method === 'GET') return json({ ok: true });
-    if (url.pathname !== '/v1/snapshot') return json({ error: 'not_found' }, 404);
+    if (!['/v1/snapshot', '/v1/session', '/v1/history', '/v1/history/resolve'].includes(url.pathname)) return json({ error: 'not_found' }, 404);
     if (!isAuthorized(request, token)) return json({ error: 'unauthorized' }, 401);
+
+    if (url.pathname === '/v1/history/resolve') {
+      if (request.method !== 'PUT') return json({ error: 'method_not_allowed' }, 405);
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+      if (!validateSession(body?.session) || body.session.state !== 'REVIEWED') return json({ error: 'invalid_review' }, 422);
+      try { return json({ session: await store.resolveHistory(body.session) }); }
+      catch { return json({ error: 'storage_unavailable' }, 503); }
+    }
+
+    if (url.pathname === '/v1/history') {
+      try {
+        if (request.method === 'GET') return json({ sessions: await store.readHistory() });
+        if (request.method !== 'PUT') return json({ error: 'method_not_allowed' }, 405);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+        if (!Array.isArray(body?.sessions) || body.sessions.length > 1000
+          || body.sessions.some(session => !validateSession(session))
+          || new Set(body.sessions.map(session => session.id)).size !== body.sessions.length) {
+          return json({ error: 'invalid_history' }, 422);
+        }
+        return json({ sessions: await store.importHistory(body.sessions) });
+      } catch { return json({ error: 'storage_unavailable' }, 503); }
+    }
+
+    if (url.pathname === '/v1/session') {
+      try {
+        if (request.method === 'GET') return json(await store.readSession());
+        if (request.method !== 'PUT') return json({ error: 'method_not_allowed' }, 405);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+        if (!Number.isInteger(body?.expectedRevision) || body.expectedRevision < 0) return json({ error: 'invalid_revision' }, 400);
+        if (!validateSession(body.session)) return json({ error: 'invalid_session' }, 422);
+        const result = await store.replaceSession(body.expectedRevision, body.session);
+        return result.conflict
+          ? json({ error: 'revision_conflict', currentRevision: result.revision }, 409)
+          : json(result);
+      } catch { return json({ error: 'storage_unavailable' }, 503); }
+    }
 
     if (request.method === 'GET') {
       try {

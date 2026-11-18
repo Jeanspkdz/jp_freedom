@@ -4,16 +4,19 @@ Terms for the personal, open-source system that coordinates blocking across an A
 
 ## Language
 
-**Access profile**:
-A saved list of apps allowed on the Android phone during a study timer session. Users can create named access profiles from currently installed apps; the fixed Essentials profile applies when none is chosen.
-_Avoid_: Phone blocklist
+**Allowed apps list**:
+A reusable list of Android apps that remain available during a study timer session. Apps not selected in the list are blocked; the fixed Essentials list applies when no custom list is selected.
+_Avoid_: Access profile, phone blocklist
+
+**Essentials list**:
+The fixed set of essential phone functions that remain available during a study timer session when no custom allowed apps list is selected. It cannot be edited or deleted.
 
 **Desktop site blocklist**:
 A shared set of websites that can be edited from Android or the Chrome extension and that Chrome blocks during a focus session. Facebook, Instagram, TikTok, X, and Reddit are selected initially; YouTube and WhatsApp Web remain available unless selected by the user. During a focus session, selected sites cannot be removed, but additional sites can be added; outside a session, the list can be edited freely.
 _Avoid_: Access profile
 
 **Focus session**:
-A timed study period started on Android or Chrome. Android applies its access profile to the phone, while Chrome blocks the selected desktop sites for the session's duration.
+A timed study period started on Android or Chrome. Android applies the selected allowed apps list, or Essentials, to the phone, while Chrome blocks the selected desktop sites for the session's duration.
 _Avoid_: Blocking session
 
 **Day plan**:
@@ -67,7 +70,7 @@ Creating or editing a day plan on the phone without internet access. The phone e
 A notification from the Chrome extension every 30 minutes while the next required day plan is incomplete and Chrome is open. It directs the user to plan on the phone but does not restrict desktop browsing.
 
 **Study timer session**:
-A manually started, duration-based focus session that records actual elapsed study time. A session started in Chrome uses the Essentials-only access profile on Android and blocks the selected desktop sites in Chrome.
+A manually started, duration-based focus session that records actual elapsed study time. A session started in Chrome uses the Essentials list on Android and blocks the selected desktop sites in Chrome.
 
 **Session review**:
 The required update after a study timer session ends, where the user records the task name and status and may add notes or remaining work. It must be completed before another study timer session can start.

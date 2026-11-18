@@ -13,8 +13,8 @@ object SiteDomainPolicy {
     private val searchHosts = setOf("google.com", "www.google.com", "www.gstatic.com", "encrypted-tbn0.gstatic.com")
 
     fun isAllowed(domain: String, state: FocusPolicyState): Boolean {
-        if (state.blockedReason == null) return true
         if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return false
+        if (state.blockedReason == null && state.activeBlock == null) return true
 
         val normalized = domain.trimEnd('.').lowercase()
         if (state.allowedPackageSnapshot != null) {
@@ -22,9 +22,10 @@ object SiteDomainPolicy {
             return matchesDomain(normalized, chatGptDomains) || normalized in chatGptAuthDomains || normalized in searchHosts
         }
 
-        val profile = state.accessProfile ?: return false
-        val chatGptAllowed = profile != AccessProfile.ESSENTIALS_ONLY
-        val searchAllowed = profile == AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH
+        val chatGptAllowed = CHATGPT_PACKAGE in state.allowedAppPackages ||
+            (state.accessProfile != null && state.accessProfile != AccessProfile.ESSENTIALS_ONLY)
+        val searchAllowed = GOOGLE_SEARCH_PACKAGE in state.allowedAppPackages ||
+            state.accessProfile == AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH
         if (chatGptAllowed &&
             (matchesDomain(normalized, chatGptDomains) || normalized in chatGptAuthDomains)
         ) return true
@@ -33,4 +34,7 @@ object SiteDomainPolicy {
 
     private fun matchesDomain(domain: String, suffixes: Set<String>): Boolean =
         suffixes.any { domain == it || domain.endsWith(".$it") }
+
+    private const val CHATGPT_PACKAGE = "com.openai.chatgpt"
+    private const val GOOGLE_SEARCH_PACKAGE = "com.google.android.googlequicksearchbox"
 }

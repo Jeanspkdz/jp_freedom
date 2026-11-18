@@ -34,10 +34,11 @@ data class FocusSettings(
     }
 }
 
+/** Legacy value retained while older plans and sync snapshots are migrated. */
 enum class AccessProfile(val title: String) {
-    ESSENTIALS_ONLY("Solo esenciales"),
-    ESSENTIALS_WITH_CHATGPT("Esenciales y ChatGPT"),
-    ESSENTIALS_WITH_CHATGPT_AND_SEARCH("Esenciales, ChatGPT y Google Search"),
+    ESSENTIALS_ONLY("Essentials only"),
+    ESSENTIALS_WITH_CHATGPT("Essentials and ChatGPT"),
+    ESSENTIALS_WITH_CHATGPT_AND_SEARCH("Essentials, ChatGPT and Google Search"),
 }
 
 enum class CompletionStatus {

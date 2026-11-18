@@ -5,7 +5,7 @@ import android.content.ContextWrapper
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.jp.freedom.domain.AccessProfile
+import com.jp.freedom.domain.AllowedAppsList
 import com.jp.freedom.domain.FocusArea
 import com.jp.freedom.domain.SessionOutcome
 import com.jp.freedom.domain.StudySessionState
@@ -24,6 +24,19 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class FocusFlowAndroidTest {
+    @Test fun versionTwentyDatabaseWithoutFocusAreasRecoversOnUpgrade() {
+        val context = isolatedContext()
+        context.deleteDatabase("jp-freedom.db")
+        try {
+            SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath("jp-freedom.db"), null).use { db ->
+                db.version = 20
+            }
+            assertEquals(emptyList<FocusArea>(), FocusRepository(context).focusAreas())
+        } finally {
+            context.deleteDatabase("jp-freedom.db")
+        }
+    }
+
     @Test fun legacyFocusAreaTableMigratesAndKeepsSessionAssignments() {
         val context = isolatedContext()
         context.deleteDatabase("jp-freedom.db")
@@ -41,7 +54,7 @@ class FocusFlowAndroidTest {
             assertEquals("English", area.name)
 
             SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath("jp-freedom.db"), null).use { db ->
-                assertEquals(20, db.version)
+                assertEquals(21, db.version)
                 db.query("focus_areas", arrayOf("id", "name", "position"), null, null, null, null, null).use { cursor ->
                     assertEquals(1, cursor.count)
                     assertEquals(setOf("id", "name", "position"), (0 until cursor.columnCount).map { cursor.getColumnName(it) }.toSet())
@@ -68,7 +81,9 @@ class FocusFlowAndroidTest {
                     id = "session-1",
                     taskName = "Vocabulary",
                     durationMillis = Duration.ofMinutes(25).toMillis(),
-                    accessProfile = AccessProfile.ESSENTIALS_ONLY,
+                    allowedAppsListId = AllowedAppsList.ESSENTIALS_ID,
+                    allowedAppsListName = AllowedAppsList.ESSENTIALS.name,
+                    allowedAppPackages = emptySet(),
                     startedAt = Instant.parse("2026-11-13T15:00:00Z"),
                     endedAt = Instant.parse("2026-11-13T15:25:00Z"),
                     actualMillis = Duration.ofMinutes(25).toMillis(),

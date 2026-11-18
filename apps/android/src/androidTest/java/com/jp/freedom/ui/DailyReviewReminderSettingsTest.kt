@@ -79,7 +79,9 @@ class DailyReviewReminderSettingsTest {
                     onDesktopDomainsChange = {},
                     onConfigureSync = { _, _ -> },
                     onSyncNow = {},
+                    onResolveReviewConflict = {},
                     onOpenAccessibilitySettings = {},
+                    onOpenAllowedAppsLists = {},
                     onRequestExactAlarmAccess = {},
                     onRequestSiteFilter = {},
                 )

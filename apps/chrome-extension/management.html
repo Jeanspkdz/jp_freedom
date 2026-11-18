@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-page="plan">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -20,9 +20,9 @@
           <span>Tally</span>
         </div>
         <nav class="view-nav" aria-label="Extension sections">
-          <button id="tab-plan" class="view-tab is-selected" type="button" aria-controls="view-plan" aria-current="page">Plan</button>
-          <button id="tab-sites" class="view-tab" type="button" aria-controls="view-sites">Sites</button>
-          <button id="tab-connection" class="view-tab" type="button" aria-controls="view-connection">Connection</button>
+          <a href="management.html" class="view-tab is-selected" aria-current="page"><span class="tab-pill-bg" aria-hidden="true"></span>Plan</a>
+          <a href="sites.html" class="view-tab"><span class="tab-pill-bg" aria-hidden="true"></span>Sites</a>
+          <a href="connection.html" class="view-tab"><span class="tab-pill-bg" aria-hidden="true"></span>Connection</a>
         </nav>
         <div class="header-actions"><p id="sync-state" role="status">Checking sync…</p><button id="sync-now" type="button">Sync now</button></div>
       </header>
@@ -73,16 +73,54 @@
           <div id="focus-progress" class="focus-progress" role="progressbar" aria-label="Focus block progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span id="focus-progress-fill"></span></div>
         </section>
         </div>
+        <section class="study-timer" aria-labelledby="focus-heading" data-enter data-i="2">
+          <div class="timer-heading-row"><h1 id="focus-heading" tabindex="-1" data-page-heading data-enter data-i="0">Focus session</h1><span id="timer-date"></span></div>
+          <div class="timer-panel">
+            <div class="clock-side">
+              <div class="clock-display" role="timer" aria-label="30 minutes, 0 seconds">
+                <div id="flip-minutes" class="flip-card" data-value="30" aria-hidden="true">
+                  <span class="flip-half flip-static-top"><span class="flip-face flip-face--top">30</span></span>
+                  <span class="flip-half flip-static-bottom"><span class="flip-face flip-face--bottom">30</span></span>
+                  <span class="flip-half flip-flap-top"><span class="flip-face flip-face--top">30</span></span>
+                  <span class="flip-half flip-flap-bottom"><span class="flip-face flip-face--bottom">30</span></span>
+                </div>
+                <span class="clock-colon" aria-hidden="true">:</span>
+                <div id="flip-seconds" class="flip-card" data-value="00" aria-hidden="true">
+                  <span class="flip-half flip-static-top"><span class="flip-face flip-face--top">00</span></span>
+                  <span class="flip-half flip-static-bottom"><span class="flip-face flip-face--bottom">00</span></span>
+                  <span class="flip-half flip-flap-top"><span class="flip-face flip-face--top">00</span></span>
+                  <span class="flip-half flip-flap-bottom"><span class="flip-face flip-face--bottom">00</span></span>
+                </div>
+              </div>
+              <span class="clock-unit">MINUTES</span>
+              <strong id="study-timer-remaining" class="sr-only" hidden></strong>
+            </div>
+            <div class="timer-controls">
+              <form id="study-timer-form">
+                <label for="study-duration">Study duration</label>
+                <div class="duration-presets" role="group" aria-label="Study duration">
+                  <button type="button" data-duration="25">25 min</button><button type="button" data-duration="30" aria-pressed="true">30 min</button><button type="button" data-duration="45">45 min</button><button type="button" data-duration="60">60 min</button>
+                </div>
+                <input id="study-duration" class="sr-only" type="number" min="1" max="1440" value="30" required tabindex="-1" aria-label="Duration in minutes">
+                <button id="start-study-timer" type="submit"><span aria-hidden="true">▶</span> Start study session</button>
+              </form>
+              <button id="stop-study-timer" type="button" hidden>Stop study session</button>
+              <p class="timer-help">Your focus block starts and selected sites stay blocked until it ends.</p>
+            </div>
+          </div>
+          <div class="timer-state-row"><span class="timer-state-label">Not connected</span><p id="study-timer-status" role="status">Connect to the sync API at least once before starting a study session.</p><a href="connection.html">Open Connection</a></div>
+          <div id="study-conflict-actions" hidden><button id="keep-chrome-timer" type="button">Continue Chrome timer</button><button id="keep-android-timer" type="button">Continue Android timer</button></div>
+        </section>
         <section class="schedule" aria-labelledby="schedule-heading">
-        <div class="schedule-intro"><h2 id="schedule-heading">Your schedule</h2><p>Today and tomorrow from your phone.</p></div>
+        <div class="schedule-intro" data-enter data-i="3"><h2 id="schedule-heading">Your schedule</h2><p>Today and tomorrow from your phone.</p></div>
       <div class="day-plans">
-        <section class="day-plan" aria-labelledby="today-plan-heading">
+        <section class="day-plan" data-reveal aria-labelledby="today-plan-heading">
             <div class="day-plan-header"><h2 id="today-plan-heading">Today’s schedule</h2><time id="today-plan-date"></time></div>
           <img id="today-plan-art" class="empty-art" src="illustrations/open-plan.png" alt="" aria-hidden="true" hidden>
           <p id="today-plan-empty" class="day-plan-empty" role="status">Loading plan…</p>
           <ol id="today-plan-list" class="day-plan-list"></ol>
         </section>
-        <section id="tomorrow-plan" class="day-plan" aria-labelledby="tomorrow-plan-heading">
+        <section id="tomorrow-plan" class="day-plan" data-reveal aria-labelledby="tomorrow-plan-heading">
             <div class="day-plan-header"><h2 id="tomorrow-plan-heading">Tomorrow’s schedule</h2><time id="tomorrow-plan-date"></time></div>
           <img id="tomorrow-plan-art" class="empty-art" src="illustrations/open-plan.png" alt="" aria-hidden="true" hidden>
           <p id="tomorrow-plan-empty" class="day-plan-empty" role="status">Loading plan…</p>

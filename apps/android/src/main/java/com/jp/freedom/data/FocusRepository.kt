@@ -4,7 +4,10 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import com.jp.freedom.domain.AllowedAppsList
 import com.jp.freedom.domain.AccessProfile
+import com.jp.freedom.domain.AllowedAppsListPolicy
+import com.jp.freedom.domain.AllowedAppsListValidation
 import com.jp.freedom.domain.BlockValidation
 import com.jp.freedom.domain.BlocklistValidation
 import com.jp.freedom.domain.CompletionStatus
@@ -158,6 +161,67 @@ class FocusRepository(context: Context) : StudySessionStore {
         while (cursor.moveToNext()) add(FocusArea(cursor.getString(0), cursor.getString(1)))
     } }
 
+    fun allowedAppsLists(): List<AllowedAppsList> = database.readableDatabase.query(
+        TABLE_ALLOWED_APPS_LISTS,
+        arrayOf("id", "name", "package_names"),
+        null,
+        null,
+        null,
+        null,
+        "name COLLATE NOCASE ASC",
+    ).use { cursor -> buildList {
+        while (cursor.moveToNext()) add(
+            AllowedAppsList(
+                id = cursor.getString(0),
+                name = cursor.getString(1),
+                packageNames = cursor.getString(2).toPackageSet(),
+            ),
+        )
+    } }
+
+    fun saveAllowedAppsList(list: AllowedAppsList): AllowedAppsListValidation {
+        val locked = (activeStudySession() ?: pendingStudyReview())?.allowedAppsListId == list.id
+        if (locked) return AllowedAppsListValidation.ActiveSessionLocked
+        val existing = allowedAppsLists()
+        val validation = AllowedAppsListPolicy.validate(list.name, existing, list.id)
+        if (validation != AllowedAppsListValidation.Valid) return validation
+        database.writableDatabase.insertWithOnConflict(
+            TABLE_ALLOWED_APPS_LISTS,
+            null,
+            ContentValues().apply {
+                put("id", list.id)
+                put("name", list.name.trim())
+                put("package_names", JSONArray(list.packageNames.sorted()).toString())
+            },
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+        return AllowedAppsListValidation.Valid
+    }
+
+    fun deleteAllowedAppsList(id: String): AllowedAppsListValidation {
+        val locked = (activeStudySession() ?: pendingStudyReview())?.allowedAppsListId == id
+        if (locked) return AllowedAppsListValidation.ActiveSessionLocked
+        database.writableDatabase.delete(TABLE_ALLOWED_APPS_LISTS, "id = ?", arrayOf(id))
+        return AllowedAppsListValidation.Valid
+    }
+
+    fun removeUninstalledAllowedApps(installedPackages: Set<String>) {
+        val lockedId = (activeStudySession() ?: pendingStudyReview())?.allowedAppsListId
+        val db = database.writableDatabase
+        val lists = allowedAppsLists()
+        lists.filter { it.id != lockedId }.forEach { list ->
+            val remaining = list.packageNames.intersect(installedPackages)
+            if (remaining != list.packageNames) {
+                db.update(
+                    TABLE_ALLOWED_APPS_LISTS,
+                    ContentValues().apply { put("package_names", JSONArray(remaining.sorted()).toString()) },
+                    "id = ?",
+                    arrayOf(list.id),
+                )
+            }
+        }
+    }
+
     fun saveFocusAreas(areas: List<FocusArea>) {
         val cleaned = FocusAreaPolicy.prepare(areas)
         val db = database.writableDatabase
@@ -180,10 +244,13 @@ class FocusRepository(context: Context) : StudySessionStore {
     override fun saveStudySession(session: StudyTimerSession) {
         val values = ContentValues().apply {
             put("id", session.id); put("task_name", session.taskName); put("duration_ms", session.durationMillis)
-            put("access_profile", session.accessProfile.name); put("started_at", session.startedAt.toEpochMilli())
+            put("access_profile", "ESSENTIALS_ONLY")
             put("profile_id", session.profileId)
             put("profile_name", session.profileName)
-            put("allowed_packages", session.allowedPackages?.let { JSONArray(it.sorted()).toString() })
+            put("allowed_list_id", session.allowedAppsListId)
+            put("allowed_list_name", session.allowedAppsListName)
+            put("allowed_packages", JSONArray((session.allowedPackages ?: session.allowedAppPackages).sorted()).toString())
+            put("started_at", session.startedAt.toEpochMilli())
             session.endedAt?.let { put("ended_at", it.toEpochMilli()) } ?: putNull("ended_at")
             put("actual_ms", session.actualMillis); put("state", session.state.name)
             session.outcome?.let { put("completion_status", it.name) } ?: putNull("completion_status")
@@ -275,10 +342,14 @@ class FocusRepository(context: Context) : StudySessionStore {
                 id = cursor.getString(cursor.getColumnIndexOrThrow("id")),
                 taskName = cursor.getString(cursor.getColumnIndexOrThrow("task_name")),
                 durationMillis = cursor.getLong(cursor.getColumnIndexOrThrow("duration_ms")),
-                accessProfile = AccessProfile.valueOf(cursor.getString(cursor.getColumnIndexOrThrow("access_profile"))),
                 profileId = cursor.getColumnIndexOrThrow("profile_id").let { if (cursor.isNull(it)) null else cursor.getString(it) },
                 profileName = cursor.getString(cursor.getColumnIndexOrThrow("profile_name")),
                 allowedPackages = cursor.getColumnIndexOrThrow("allowed_packages").let { if (cursor.isNull(it)) null else jsonPackages(cursor.getString(it)) },
+                allowedAppsListId = cursor.getString(cursor.getColumnIndexOrThrow("allowed_list_id")),
+                allowedAppsListName = cursor.getString(cursor.getColumnIndexOrThrow("allowed_list_name")),
+                allowedAppPackages = cursor.getColumnIndexOrThrow("allowed_packages").let {
+                    if (cursor.isNull(it)) emptySet() else cursor.getString(it).toPackageSet()
+                },
                 startedAt = Instant.ofEpochMilli(cursor.getLong(cursor.getColumnIndexOrThrow("started_at"))),
                 endedAt = cursor.getColumnIndexOrThrow("ended_at").let { if (cursor.isNull(it)) null else Instant.ofEpochMilli(cursor.getLong(it)) },
                 actualMillis = cursor.getLong(cursor.getColumnIndexOrThrow("actual_ms")),
@@ -875,9 +946,8 @@ class FocusRepository(context: Context) : StudySessionStore {
                             name = cursor.getString(2),
                             startTime = cursor.getInt(3).toLocalTime(),
                             endTime = cursor.getInt(4).toLocalTime(),
-                            accessProfile = AccessProfile.valueOf(cursor.getString(5)),
-                            completionStatus = CompletionStatus.valueOf(cursor.getString(6)),
-                            note = cursor.nullableString(7),
+                            completionStatus = CompletionStatus.valueOf(cursor.getString(5)),
+                            note = cursor.nullableString(6),
                         ),
                     )
                 }
@@ -890,7 +960,6 @@ class FocusRepository(context: Context) : StudySessionStore {
             "name" to (previous?.name != updated.name),
             "startTime" to (previous?.startTime != updated.startTime),
             "endTime" to (previous?.endTime != updated.endTime),
-            "accessProfile" to (previous?.accessProfile != updated.accessProfile),
             "completionStatus" to (previous?.completionStatus != updated.completionStatus),
             "note" to (previous?.note != updated.note),
         )
@@ -903,7 +972,7 @@ class FocusRepository(context: Context) : StudySessionStore {
         put(COLUMN_NAME, name.trim())
         put(COLUMN_START_MINUTE, startTime.toMinuteOfDay())
         put(COLUMN_END_MINUTE, endTime.toMinuteOfDay())
-        put(COLUMN_ACCESS_PROFILE, accessProfile.name)
+        put(COLUMN_ACCESS_PROFILE, "ESSENTIALS_ONLY")
         put(COLUMN_COMPLETION_STATUS, completionStatus.name)
         if (note == null) putNull(COLUMN_NOTE) else put(COLUMN_NOTE, note)
     }
@@ -911,6 +980,10 @@ class FocusRepository(context: Context) : StudySessionStore {
     private fun Int.toLocalTime() = LocalTime.of(this / 60, this % 60)
     private fun LocalTime.toMinuteOfDay() = hour * 60 + minute
     private fun android.database.Cursor.nullableString(column: Int) = if (isNull(column)) null else getString(column)
+    private fun String.toPackageSet(): Set<String> = runCatching {
+        val json = JSONArray(this)
+        buildSet { for (index in 0 until json.length()) add(json.getString(index)) }
+    }.getOrDefault(emptySet())
 
     private class FocusDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
         override fun onCreate(db: SQLiteDatabase) {
@@ -921,6 +994,7 @@ class FocusRepository(context: Context) : StudySessionStore {
             createStudySessionTable(db)
             createAccessProfileTable(db)
             createFocusAreaTable(db)
+            createAllowedAppsListTable(db)
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -1013,6 +1087,8 @@ class FocusRepository(context: Context) : StudySessionStore {
                 createFocusAreaTable(db)
             }
             if (oldVersion < 20) migrateFocusAreaTable(db)
+            if (oldVersion < 21) createFocusAreaTable(db)
+            if (oldVersion < 22) migrateAllowedAppsLists(db)
         }
 
         private fun migrateFocusAreaTable(db: SQLiteDatabase) {
@@ -1085,8 +1161,50 @@ class FocusRepository(context: Context) : StudySessionStore {
                 actual_ms INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL,
                 completion_status TEXT, note TEXT NOT NULL DEFAULT '', remaining TEXT NOT NULL DEFAULT '',
                 break_started_at INTEGER, break_duration_ms INTEGER NOT NULL DEFAULT 0, next_task TEXT NOT NULL DEFAULT '',
-                profile_id TEXT, profile_name TEXT NOT NULL DEFAULT 'Essentials only', allowed_packages TEXT,
-                focus_area_id TEXT)""")
+                profile_id TEXT, profile_name TEXT NOT NULL DEFAULT 'Essentials only',
+                allowed_packages TEXT NOT NULL DEFAULT '[]', focus_area_id TEXT,
+                allowed_list_id TEXT NOT NULL DEFAULT 'essentials',
+                allowed_list_name TEXT NOT NULL DEFAULT 'Essentials')""")
+        }
+
+        private fun createAllowedAppsListTable(db: SQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS $TABLE_ALLOWED_APPS_LISTS (
+                id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                package_names TEXT NOT NULL DEFAULT '[]')""")
+        }
+
+        private fun migrateAllowedAppsLists(db: SQLiteDatabase) {
+            createAllowedAppsListTable(db)
+            addColumnIfMissing(db, "study_sessions", "allowed_list_id", "TEXT NOT NULL DEFAULT 'essentials'")
+            addColumnIfMissing(db, "study_sessions", "allowed_list_name", "TEXT NOT NULL DEFAULT 'Essentials'")
+            addColumnIfMissing(db, "study_sessions", "allowed_packages", "TEXT NOT NULL DEFAULT '[]'")
+            db.query("access_profiles", arrayOf("id", "name", "packages"), null, null, null, null, null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    db.insertWithOnConflict(TABLE_ALLOWED_APPS_LISTS, null, ContentValues().apply {
+                        put("id", cursor.getString(0))
+                        put("name", cursor.getString(1))
+                        put("package_names", cursor.getString(2))
+                    }, SQLiteDatabase.CONFLICT_IGNORE)
+                }
+            }
+            db.query("study_sessions", arrayOf("id", "access_profile", "profile_id", "profile_name", "allowed_packages"), "allowed_list_id = 'essentials'", null, null, null, null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val legacy = AllowedAppsList.fromLegacyAccessProfile(cursor.getString(1))
+                    val savedProfileId = if (cursor.isNull(2)) null else cursor.getString(2)
+                    val savedProfileName = if (cursor.isNull(3)) null else cursor.getString(3)
+                    val savedPackages = if (cursor.isNull(4)) null else cursor.getString(4)
+                    db.update(
+                        "study_sessions",
+                        ContentValues().apply {
+                            put("allowed_list_id", savedProfileId ?: legacy.id)
+                            put("allowed_list_name", savedProfileName ?: legacy.name)
+                            put("allowed_packages", savedPackages ?: JSONArray(legacy.packageNames.sorted()).toString())
+                        },
+                        "id = ?",
+                        arrayOf(cursor.getString(0)),
+                    )
+                }
+            }
         }
 
         private fun createAccessProfileTable(db: SQLiteDatabase) {
@@ -1164,7 +1282,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         companion object {
             private const val DATABASE_NAME = "jp-freedom.db"
-            private const val DATABASE_VERSION = 20
+            private const val DATABASE_VERSION = 22
         }
     }
 
@@ -1172,6 +1290,7 @@ class FocusRepository(context: Context) : StudySessionStore {
         const val TABLE_BLOCKS = "planned_blocks"
         const val TABLE_SETTINGS = "focus_settings"
         const val TABLE_DESKTOP_DOMAINS = "desktop_blocked_domains"
+        const val TABLE_ALLOWED_APPS_LISTS = "allowed_apps_lists"
         const val TABLE_SYNC_STATE = "sync_state"
         const val TABLE_SYNC_CHANGES = "sync_changes"
         const val COLUMN_ID = "id"
@@ -1203,7 +1322,6 @@ class FocusRepository(context: Context) : StudySessionStore {
             COLUMN_NAME,
             COLUMN_START_MINUTE,
             COLUMN_END_MINUTE,
-            COLUMN_ACCESS_PROFILE,
             COLUMN_COMPLETION_STATUS,
             COLUMN_NOTE,
         )

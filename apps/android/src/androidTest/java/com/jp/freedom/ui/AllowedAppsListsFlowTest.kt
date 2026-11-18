@@ -1,0 +1,107 @@
+package com.jp.freedom.ui
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.jp.freedom.domain.InstalledApp
+import com.jp.freedom.domain.AllowedAppsList
+import com.jp.freedom.domain.AllowedAppsListPolicy
+import com.jp.freedom.domain.AllowedAppsListValidation
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class AllowedAppsListsFlowTest {
+    @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun newListCanBeNamedAndSavedWhenNoTimerIsActive() {
+        var savedList: AllowedAppsList? = null
+        compose.setContent {
+            FocusTheme {
+                AllowedAppsListEditorScreen(
+                    existingList = null,
+                    lists = emptyList(),
+                    installedApps = listOf(InstalledApp("com.example.calendar", "Calendar")),
+                    locked = AllowedAppsListPolicy.isEditorLocked(editorListId = null, activeSessionListId = null),
+                    onBack = {},
+                    onSave = {
+                        savedList = it
+                        AllowedAppsListValidation.Valid
+                    },
+                )
+            }
+        }
+
+        compose.onNodeWithText("List name").performTextInput("Reading")
+        compose.onNodeWithText("Calendar").performClick()
+        compose.onNodeWithText("Save list").assertIsDisplayed().performClick()
+
+        compose.runOnIdle {
+            assertEquals("Reading", savedList?.name)
+            assertEquals(setOf("com.example.calendar"), savedList?.packageNames)
+        }
+    }
+
+    @Test
+    fun listsCanBeSelectedForANewTimerAndCreatedBeforeItStarts() {
+        var selectedId: String? = null
+        var createRequested = false
+        val readingList = AllowedAppsList("reading", "Reading", setOf("com.example.calendar"))
+        compose.setContent {
+            FocusTheme {
+                AllowedAppsListsScreen(
+                    lists = listOf(readingList),
+                    installedApps = listOf(InstalledApp("com.example.calendar", "Calendar")),
+                    selectedListId = AllowedAppsList.ESSENTIALS_ID,
+                    selectionMode = true,
+                    lockedListId = null,
+                    onBack = {},
+                    onSelect = { selectedId = it.id },
+                    onCreate = { createRequested = true },
+                    onEdit = {},
+                    onDelete = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Reading").performScrollTo().performClick()
+        compose.onNodeWithText("Create list").performClick()
+
+        compose.runOnIdle {
+            assertEquals("reading", selectedId)
+            assertTrue(createRequested)
+        }
+    }
+
+    @Test
+    fun listInAnActiveSessionCannotBeEdited() {
+        val readingList = AllowedAppsList("reading", "Reading", setOf("com.example.calendar"))
+        compose.setContent {
+            FocusTheme {
+                AllowedAppsListEditorScreen(
+                    existingList = readingList,
+                    lists = listOf(readingList),
+                    installedApps = listOf(InstalledApp("com.example.calendar", "Calendar")),
+                    locked = AllowedAppsListPolicy.isEditorLocked(
+                        editorListId = readingList.id,
+                        activeSessionListId = readingList.id,
+                    ),
+                    onBack = {},
+                    onSave = { AllowedAppsListValidation.Valid },
+                )
+            }
+        }
+
+        compose.onNodeWithText("This list is locked while its session is active.").assertIsDisplayed()
+        compose.onNodeWithText("List name").assertIsNotEnabled()
+    }
+}

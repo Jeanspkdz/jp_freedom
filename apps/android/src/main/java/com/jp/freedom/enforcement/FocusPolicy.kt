@@ -1,7 +1,7 @@
 package com.jp.freedom.enforcement
 
-import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.DayPlanPolicy
+import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.StudyTimerSession
@@ -15,6 +15,7 @@ data class FocusPolicyState(
     // Planned blocks schedule work; their legacy serialized profile is not a phone choice.
     val accessProfile: AccessProfile? = activeBlock?.let { AccessProfile.ESSENTIALS_ONLY },
     val allowedPackageSnapshot: Set<String>? = null,
+    val allowedAppPackages: Set<String> = emptySet(),
 )
 
 object FocusPolicy {
@@ -28,7 +29,13 @@ object FocusPolicy {
             StudyTimerPolicy.finishBreakIfDue(studySession, now.atZone(java.time.ZoneId.systemDefault()).toInstant()) == null
         ) return FocusPolicyState(null, null)
         if (studySession?.state == StudySessionState.ACTIVE && StudyTimerPolicy.finishIfDue(studySession, now.atZone(java.time.ZoneId.systemDefault()).toInstant()) == null) {
-            return FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, studySession.accessProfile, studySession.allowedPackages)
+            return FocusPolicyState(
+                blockedReason = BlockedReason.FOCUS_BLOCK,
+                activeBlock = null,
+                accessProfile = null,
+                allowedPackageSnapshot = studySession.allowedPackages,
+                allowedAppPackages = studySession.allowedAppPackages,
+            )
         }
         val eveningRestriction = DayPlanPolicy.shouldRestrictEvening(
             now = now,
@@ -45,7 +52,7 @@ object FocusPolicy {
                 now.toLocalTime().isBefore(block.endTime)
         }
         return FocusPolicyState(
-            blockedReason = if (activeBlock == null) null else BlockedReason.FOCUS_BLOCK,
+            blockedReason = null,
             activeBlock = activeBlock,
         )
     }
@@ -62,25 +69,13 @@ object FocusPolicy {
         if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return allowed
         state.allowedPackageSnapshot?.let { return allowed + it }
 
-        val profile = state.accessProfile
-        when (profile) {
-            AccessProfile.ESSENTIALS_WITH_CHATGPT -> allowed += CHATGPT_PACKAGE
-            AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH -> {
-                allowed += CHATGPT_PACKAGE
-                allowed += GOOGLE_SEARCH_PACKAGE
-            }
-            AccessProfile.ESSENTIALS_ONLY, null -> Unit
-        }
-
-        if (profile != null && profile != AccessProfile.ESSENTIALS_ONLY &&
-            state.blockedReason == BlockedReason.FOCUS_BLOCK && siteFilterRunning
-        ) {
+        if (state.blockedReason != BlockedReason.FOCUS_BLOCK) return allowed
+        allowed += state.allowedAppPackages - CHROME_PACKAGE
+        if (CHROME_PACKAGE in state.allowedAppPackages && siteFilterRunning) {
             allowed += CHROME_PACKAGE
         }
         return allowed
     }
 
-    private const val CHATGPT_PACKAGE = "com.openai.chatgpt"
-    private const val GOOGLE_SEARCH_PACKAGE = "com.google.android.googlequicksearchbox"
     private const val CHROME_PACKAGE = "com.android.chrome"
 }

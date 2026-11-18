@@ -17,7 +17,10 @@ function createNode() {
     attributes: new Map(),
     listeners: new Map(),
     children: [],
+    focusCount: 0,
+    focus() { this.focusCount += 1; },
     setAttribute(name, value) { this.attributes.set(name, value); },
+    getAttribute(name) { return this.attributes.get(name) ?? null; },
     removeAttribute(name) { this.attributes.delete(name); },
     addEventListener(type, listener) {
       this.listeners.set(type, listener);
@@ -40,7 +43,7 @@ function createNode() {
   };
 }
 
-function createHarness(initialStorage = {}) {
+function createHarness(initialStorage = {}, page = 'all') {
   const nodes = new Map();
   const storage = { ...initialStorage };
   const rules = [];
@@ -82,7 +85,24 @@ function createHarness(initialStorage = {}) {
       },
     },
   };
+  const navigationLinks = ['management.html', 'sites.html', 'connection.html'].map(href => {
+    const link = createNode();
+    link.setAttribute('href', href);
+    return link;
+  });
+  const sessionValues = new Map();
   const documentRef = {
+    title: 'Tally · Focus plan',
+    documentElement: { dataset: { page }, classList: { add() {}, remove() {} } },
+    location: { href: '' },
+    defaultView: {
+      sessionStorage: {
+        setItem(key, value) { sessionValues.set(key, value); },
+        getItem(key) { return sessionValues.get(key) ?? null; },
+        removeItem(key) { sessionValues.delete(key); },
+      },
+    },
+    querySelectorAll(selector) { return selector === '.view-nav a' ? navigationLinks : []; },
     getElementById(id) {
       if (!nodes.has(id)) nodes.set(id, createNode());
       return nodes.get(id);
@@ -90,7 +110,7 @@ function createHarness(initialStorage = {}) {
     createElement() { return createNode(); },
     createTextNode(textContent) { return { textContent }; },
   };
-  return { chromeApi, documentRef, nodes, rules, storage, alarms, notifications };
+  return { chromeApi, documentRef, navigationLinks, nodes, rules, storage, alarms, notifications, sessionValues };
 }
 
 test('without a valid snapshot, management reports inactive protection and leaves browsing unblocked', async () => {
@@ -111,14 +131,11 @@ test('without a valid snapshot, management reports inactive protection and leave
   assert.deepEqual(harness.rules, []);
 });
 
-test('management navigation separates the plan, sites, and connection views', async () => {
-  const harness = createHarness();
+test('separate management page links carry direction and degrade to ordinary navigation', async () => {
+  const harness = createHarness({}, 'sites');
   await initializeManagement({ ...harness, fetchImpl: async () => { throw new Error('unexpected request'); } });
 
-  harness.nodes.get('tab-sites').listeners.get('click')();
-  assert.equal(harness.nodes.get('view-plan').hidden, true);
-  assert.equal(harness.nodes.get('view-sites').hidden, false);
-  assert.equal(harness.nodes.get('view-connection').hidden, true);
+  harness.navigationLinks[0].listeners.get('click')({ button: 0 });
 
   harness.nodes.get('tab-connection').listeners.get('click')();
   assert.equal(harness.nodes.get('view-sites').hidden, true);
@@ -373,6 +390,73 @@ test('a cached plan without a configured connection is visibly offline', async (
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
 });
 
+test('Plan exposes the manual timer and shows its countdown after starting', async () => {
+  const now = new Date('2026-11-16T12:00:00.000Z');
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' }, 'plan');
+  let session = null;
+  let revision = 0;
+  const fetchImpl = async (url, options) => {
+    if (url.endsWith('/v1/session')) {
+      if (options.method === 'PUT') {
+        const body = JSON.parse(options.body);
+        assert.equal(body.expectedRevision, revision);
+        session = body.session;
+        revision += 1;
+      }
+      return new Response(JSON.stringify({ revision, session }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ revision: 1, updatedAt: now.toISOString(), snapshot }), { status: 200 });
+  };
+  await initializeManagement({ ...harness, fetchImpl, now: () => now });
+  assert.equal(harness.nodes.get('start-study-timer').disabled, false);
+  harness.documentRef.getElementById('study-duration').value = '30';
+  await harness.nodes.get('study-timer-form').listeners.get('submit')({ preventDefault() {} });
+  assert.equal(harness.nodes.get('study-timer-remaining').textContent, '0:30:00');
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+});
+
+test('a timer can start without a connection and stays pending for sync', async () => {
+  const now = new Date('2026-11-16T12:00:00.000Z');
+  const harness = createHarness({}, 'plan');
+  await initializeManagement({ ...harness, now: () => now,
+    fetchImpl: async () => { throw new Error('Unexpected network request'); } });
+  harness.documentRef.getElementById('study-duration').value = '30';
+  assert.equal(harness.nodes.get('start-study-timer').disabled, false);
+  await harness.nodes.get('study-timer-form').listeners.get('submit')({ preventDefault() {} });
+  assert.equal(harness.storage.studyPending, true);
+  assert.equal(harness.nodes.get('study-timer-remaining').textContent, '0:30:00');
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]),
+    ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com']);
+});
+
+test('Plan lets the user choose the Chrome timer after an offline conflict', async () => {
+  const now = new Date('2026-11-16T12:05:00.000Z');
+  const local = { id: 'chrome-1', startedAt: '2026-11-16T12:00:00.000Z', durationMillis: 1_800_000,
+    state: 'ACTIVE', accessProfile: 'ESSENTIALS_ONLY', taskName: '' };
+  const remote = { ...local, id: 'android-1' };
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token',
+    lastStudySession: local, studyPending: true, studyConflict: true }, 'plan');
+  let chosen;
+  const fetchImpl = async (url, options) => {
+    if (url.endsWith('/v1/snapshot')) return new Response(JSON.stringify({ revision: 1, updatedAt: now.toISOString(), snapshot }));
+    if (options.method === 'PUT') {
+      chosen = JSON.parse(options.body).session;
+      return new Response(JSON.stringify({ revision: 3, session: chosen }));
+    }
+    return new Response(JSON.stringify({ revision: 2, session: remote }));
+  };
+  await initializeManagement({ ...harness, fetchImpl, now: () => now });
+  assert.equal(harness.nodes.get('study-conflict-actions').hidden, false);
+  await harness.nodes.get('keep-chrome-timer').listeners.get('click')();
+  assert.equal(chosen.id, 'chrome-1');
+  assert.deepEqual(chosen.supersededAttemptIds, ['android-1']);
+  assert.equal(harness.storage.studyConflict, false);
+  assert.equal(harness.storage.studyPending, false);
+});
+
 test('a successful sync shows the active block and planned end, saves the snapshot, and installs its rules', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -394,7 +478,7 @@ test('a successful sync shows the active block and planned end, saves the snapsh
     },
   });
 
-  assert.equal(request.url, 'https://sync.example/v1/snapshot');
+  assert.equal(request.url, 'https://sync.example/v1/session');
   assert.equal(request.options.headers.Authorization, 'Bearer secret-token');
   assert.equal(harness.nodes.get('current-block').textContent, 'Deep work');
   assert.equal(harness.nodes.get('planned-end').textContent, 'Planned end: 11:30');
@@ -993,6 +1077,14 @@ test('the blocked page hides the return-time row when no block is active', async
   assert.equal(harness.nodes.get('blocked-end-row').hidden, true);
 });
 
+test('the blocked page identifies a manually started study session', async () => {
+  const session = { id: 'study-1', state: 'ACTIVE', startedAt: '2026-11-16T12:00:00.000Z', durationMillis: 1_800_000 };
+  const harness = createHarness({ lastStudySession: session });
+  await initializeBlockedPage({ ...harness, now: () => new Date('2026-11-16T12:05:00.000Z') });
+  assert.equal(harness.nodes.get('blocked-activity').textContent, 'Study timer');
+  assert.equal(harness.nodes.get('blocked-end-row').hidden, false);
+});
+
 test('an invalid newer snapshot does not replace the last valid cached plan', async () => {
   const now = new Date(2026, 10, 5, 10, 30);
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -1147,6 +1239,51 @@ test('the background worker polls for Android completion and releases rules with
   assert.deepEqual(harness.storage.lastValidSnapshot, finished);
   assert.equal(harness.storage.lastSnapshotRevision, 2);
   assert.deepEqual(harness.rules, []);
+});
+
+test('background sync publishes an offline Chrome timer without losing its original start time', async () => {
+  const startedAt = '2026-11-16T12:00:00.000Z';
+  const session = { id: 'offline-1', startedAt, durationMillis: 1_800_000,
+    state: 'ACTIVE', accessProfile: 'ESSENTIALS_ONLY', taskName: '' };
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token',
+    studyPending: true, lastStudySession: session });
+  let published;
+  const fetchImpl = async (url, options) => {
+    if (url.endsWith('/v1/snapshot')) return new Response(JSON.stringify({ revision: 1, updatedAt: startedAt, snapshot }));
+    if (options.method === 'PUT') {
+      published = JSON.parse(options.body).session;
+      return new Response(JSON.stringify({ revision: 1, session: published }));
+    }
+    return new Response(JSON.stringify({ revision: 0, session: null }));
+  };
+  await refreshRemoteSnapshot(harness.chromeApi, fetchImpl, new Date('2026-11-16T12:05:00.000Z'));
+  assert.equal(published.startedAt, startedAt);
+  assert.equal(harness.storage.studyPending, false);
+  assert.equal(harness.storage.lastStudySession.id, 'offline-1');
+  assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
+});
+
+test('background sync keeps an offline timer when Android started a different one', async () => {
+  const local = { id: 'chrome-session', startedAt: '2026-11-16T12:00:00.000Z', durationMillis: 1_800_000,
+    state: 'ACTIVE', accessProfile: 'ESSENTIALS_ONLY', taskName: '' };
+  const remote = { ...local, id: 'android-session' };
+  const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: ['reddit.com'], blocks: [] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token',
+    studyPending: true, lastStudySession: local });
+  let writes = 0;
+  const fetchImpl = async (url, options) => {
+    if (url.endsWith('/v1/snapshot')) return new Response(JSON.stringify({ revision: 1, updatedAt: local.startedAt, snapshot }));
+    if (options.method === 'PUT') writes += 1;
+    return new Response(JSON.stringify({ revision: 2, session: remote }));
+  };
+  await refreshRemoteSnapshot(harness.chromeApi, fetchImpl, new Date('2026-11-16T12:05:00.000Z'));
+  assert.equal(writes, 0);
+  assert.equal(harness.storage.studyPending, true);
+  assert.equal(harness.storage.studyConflict, true);
+  assert.equal(harness.storage.lastStudySession.id, 'chrome-session');
 });
 
 test('overlapping background refreshes share one request and cannot replace a newer cached revision', async () => {

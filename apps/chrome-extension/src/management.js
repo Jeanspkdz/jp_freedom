@@ -2,6 +2,8 @@ import { applySnapshotRules } from './enforcement.js';
 import { getActiveStudySession, getCurrentAndNext } from './policy.js';
 import { readSnapshot, snapshotEndpoint, validSnapshotResponse } from './sync-client.js';
 import { isValidDomain } from './domain.js';
+import { readStudySession, startStudySession, stopStudySession, activeStudySession, makeLocalStudySession, publishPendingStudySession, resolveStudyConflict } from './study-session.js';
+import { setClockTime } from './flip-clock.js';
 
 const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync', 'lastSnapshotRevision', 'pendingSessionStart', 'pendingSessionStop'];
 const DEFAULT_SYNC_API_URL = 'https://br-floral-block-bddjl0rs-jpfreedomsync.compute.c-8.us-east-2.aws.neon.tech/';
@@ -125,6 +127,36 @@ function renderFocusMeter(documentRef, current, now) {
   progress.setAttribute('aria-valuenow', String(Math.round(percent)));
 }
 
+// The countdown updates without rebuilding schedule rows or restarting their entry animations.
+function renderStudyTimer(documentRef, state, now) {
+  const timer = documentRef.getElementById('study-timer-status');
+  const remaining = documentRef.getElementById('study-timer-remaining');
+  const running = activeStudySession(state.studySession, now);
+  const seconds = running ? Math.ceil((Date.parse(state.studySession.startedAt) + state.studySession.durationMillis - now.getTime()) / 1000) : 0;
+  const durationInput = documentRef.getElementById('study-duration');
+  setClockTime(documentRef, running ? Math.max(0, seconds) : Number(durationInput.value) * 60,
+    documentRef.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  const date = documentRef.getElementById('timer-date');
+  if (date) date.textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  remaining.hidden = !running;
+  remaining.textContent = running ? `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds / 60) % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}` : '';
+  timer.textContent = state.studyTimerMessage ?? (state.studyConflict
+    ? 'A different timer started on Android while Chrome was offline. Both attempts were kept.'
+    : running ? 'Study session in progress.'
+    : state.studySession?.state === 'ACTIVE' ? 'Timer finished. Review this session on Android.'
+    : state.studySession?.state === 'PENDING_REVIEW' ? 'Review the previous session on Android before starting another.'
+    : state.studyPending ? 'Timer saved here. Connect to share it with Android.'
+    : state.connected ? 'Choose a duration and start a study session.' : 'Start a timer here. Connect to share it with Android.');
+  documentRef.getElementById('study-timer-form').hidden = running;
+  documentRef.getElementById('start-study-timer').disabled = state.studyTimerBusy
+    || Boolean(state.studySession && state.studySession.state !== 'REVIEWED');
+  documentRef.getElementById('stop-study-timer').hidden = !running;
+  documentRef.getElementById('stop-study-timer').disabled = state.studyTimerBusy;
+  documentRef.getElementById('study-conflict-actions').hidden = !state.studyConflict;
+  const stateLabel = documentRef.querySelector?.('.timer-state-label');
+  if (stateLabel) stateLabel.textContent = running ? 'Focus session active' : state.connected ? 'Connected' : 'Not connected';
+}
+
 function renderDayPlan(documentRef, snapshot, date, prefix, currentBlockId) {
   const dateElement = documentRef.getElementById(`${prefix}-plan-date`);
   const emptyElement = documentRef.getElementById(`${prefix}-plan-empty`);
@@ -151,6 +183,9 @@ function renderDayPlan(documentRef, snapshot, date, prefix, currentBlockId) {
   for (const block of blocks) {
     const row = documentRef.createElement('li');
     row.className = `day-plan-row${block.id === currentBlockId ? ' is-current' : ''}`;
+    row.setAttribute?.('data-list-item', '');
+    row.classList?.add('is-entering');
+    row.addEventListener?.('animationend', () => row.classList?.remove('is-entering'), { once: true });
     const time = documentRef.createElement('time');
     time.className = 'day-plan-time';
     time.textContent = `${formatPlanTime(block.startTime)}–${formatPlanTime(block.endTime)}`;
@@ -171,7 +206,7 @@ function renderDayPlan(documentRef, snapshot, date, prefix, currentBlockId) {
 
 function render(documentRef, state, now) {
   const { snapshot, lastSuccessfulSync, error, connected } = state;
-  const protection = documentRef.getElementById('protection-state');
+  const page = documentRef.documentElement.dataset.page ?? 'all';
   const sync = documentRef.getElementById('sync-state');
   sync.setAttribute?.('data-state', connected && state.online && !error ? 'synced' : 'offline');
   const lastSync = documentRef.getElementById('last-sync');
@@ -276,70 +311,92 @@ function render(documentRef, state, now) {
   const focusMain = documentRef.getElementById('focus-main');
   if (focusMain) focusMain.hidden = !active;
   state.focusBlockId = current?.id ?? null;
-  renderFocusMeter(documentRef, current, now);
-  const currentBlockId = current?.id ?? null;
-  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  documentRef.getElementById('today-intro-date').textContent = now.toLocaleDateString(undefined, {
-    weekday: 'long', month: 'long', day: 'numeric',
-  });
-  renderDayPlan(documentRef, snapshot, now, 'today', currentBlockId);
-  renderDayPlan(documentRef, snapshot, tomorrow, 'tomorrow', currentBlockId);
-  const displayedDomains = snapshot
-    ? (state.newEmptyBlocklist ? [...DEFAULT_DESKTOP_DOMAINS] : [...new Set(snapshot.desktopBlockedDomains)])
-    : [...DEFAULT_DESKTOP_DOMAINS];
-  state.displayedDomains = displayedDomains;
-  const canEdit = Boolean(state.connected && state.online && snapshot && !state.saving);
-  for (const domain of COMMON_DOMAINS) {
-    const checkbox = documentRef.getElementById(`domain-${domain}`);
-    checkbox.checked = displayedDomains.includes(domain);
-    checkbox.disabled = !canEdit || (active && checkbox.checked);
-  }
-  for (const domain of displayedDomains.filter(value => !COMMON_DOMAINS.includes(value))) {
-    ensureCustomCheckbox(documentRef, state, domain);
-  }
-  for (const [domain, checkbox] of state.customCheckboxes ?? []) {
-    if (!displayedDomains.includes(domain)) {
-      checkbox.parentElement?.remove();
-      state.customCheckboxes.delete(domain);
-      continue;
+  if (page === 'plan' || page === 'all') {
+    renderStudyTimer(documentRef, state, now);
+    const protection = documentRef.getElementById('protection-state');
+    const plannedEnd = documentRef.getElementById('planned-end');
+    const currentBlock = documentRef.getElementById('current-block');
+    const focusHeading = documentRef.getElementById('focus-heading');
+    focusHeading.textContent = 'Focus session';
+    focusHeading.classList?.toggle('is-active', active);
+    documentRef.getElementById('focus-live').hidden = !active;
+    documentRef.querySelector?.('.focus-board')?.classList?.toggle('is-active', active);
+    renderFocusMeter(documentRef, current, now);
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    documentRef.getElementById('today-intro-date').textContent = now.toLocaleDateString(undefined, {
+      weekday: 'long', month: 'long', day: 'numeric',
+    });
+    renderDayPlan(documentRef, snapshot, now, 'today', current?.id ?? null);
+    renderDayPlan(documentRef, snapshot, tomorrow, 'tomorrow', current?.id ?? null);
+    if (!snapshot) {
+      protection.textContent = 'Protection inactive. No valid plan has synced.';
+      currentBlock.textContent = 'No active focus block';
+      plannedEnd.hidden = true;
+      plannedEnd.textContent = '';
+    } else {
+      protection.textContent = 'Protection is active when a focus block is scheduled.';
+      currentBlock.textContent = current?.name ?? 'No active focus block';
+      plannedEnd.hidden = !current;
+      plannedEnd.textContent = current ? `Planned end: ${current.endTime}` : '';
     }
-    checkbox.checked = displayedDomains.includes(domain);
-    checkbox.disabled = !canEdit || (active && checkbox.checked);
   }
-  const customDomain = documentRef.getElementById('custom-domain');
-  const addButton = documentRef.getElementById('add-domain');
-  customDomain.disabled = !canEdit;
-  addButton.disabled = !canEdit;
-  documentRef.getElementById('blocklist-status').textContent = state.blocklistMessage
-    ?? (!state.connected || !state.online ? 'Connect Chrome to the internet and sync to save blocklist changes.' : '');
-
-  lastSync.textContent = `Last successful sync: ${formatLocalTime(lastSuccessfulSync)}`;
-  errorMessage.hidden = !error;
-  errorMessage.textContent = error ?? '';
-  if (!snapshot) {
-    protection.textContent = 'Protection inactive. No valid plan has synced.';
-    sync.textContent = !connected
-      ? 'Not connected. Enter your sync API details.'
-      : error ? 'Offline. No plan has synced yet.' : 'Connected. Waiting for first sync.';
-    currentBlock.textContent = 'No active focus block';
-    plannedEnd.hidden = true;
-    plannedEnd.textContent = '';
-    return;
+  if (page === 'sites' || page === 'all') {
+    const displayedDomains = snapshot
+      ? (state.newEmptyBlocklist ? [...DEFAULT_DESKTOP_DOMAINS] : [...new Set(snapshot.desktopBlockedDomains)])
+      : [...DEFAULT_DESKTOP_DOMAINS];
+    state.displayedDomains = displayedDomains;
+    const count = String(displayedDomains.length).padStart(2, '0');
+    documentRef.querySelectorAll?.('.sites-digit')?.forEach((digit, index) => {
+      digit.textContent = count[index] ?? '';
+      digit.dataset.digit = count[index] ?? '';
+    });
+    const countLive = documentRef.getElementById('sites-count-live');
+    if (countLive?.textContent !== undefined) countLive.textContent = `${displayedDomains.length} sites selected`;
+    const canEdit = Boolean(state.connected && state.online && snapshot && !state.saving);
+    for (const domain of COMMON_DOMAINS) {
+      const checkbox = documentRef.getElementById(`domain-${domain}`);
+      checkbox.checked = displayedDomains.includes(domain);
+      checkbox.disabled = !canEdit || (active && checkbox.checked);
+    }
+    for (const domain of displayedDomains.filter(value => !COMMON_DOMAINS.includes(value))) {
+      ensureCustomCheckbox(documentRef, state, domain);
+    }
+    for (const [domain, checkbox] of state.customCheckboxes ?? []) {
+      if (!displayedDomains.includes(domain)) {
+        const row = checkbox.parentElement;
+        if (row?.classList?.add) {
+          row.classList.add('is-removing');
+          row.addEventListener?.('animationend', () => row.remove(), { once: true });
+        } else row?.remove?.();
+        state.customCheckboxes.delete(domain);
+        continue;
+      }
+      checkbox.checked = displayedDomains.includes(domain);
+      checkbox.disabled = !canEdit || (active && checkbox.checked);
+    }
+    documentRef.getElementById('custom-domain').disabled = !canEdit;
+    documentRef.getElementById('add-domain').disabled = !canEdit;
+    documentRef.getElementById('blocklist-status').textContent = state.blocklistMessage
+      ?? (!state.connected || !state.online ? 'Connect Chrome to the internet and sync to save blocklist changes.' : '');
   }
-
-  protection.textContent = 'Protection is active during a study session or scheduled focus block.';
-  sync.textContent = error || !connected ? 'Offline. Using cached plan.' : 'Synced. Using latest plan.';
-  currentBlock.textContent = current?.name ?? 'No active focus block';
-  plannedEnd.hidden = !current;
-  plannedEnd.textContent = !current ? '' : current.studySession
-    ? `Planned end: ${new Date(current.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
-    : `Planned end: ${current.endTime}`;
+  if (page === 'connection' || page === 'all') {
+    documentRef.getElementById('last-sync').textContent = `Last successful sync: ${formatLocalTime(lastSuccessfulSync)}`;
+    const errorMessage = documentRef.getElementById('sync-error');
+    errorMessage.hidden = !error;
+    errorMessage.textContent = error ?? '';
+  }
+  sync.textContent = !snapshot
+    ? (!connected ? 'Not connected. Enter your sync API details.' : error ? 'Offline. No plan has synced yet.' : 'Connected. Waiting for first sync.')
+    : (error || !connected ? 'Offline. Using cached plan.' : 'Synced. Using latest plan.');
 }
 
 function ensureCustomCheckbox(documentRef, state, domain) {
   if (state.customCheckboxes?.has(domain)) return state.customCheckboxes.get(domain);
   const wrapper = documentRef.createElement('label');
   wrapper.className = 'site-row';
+  wrapper.setAttribute?.('data-list-item', '');
+  wrapper.classList?.add('is-entering');
+  wrapper.addEventListener?.('animationend', () => wrapper.classList?.remove('is-entering'), { once: true });
   wrapper.setAttribute?.('data-monogram', domain[0].toUpperCase());
   const checkbox = documentRef.createElement('input');
   checkbox.type = 'checkbox';
@@ -397,19 +454,120 @@ export async function initializeManagement({
     pendingSessionStart: saved.pendingSessionStart ?? null,
     pendingSessionStop: saved.pendingSessionStop ?? null,
   };
-  const views = ['plan', 'sites', 'connection'];
-  const showView = selected => {
-    for (const view of views) {
-      const active = view === selected;
-      const tab = documentRef.getElementById(`tab-${view}`);
-      documentRef.getElementById(`view-${view}`).hidden = !active;
-      tab.classList?.toggle('is-selected', active);
-      if (active) tab.setAttribute?.('aria-current', 'page');
-      else tab.removeAttribute?.('aria-current');
+  const page = documentRef.documentElement.dataset.page ?? 'all';
+  const pageOrder = ['plan', 'sites', 'connection'];
+  const setNavigationDirection = target => {
+    const currentIndex = pageOrder.indexOf(page);
+    const targetIndex = pageOrder.indexOf(target);
+    documentRef.documentElement.dataset.nav = targetIndex < currentIndex ? 'back' : 'forward';
+    try {
+      const sessionStorage = documentRef.defaultView?.sessionStorage ?? globalThis.sessionStorage;
+      sessionStorage?.setItem('Tally-nav-direction', documentRef.documentElement.dataset.nav);
+    } catch {
+      // The new page defaults to a forward transition when session storage is unavailable.
     }
   };
-  for (const view of views) {
-    documentRef.getElementById(`tab-${view}`).addEventListener('click', () => showView(view));
+  let leaving = false;
+  const openPage = (target, href) => {
+    if (leaving) return;
+    setNavigationDirection(target);
+    const view = documentRef.defaultView;
+    const location = view?.location ?? documentRef.location ?? globalThis.location;
+    if (!location) return;
+    if (view?.location?.protocol !== 'chrome-extension:' || target === page) {
+      location.href = href;
+      return;
+    }
+    // Extension URLs currently skip cross-document View Transitions in Chromium.
+    leaving = true;
+    try { view.sessionStorage?.setItem('Tally-nav-fallback', '1'); } catch { /* Direct navigation remains available. */ }
+    documentRef.documentElement.classList.add('is-leaving');
+    const duration = view.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 100 : 200;
+    globalThis.setTimeout(() => { location.href = href; }, duration);
+  };
+  const navigateToPage = target => {
+    openPage(target, `${target === 'plan' ? 'management' : target}.html`);
+  };
+  let switchingTab = false;
+  const slideTabThenOpen = (target, href) => {
+    if (switchingTab || leaving) return;
+    switchingTab = true;
+    const nav = documentRef.querySelector?.('.view-nav');
+    const currentTab = documentRef.querySelector?.('.view-nav [aria-current="page"]');
+    const nextTab = [...(documentRef.querySelectorAll?.('.view-nav a') ?? [])]
+      .find(tab => tab.getAttribute('href') === href);
+    const from = currentTab?.getBoundingClientRect?.();
+    const to = nextTab?.getBoundingClientRect?.();
+    const activate = () => {
+      for (const tab of documentRef.querySelectorAll?.('.view-nav a') ?? []) {
+        const selected = tab.getAttribute('href') === href;
+        tab.classList.toggle('is-selected', selected);
+        if (selected) tab.setAttribute('aria-current', 'page');
+        else tab.removeAttribute('aria-current');
+      }
+    };
+    const openTabDocument = () => {
+      setNavigationDirection(target);
+      documentRef.documentElement.classList.add('tab-pill-only');
+      try { documentRef.defaultView?.sessionStorage?.setItem('Tally-tab-pill-only', '1'); } catch { /* Direct navigation still works. */ }
+      (documentRef.defaultView?.location ?? documentRef.location ?? globalThis.location).href = href;
+    };
+    if (!nav || !from || !to || documentRef.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      activate();
+      openTabDocument();
+      return;
+    }
+    const pill = documentRef.createElement('span');
+    pill.className = 'nav-pill';
+    pill.setAttribute('aria-hidden', 'true');
+    const navLeft = nav.getBoundingClientRect().left;
+    const fromX = from.left - navLeft + nav.scrollLeft;
+    const toX = to.left - navLeft + nav.scrollLeft;
+    pill.style.width = `${from.width}px`;
+    pill.style.transform = `translateX(${fromX}px)`;
+    nav.prepend(pill);
+    documentRef.documentElement.classList.add('nav-pill-ready');
+    activate();
+    const finishNavigation = () => {
+      pill.style.width = `${to.width}px`;
+      pill.style.transform = `translateX(${toX}px)`;
+      openTabDocument();
+    };
+    if (!pill.animate) return finishNavigation();
+    pill.animate([
+      { width: `${from.width}px`, transform: `translateX(${fromX}px)` },
+      { width: `${to.width}px`, transform: `translateX(${toX}px)` },
+    ], { duration: 300, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'forwards' }).finished
+      .then(finishNavigation, finishNavigation);
+  };
+  for (const link of documentRef.querySelectorAll?.('.view-nav a') ?? []) {
+    link.addEventListener('click', event => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button > 0) return;
+      const href = link.getAttribute('href');
+      const target = href === 'management.html' ? 'plan' : href?.replace('.html', '');
+      if (pageOrder.includes(target)) {
+        if (documentRef.defaultView?.location?.protocol === 'chrome-extension:' && target !== page) {
+          event.preventDefault();
+          slideTabThenOpen(target, href);
+        } else setNavigationDirection(target);
+      }
+    });
+  }
+  if (typeof globalThis.IntersectionObserver === 'function') {
+    const observer = new globalThis.IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.classList?.add('is-visible');
+        observer.unobserve(entry.target);
+      }
+    }, { threshold: 0.15 });
+    for (const element of documentRef.querySelectorAll?.('[data-reveal]') ?? []) observer.observe(element);
+  } else {
+    for (const element of documentRef.querySelectorAll?.('[data-reveal]') ?? []) element.classList?.add('is-visible');
+  }
+  if (page === 'connection' || page === 'all') {
+    documentRef.getElementById('api-url').value = state.apiUrl;
+    documentRef.getElementById('api-token').value = state.apiToken;
   }
   documentRef.getElementById('open-connection').addEventListener('click', () => showView('connection'));
   documentRef.getElementById('api-url').value = state.apiUrl;
@@ -445,13 +603,25 @@ export async function initializeManagement({
       show();
       return;
     }
-    renderFocusMeter(documentRef, current, now());
+    if (page === 'plan' || page === 'all') {
+      renderFocusMeter(documentRef, current, now());
+      renderStudyTimer(documentRef, state, now());
+    }
   }, 1000);
   focusClock?.unref?.();
   const updateRules = async () => {
-    await applySnapshotRules(chromeApi, state.snapshot, now());
+    const rulesSnapshot = state.snapshot ?? (state.studySession
+      ? { desktopBlockedDomains: DEFAULT_DESKTOP_DOMAINS, blocks: [] } : null);
+    await applySnapshotRules(chromeApi, rulesSnapshot, now(), state.studySession);
     show();
   };
+  // Background sync can receive a session started or stopped on Android while Plan is open.
+  chromeApi.storage.onChanged?.addListener?.((changes, area) => {
+    if (area !== 'local') return;
+    if ('lastStudySession' in changes) state.studySession = changes.lastStudySession.newValue ?? null;
+    if ('studyConflict' in changes) state.studyConflict = Boolean(changes.studyConflict.newValue);
+    show();
+  });
   const readLatest = () => readSnapshot(state.apiUrl, state.apiToken, fetchImpl);
   documentRef.getElementById('start-session').addEventListener('click', async () => {
     const duration = Number(documentRef.getElementById('session-duration').value);
@@ -761,28 +931,30 @@ export async function initializeManagement({
     const base = state.newEmptyBlocklist ? displayed : (state.snapshot?.desktopBlockedDomains ?? displayed);
     return persistDomainIntent(domain, included, base);
   };
-  for (const domain of COMMON_DOMAINS) {
-    documentRef.getElementById(`domain-${domain}`).addEventListener('change', event => {
-      return state.changeDomain(domain, event.target.checked);
+  if (page === 'sites' || page === 'all') {
+    for (const domain of COMMON_DOMAINS) {
+      documentRef.getElementById(`domain-${domain}`).addEventListener('change', event => {
+        return state.changeDomain(domain, event.target.checked);
+      });
+    }
+    documentRef.getElementById('add-domain-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const field = documentRef.getElementById('custom-domain');
+      const domain = field.value.trim().toLowerCase();
+      if (!isValidDomain(domain)) {
+        state.blocklistMessage = 'Enter a bare domain such as example.com. URLs and paths are not accepted.';
+        show();
+        return;
+      }
+      if (state.displayedDomains.includes(domain)) {
+        state.blocklistMessage = 'That domain is already in the blocklist.';
+        show();
+        return;
+      }
+      await persistDomainIntent(domain, true);
+      if (state.online && state.snapshot.desktopBlockedDomains.includes(domain)) field.value = '';
     });
   }
-  documentRef.getElementById('add-domain-form').addEventListener('submit', async event => {
-    event.preventDefault();
-    const field = documentRef.getElementById('custom-domain');
-    const domain = field.value.trim().toLowerCase();
-    if (!isValidDomain(domain)) {
-      state.blocklistMessage = 'Enter a bare domain such as example.com. URLs and paths are not accepted.';
-      show();
-      return;
-    }
-    if (state.displayedDomains.includes(domain)) {
-      state.blocklistMessage = 'That domain is already in the blocklist.';
-      show();
-      return;
-    }
-    await persistDomainIntent(domain, true);
-    if (state.online && state.snapshot.desktopBlockedDomains.includes(domain)) field.value = '';
-  });
   const sync = async () => {
     state.error = null;
     state.connected = Boolean(state.apiUrl && state.apiToken);
@@ -902,6 +1074,10 @@ export async function initializeManagement({
       state.error = cause instanceof TypeError
         ? connectionError(state.apiUrl)
         : (cause?.message || 'Sync failed. Check the API URL and bearer token.');
+      if (/Another study session/.test(state.error)) {
+        state.studyConflict = true;
+        await chromeApi.storage.local.set({ studyConflict: true });
+      }
       await updateRules();
     } finally {
       syncButton.classList?.remove('is-syncing');
@@ -910,26 +1086,92 @@ export async function initializeManagement({
     }
   };
 
-  documentRef.getElementById('settings-form').addEventListener('submit', async event => {
-    event.preventDefault();
-    state.apiUrl = documentRef.getElementById('api-url').value.trim();
-    state.apiToken = documentRef.getElementById('api-token').value.trim();
-    state.connected = Boolean(state.apiUrl && state.apiToken);
-    if (state.connected && chromeApi.permissions?.request) {
-      try {
-        const api = new URL(state.apiUrl);
-        const localHttp = api.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(api.hostname);
-        if (!localHttp) await chromeApi.permissions.request({ origins: [`${api.origin}/*`] });
-      } catch {
-        // endpointFor reports malformed or insecure URLs in the normal sync flow.
-      }
+  // Manual timer actions use the shared session record and refresh site rules immediately.
+  if (page === 'plan' || page === 'all') {
+    for (const [id, choice] of [['keep-chrome-timer', 'chrome'], ['keep-android-timer', 'android']]) {
+      documentRef.getElementById(id).addEventListener('click', async () => {
+        state.studyTimerBusy = true;
+        show();
+        try {
+          const result = await resolveStudyConflict(state.apiUrl, state.apiToken, state.studySession, choice, fetchImpl);
+          state.studySession = result.session;
+          state.studyPending = false;
+          state.studyConflict = false;
+          state.studyTimerMessage = null;
+          await chromeApi.storage.local.set({ lastStudySession: result.session,
+            lastStudyRevision: result.revision, studyPending: false, studyConflict: false });
+          await updateRules();
+          await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
+        } catch (cause) { state.studyTimerMessage = cause.message ?? 'Could not resolve the timer conflict.'; }
+        finally { state.studyTimerBusy = false; show(); }
+      });
     }
-    await chromeApi.storage.local.set({ apiUrl: state.apiUrl, apiToken: state.apiToken });
-    await sync();
-  });
+    const runTimerAction = async (action, localAction) => {
+      state.studyTimerBusy = true;
+      state.studyTimerMessage = null;
+      show();
+      try {
+        let result;
+        try { result = state.connected ? await action() : null; }
+        catch (cause) { if (!(cause instanceof TypeError)) throw cause; }
+        if (result) {
+          state.studySession = result.session;
+          state.studyPending = false;
+        } else {
+          state.studySession = localAction();
+          state.studyPending = true;
+        }
+        await chromeApi.storage.local.set({ lastStudySession: state.studySession,
+          ...(result ? { lastStudyRevision: result.revision } : {}), studyPending: state.studyPending });
+        await updateRules();
+        await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
+      } catch (cause) { state.studyTimerMessage = cause.message ?? 'Could not update the study timer.'; }
+      finally { state.studyTimerBusy = false; show(); }
+    };
+    documentRef.getElementById('study-timer-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const duration = Number(documentRef.getElementById('study-duration').value);
+      return runTimerAction(() => startStudySession(state.apiUrl, state.apiToken, duration, fetchImpl, now()),
+        () => makeLocalStudySession(duration, now()));
+    });
+    documentRef.querySelectorAll?.('[data-duration]').forEach(button => button.addEventListener('click', () => {
+      const duration = Number(button.dataset.duration);
+      documentRef.getElementById('study-duration').value = String(duration);
+      documentRef.querySelectorAll('[data-duration]').forEach(option =>
+        option.setAttribute('aria-pressed', String(option === button)));
+      setClockTime(documentRef, duration * 60,
+        documentRef.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+    }));
+    if (documentRef.getElementById('study-timer-form').dataset) documentRef.getElementById('study-timer-form').dataset.ready = 'true';
+    documentRef.getElementById('stop-study-timer').addEventListener('click', () =>
+      runTimerAction(() => state.studyPending ? null : stopStudySession(state.apiUrl, state.apiToken, fetchImpl, now()),
+        () => ({ ...state.studySession, endedAt: now().toISOString(),
+          actualMillis: Math.max(0, Math.min(now().getTime() - Date.parse(state.studySession.startedAt), state.studySession.durationMillis)),
+          state: 'PENDING_REVIEW' })));
+  }
+
+  if (page === 'connection' || page === 'all') {
+    documentRef.getElementById('settings-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      state.apiUrl = documentRef.getElementById('api-url').value.trim();
+      state.apiToken = documentRef.getElementById('api-token').value.trim();
+      state.connected = Boolean(state.apiUrl && state.apiToken);
+      if (state.connected && chromeApi.permissions?.request) {
+        try {
+          const api = new URL(state.apiUrl);
+          const localHttp = api.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(api.hostname);
+          if (!localHttp) await chromeApi.permissions.request({ origins: [`${api.origin}/*`] });
+        } catch {
+          // endpointFor reports malformed or insecure URLs in the normal sync flow.
+        }
+      }
+      await chromeApi.storage.local.set({ apiUrl: state.apiUrl, apiToken: state.apiToken });
+      await sync();
+    });
+  }
   documentRef.getElementById('sync-now').addEventListener('click', async () => {
     await sync();
-    if (!state.connected || state.error) showView('connection');
+    if ((!state.connected || state.error) && page !== 'connection') navigateToPage('connection');
   });
 
   await updateRules();
