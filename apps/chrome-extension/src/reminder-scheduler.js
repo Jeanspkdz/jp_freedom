@@ -11,9 +11,13 @@ function localDateKey(date) {
 
 function studiedToday(snapshot, now) {
   const today = localDateKey(now);
+  const startedToday = value => {
+    const startedAt = Date.parse(value);
+    return Number.isFinite(startedAt) && localDateKey(new Date(startedAt)) === today;
+  };
   return Boolean(getActiveStudySession(snapshot, now)
-    || snapshot?.activeStudySession?.startedAt?.slice(0, 10) === today
-    || snapshot?.studyHistory?.some(session => session.startedAt?.slice(0, 10) === today));
+    || startedToday(snapshot?.activeStudySession?.startedAt)
+    || snapshot?.studyHistory?.some(session => startedToday(session.startedAt)));
 }
 
 export function createPlanningReminderScheduler({ getSnapshot, alarms, notifications, iconUrl, now = () => new Date() }) {

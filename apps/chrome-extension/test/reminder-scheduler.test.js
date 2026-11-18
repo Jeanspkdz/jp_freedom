@@ -105,3 +105,20 @@ test('the study reminder runs on weekends too', async () => {
   await scheduler.onAlarm(PLANNING_REMINDER_CUTOFF_ALARM);
   assert.match(chrome.notifications.shown[0].options.message, /Start a focus session/);
 });
+
+test('a session started late in the local day suppresses the reminder', async () => {
+  const chrome = createChromeBoundaries();
+  const scheduler = createPlanningReminderScheduler({
+    getSnapshot: async () => ({
+      activeStudySession: {
+        startedAt: new Date(2026, 10, 5, 20, 0).toISOString(),
+        endsAt: new Date(2026, 10, 5, 20, 30).toISOString(),
+      },
+    }),
+    alarms: chrome.alarms, notifications: chrome.notifications,
+    iconUrl: 'icons/reminder-128.png',
+    now: () => new Date(2026, 10, 5, 21, 0),
+  });
+  await scheduler.reconcile();
+  assert.equal(chrome.notifications.shown.length, 0);
+});
