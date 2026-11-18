@@ -278,7 +278,7 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("04", "Daily review reminder")
+                Text("Daily review reminder", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -345,7 +345,7 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("05", "Allowed apps")
+                SectionHeading("04", "Allowed apps")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -366,7 +366,7 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("06", "Focus areas")
+                SectionHeading("05", "Focus areas")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -416,7 +416,7 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("07", "Sync with Chrome")
+                SectionHeading("06", "Sync with Chrome")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),

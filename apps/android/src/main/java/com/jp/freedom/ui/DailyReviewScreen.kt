@@ -45,12 +45,7 @@ fun DailyReviewScreen(review: DailyReview, onBack: () -> Unit, onResolveImportCo
                     }
                 }
             }
-            item { Text("Planned blocks", style = MaterialTheme.typography.titleMedium) }
-            if (review.plannedBlocks.isEmpty()) item { Text("No planned blocks.") }
-            items(review.plannedBlocks, key = { it.id }) { block ->
-                Text("${block.startTime}–${block.endTime} · ${block.name} · ${block.completionStatus.label()}")
-            }
-            item { OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to planner") } }
+            item { OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to home") } }
         }
     }
 }
