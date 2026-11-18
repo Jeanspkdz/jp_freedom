@@ -4,6 +4,7 @@ import { readSnapshot, snapshotEndpoint, validSnapshotResponse } from './sync-cl
 import { isValidDomain } from './domain.js';
 import { readStudySession, startStudySession, stopStudySession, activeStudySession, makeLocalStudySession, publishPendingStudySession, resolveStudyConflict } from './study-session.js';
 import { setClockTime } from './flip-clock.js';
+import { setSyncState } from './sync-visual.js';
 
 const STORAGE_KEYS = ['apiUrl', 'apiToken', 'lastValidSnapshot', 'lastSuccessfulSync', 'lastSnapshotRevision', 'pendingSessionStart', 'pendingSessionStop'];
 const DEFAULT_SYNC_API_URL = 'https://br-floral-block-bddjl0rs-jpfreedomsync.compute.c-8.us-east-2.aws.neon.tech/';
@@ -73,9 +74,88 @@ function formatPlanTime(value) {
   });
 }
 
+function pendingReviewFromSession(session, endedAt) {
+  const startedMillis = Date.parse(session.startedAt);
+  const plannedEndMillis = Date.parse(session.endsAt);
+  const endedMillis = Date.parse(endedAt);
+  const durationMillis = Math.max(0, plannedEndMillis - startedMillis);
+  return {
+    id: session.id,
+    taskName: session.taskName,
+    durationMillis,
+    accessProfile: session.accessProfile,
+    ...(session.profileId ? { profileId: session.profileId } : { profileId: null }),
+    profileName: session.profileName ?? 'Essentials only',
+    ...(session.allowedPackages ? { allowedPackages: session.allowedPackages } : {}),
+    startedAt: session.startedAt,
+    endedAt: new Date(endedMillis).toISOString(),
+    actualMillis: Math.min(Math.max(0, endedMillis - startedMillis), durationMillis),
+    state: 'PENDING_REVIEW',
+    completionStatus: null,
+    note: '',
+    remaining: '',
+    breakStartedAt: null,
+    breakDurationMillis: 0,
+    nextTask: '',
+  };
+}
+
 function planTimeInSeconds(value) {
   const [hours, minutes] = value.split(':').map(Number);
   return (hours * 60 + minutes) * 60;
+}
+
+function setFlipClass(element, className, enabled) {
+  const classes = new Set(String(element.className ?? '').split(/\s+/).filter(Boolean));
+  if (enabled) classes.add(className);
+  else classes.delete(className);
+  element.className = [...classes].join(' ');
+}
+
+function setFlipLayers(documentRef, group, value) {
+  for (const layer of ['static-top', 'static-bottom', 'flap-top', 'flap-bottom']) {
+    documentRef.getElementById(`${group.id}-${layer}-value`).textContent = value;
+  }
+}
+
+function updateFlipGroup(documentRef, group, nextValue, reducedMotion = false) {
+  const previousValue = group.dataset.value;
+
+  if (reducedMotion) {
+    setFlipLayers(documentRef, group, nextValue);
+    group.dataset.value = nextValue;
+    delete group.dataset.nextValue;
+    setFlipClass(group, 'is-flipping', false);
+    return;
+  }
+
+  if (String(group.className ?? '').split(/\s+/).includes('is-flipping')) {
+    if (group.dataset.value === nextValue) delete group.dataset.nextValue;
+    else group.dataset.nextValue = nextValue;
+    return;
+  }
+  if (previousValue === nextValue) return;
+
+  documentRef.getElementById(`${group.id}-static-top-value`).textContent = nextValue;
+  documentRef.getElementById(`${group.id}-static-bottom-value`).textContent = previousValue;
+  documentRef.getElementById(`${group.id}-flap-top-value`).textContent = previousValue;
+  documentRef.getElementById(`${group.id}-flap-bottom-value`).textContent = nextValue;
+  group.dataset.value = nextValue;
+  setFlipClass(group, 'is-flipping', true);
+}
+
+function finishFlipGroup(documentRef, group, event, reducedMotion = false) {
+  if (!reducedMotion && event?.animationName !== 'flip-unfold') return;
+  const settledValue = group.dataset.value;
+  setFlipLayers(documentRef, group, settledValue);
+  setFlipClass(group, 'is-flipping', false);
+  const queuedValue = group.dataset.nextValue;
+  delete group.dataset.nextValue;
+  if (queuedValue && queuedValue !== settledValue) {
+    const startQueuedFlip = () => updateFlipGroup(documentRef, group, queuedValue, reducedMotion);
+    if (!reducedMotion && globalThis.requestAnimationFrame) globalThis.requestAnimationFrame(startQueuedFlip);
+    else startQueuedFlip();
+  }
 }
 
 function renderFocusMeter(documentRef, current, now) {
@@ -87,6 +167,9 @@ function renderFocusMeter(documentRef, current, now) {
   const clockMinutes = documentRef.getElementById('focus-clock-minutes');
   const clockSeconds = documentRef.getElementById('focus-clock-seconds');
   const clockUnit = documentRef.getElementById('session-clock-unit');
+  if (clockMinutes.dataset.value == null) clockMinutes.dataset.value = '30';
+  if (clockSeconds.dataset.value == null) clockSeconds.dataset.value = '00';
+  const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
   if (!current) {
     remaining.hidden = true;
     progress.hidden = true;
@@ -95,8 +178,8 @@ function renderFocusMeter(documentRef, current, now) {
     progress.setAttribute('aria-valuenow', '0');
     const selectedDuration = Number(documentRef.getElementById('session-duration')?.value);
     const minutes = Number.isSafeInteger(selectedDuration) && selectedDuration > 0 ? selectedDuration : 30;
-    clockMinutes.textContent = String(minutes).padStart(2, '0');
-    clockSeconds.textContent = '00';
+    updateFlipGroup(documentRef, clockMinutes, String(minutes).padStart(2, '0'), reducedMotion);
+    updateFlipGroup(documentRef, clockSeconds, '00', reducedMotion);
     clockUnit.textContent = 'Minutes';
     clock.setAttribute('aria-label', `Study session duration: ${minutes} minutes`);
     return;
@@ -117,8 +200,8 @@ function renderFocusMeter(documentRef, current, now) {
   const minutesLeft = Math.floor(secondsLeft / 60);
   const secondsRemainder = secondsLeft % 60;
   remainingValue.textContent = `${minutesLeft}:${String(secondsRemainder).padStart(2, '0')}`;
-  clockMinutes.textContent = String(minutesLeft).padStart(2, '0');
-  clockSeconds.textContent = String(secondsRemainder).padStart(2, '0');
+  updateFlipGroup(documentRef, clockMinutes, String(minutesLeft).padStart(2, '0'), reducedMotion);
+  updateFlipGroup(documentRef, clockSeconds, String(secondsRemainder).padStart(2, '0'), reducedMotion);
   clockUnit.textContent = 'Remaining';
   clock.setAttribute('aria-label', `Time remaining: ${minutesLeft} minutes and ${secondsRemainder} seconds`);
   remaining.hidden = false;
@@ -210,6 +293,7 @@ function render(documentRef, state, now) {
   const sync = documentRef.getElementById('sync-state');
   sync.setAttribute?.('data-state', connected && state.online && !error ? 'synced' : 'offline');
   const lastSync = documentRef.getElementById('last-sync');
+  const connectionVisual = documentRef.getElementById('connection-visual');
   const errorMessage = documentRef.getElementById('sync-error');
   const currentBlock = documentRef.getElementById('current-block');
   const plannedEnd = documentRef.getElementById('planned-end');
@@ -221,8 +305,12 @@ function render(documentRef, state, now) {
     : plannedBlock;
   const active = Boolean(current);
   const sharedSessionPending = Boolean(snapshot?.activeStudySession);
+  const pendingReviewRecord = snapshot?.studyHistory?.find(item => item.id === snapshot.pendingStudyReviewSessionId) ?? null;
+  const pendingReview = pendingReviewRecord ?? (snapshot?.pendingStudyReviewSessionId
+    ? { id: snapshot.pendingStudyReviewSessionId, taskName: '', actualMillis: null, needsDurationEstimate: true }
+    : null);
   const startControls = documentRef.getElementById('session-start-controls');
-  if (startControls) startControls.hidden = active;
+  if (startControls) startControls.hidden = active || Boolean(snapshot?.pendingStudyReviewSessionId);
   const startButton = documentRef.getElementById('start-session');
   if (startButton) startButton.disabled = !snapshot || !state.connected || state.saving || sharedSessionPending || Boolean(snapshot.pendingStudyReviewSessionId) || candidates.length > 1;
   const selectedDuration = Number(documentRef.getElementById('session-duration')?.value);
@@ -240,16 +328,38 @@ function render(documentRef, state, now) {
   if (startStatus) startStatus.textContent = state.sessionMessage
     ?? (!state.connected ? 'Connect to the sync API at least once before starting a study session.'
       : !snapshot ? 'Sync once to load your plan before starting a study session.'
-      : snapshot.pendingStudyReviewSessionId ? 'Finish the pending phone review before starting another session.'
+      : snapshot.pendingStudyReviewSessionId ? 'Save the pending session review here before starting another session.'
         : snapshot.activeStudySession
           ? Date.parse(snapshot.activeStudySession.endsAt) > now.getTime()
             ? 'A study session is already active.'
             : 'Wait for the phone to sync this session and its review before starting another.'
           : '');
   const connectionNotice = documentRef.getElementById('session-connection-notice');
-  if (connectionNotice) connectionNotice.hidden = active || !startStatus?.textContent;
+  if (connectionNotice) connectionNotice.hidden = active || Boolean(pendingReview) || !startStatus?.textContent;
   const connectionLabel = documentRef.getElementById('session-connection-label');
-  if (connectionLabel) connectionLabel.textContent = state.connected ? 'Action needed' : 'Not connected';
+  if (connectionLabel) connectionLabel.textContent = !state.connected ? 'Not connected'
+    : !snapshot ? 'Sync required'
+      : snapshot.pendingStudyReviewSessionId ? 'Review needed' : 'Action needed';
+  const connectionAction = documentRef.getElementById('open-connection');
+  if (connectionAction) connectionAction.hidden = Boolean(state.connected && snapshot);
+  const reviewForm = documentRef.getElementById('session-review');
+  if (reviewForm) reviewForm.hidden = !pendingReview;
+  if (pendingReview) {
+    const reviewDraft = state.sessionReviewDraft?.id === pendingReview.id ? state.sessionReviewDraft : pendingReview;
+    documentRef.getElementById('session-review-summary').textContent = pendingReview.needsDurationEstimate
+      ? 'Session details did not sync. Enter the activity and your best estimate of minutes studied to finish this review.'
+      : `You studied ${Math.floor((pendingReview.actualMillis ?? 0) / 60_000)} min. Save how it went to close the session.`;
+    documentRef.getElementById('session-review-task').value = reviewDraft.taskName ?? '';
+    documentRef.getElementById('session-review-status').value = reviewDraft.completionStatus ?? '';
+    documentRef.getElementById('session-review-note').value = reviewDraft.note ?? '';
+    documentRef.getElementById('session-review-remaining').value = reviewDraft.remaining ?? '';
+    documentRef.getElementById('session-review-duration-label').hidden = !pendingReview.needsDurationEstimate;
+    documentRef.getElementById('session-review-duration').hidden = !pendingReview.needsDurationEstimate;
+    documentRef.getElementById('session-review-duration').required = Boolean(pendingReview.needsDurationEstimate);
+    if (reviewDraft.durationInput !== undefined) documentRef.getElementById('session-review-duration').value = reviewDraft.durationInput;
+  }
+  const reviewSubmit = documentRef.getElementById('save-session-review');
+  if (reviewSubmit) reviewSubmit.disabled = !state.connected || !state.online || state.saving || !pendingReview;
   const receipt = documentRef.getElementById('phone-receipt-state');
   if (receipt) {
     const sharedSession = snapshot?.activeStudySession;
@@ -334,10 +444,12 @@ function render(documentRef, state, now) {
       plannedEnd.hidden = true;
       plannedEnd.textContent = '';
     } else {
-      protection.textContent = 'Protection is active when a focus block is scheduled.';
+      protection.textContent = 'Protection is active during a study session or scheduled focus block.';
       currentBlock.textContent = current?.name ?? 'No active focus block';
       plannedEnd.hidden = !current;
-      plannedEnd.textContent = current ? `Planned end: ${current.endTime}` : '';
+      plannedEnd.textContent = !current ? '' : current.studySession
+        ? `Planned end: ${new Date(current.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+        : `Planned end: ${current.endTime}`;
     }
   }
   if (page === 'sites' || page === 'all') {
@@ -453,6 +565,7 @@ export async function initializeManagement({
     blocklistMessage: null,
     pendingSessionStart: saved.pendingSessionStart ?? null,
     pendingSessionStop: saved.pendingSessionStop ?? null,
+    sessionReviewDraft: null,
   };
   const page = documentRef.documentElement.dataset.page ?? 'all';
   const pageOrder = ['plan', 'sites', 'connection'];
@@ -577,6 +690,21 @@ export async function initializeManagement({
   if (!durationInput.value) durationInput.value = '30';
 
   const show = () => render(documentRef, state, now());
+  const clockGroups = [
+    documentRef.getElementById('focus-clock-minutes'),
+    documentRef.getElementById('focus-clock-seconds'),
+  ];
+  for (const group of clockGroups) {
+    documentRef.getElementById(`${group.id}-flap-bottom`).addEventListener('animationend', event => {
+      finishFlipGroup(documentRef, group, event);
+    });
+  }
+  const motionPreference = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+  motionPreference?.addEventListener?.('change', event => {
+    if (event.matches) {
+      for (const group of clockGroups) finishFlipGroup(documentRef, group, null, true);
+    }
+  });
   for (const duration of [25, 30, 45, 60]) {
     documentRef.getElementById(`duration-${duration}`).addEventListener('click', () => {
       durationInput.value = String(duration);
@@ -623,6 +751,97 @@ export async function initializeManagement({
     show();
   });
   const readLatest = () => readSnapshot(state.apiUrl, state.apiToken, fetchImpl);
+  documentRef.getElementById('session-review').addEventListener('submit', async event => {
+    event.preventDefault();
+    const reviewId = state.snapshot?.pendingStudyReviewSessionId;
+    const review = state.snapshot?.studyHistory?.find(item => item.id === reviewId);
+    const taskName = documentRef.getElementById('session-review-task').value.trim();
+    const durationInput = documentRef.getElementById('session-review-duration').value.trim();
+    const estimatedMinutes = Number(durationInput);
+    const completionStatus = documentRef.getElementById('session-review-status').value;
+    const note = documentRef.getElementById('session-review-note').value.trim();
+    const remaining = documentRef.getElementById('session-review-remaining').value.trim();
+    const status = documentRef.getElementById('session-review-status-message');
+    if (!reviewId || !taskName || !['FINISHED', 'PARTLY_DONE', 'NOT_DONE'].includes(completionStatus)
+      || (!review && (!durationInput || !Number.isSafeInteger(estimatedMinutes) || estimatedMinutes < 0))) {
+      status.textContent = 'Enter the activity, minutes studied, and how the session went.';
+      return;
+    }
+    if (!state.connected || !state.online || state.saving) {
+      status.textContent = 'Connect and sync before saving the review.';
+      return;
+    }
+
+    state.sessionReviewDraft = { id: reviewId, taskName, durationInput, completionStatus, note, remaining };
+    state.saving = true;
+    state.sessionMessage = null;
+    status.textContent = 'Saving review…';
+    show();
+    try {
+      const fallbackEndedAt = now();
+      const estimatedMillis = estimatedMinutes * 60_000;
+      const fallbackReview = review ?? {
+        id: reviewId, taskName, durationMillis: estimatedMillis, accessProfile: 'ESSENTIALS_ONLY',
+        profileId: null, profileName: 'Essentials only',
+        startedAt: new Date(fallbackEndedAt.getTime() - estimatedMillis).toISOString(),
+        endedAt: fallbackEndedAt.toISOString(), actualMillis: estimatedMillis,
+        state: 'PENDING_REVIEW', completionStatus: null, note: '', remaining: '',
+        breakStartedAt: null, breakDurationMillis: 0, nextTask: '',
+      };
+      const reviewed = { ...fallbackReview, taskName, completionStatus, note, remaining, state: 'REVIEWED' };
+      const snapshot = {
+        ...state.snapshot,
+        pendingStudyReviewSessionId: null,
+        studyHistory: review
+          ? state.snapshot.studyHistory.map(item => item.id === reviewId ? reviewed : item)
+          : [...(state.snapshot.studyHistory ?? []), reviewed],
+      };
+      let response = await fetchImpl(snapshotEndpoint(state.apiUrl), {
+        method: 'PUT', headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: state.revision, snapshot }),
+        cache: 'no-store', credentials: 'omit', redirect: 'error',
+      });
+      if (response.status === 409) {
+        const latest = await readLatest();
+        if (latest.snapshot.pendingStudyReviewSessionId !== reviewId) {
+          state.snapshot = latest.snapshot;
+          state.revision = latest.revision;
+          throw new Error('The pending review changed on another device. Sync and review the latest session.');
+        }
+        const latestReview = latest.snapshot.studyHistory?.find(item => item.id === reviewId) ?? fallbackReview;
+        response = await fetchImpl(snapshotEndpoint(state.apiUrl), {
+          method: 'PUT', headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedRevision: latest.revision, snapshot: {
+            ...latest.snapshot,
+            pendingStudyReviewSessionId: null,
+            studyHistory: latest.snapshot.studyHistory?.some(item => item.id === reviewId)
+              ? latest.snapshot.studyHistory.map(item => item.id === reviewId
+                ? { ...latestReview, taskName, completionStatus, note, remaining, state: 'REVIEWED' } : item)
+              : [...(latest.snapshot.studyHistory ?? []), { ...latestReview, taskName, completionStatus, note, remaining, state: 'REVIEWED' }],
+          } }),
+          cache: 'no-store', credentials: 'omit', redirect: 'error',
+        });
+      }
+      if (!response.ok) throw new Error(`Could not save the review (HTTP ${response.status}).`);
+      const payload = await response.json();
+      if (!validSnapshotResponse(payload)) throw new Error('The sync API returned an unsupported or incomplete plan. Check the API version.');
+      state.snapshot = payload.snapshot;
+      state.revision = payload.revision;
+      state.lastSuccessfulSync = now().toISOString();
+      state.online = true;
+      state.error = null;
+      state.sessionReviewDraft = null;
+      status.textContent = 'Review saved. You can start another study session.';
+      await chromeApi.storage.local.set({ lastValidSnapshot: payload.snapshot, lastSuccessfulSync: state.lastSuccessfulSync, lastSnapshotRevision: payload.revision });
+      await updateRules();
+      await chromeApi.runtime?.sendMessage?.({ type: 'refresh-focus-state' });
+    } catch (cause) {
+      status.textContent = cause?.message || 'Could not save the review. Try syncing again.';
+    } finally {
+      state.saving = false;
+      show();
+    }
+  });
   documentRef.getElementById('start-session').addEventListener('click', async () => {
     const duration = Number(documentRef.getElementById('session-duration').value);
     if (!Number.isSafeInteger(duration) || duration <= 0) {
@@ -636,7 +855,7 @@ export async function initializeManagement({
       return;
     }
     if (state.snapshot.pendingStudyReviewSessionId) {
-      state.sessionMessage = 'Finish the pending phone review before starting another session.';
+      state.sessionMessage = 'Save the pending session review here before starting another session.';
       show();
       return;
     }
@@ -683,7 +902,7 @@ export async function initializeManagement({
           state.snapshot = latest.snapshot;
           state.revision = latest.revision;
           state.sessionMessage = latest.snapshot.pendingStudyReviewSessionId
-            ? 'Finish the pending phone review before starting another session.'
+            ? 'Save the pending session review here before starting another session.'
             : Date.parse(remoteSession.endsAt) > startedAt.getTime()
               ? 'A study session is already active on a connected device.'
               : 'Wait for the phone to sync this session and its review before starting another.';
@@ -797,11 +1016,14 @@ export async function initializeManagement({
   documentRef.getElementById('stop-session').addEventListener('click', async () => {
     const session = state.snapshot?.activeStudySession;
     if (!session || !state.connected || state.saving) return;
-    state.pendingSessionStop = session;
+    const stoppedAt = now().toISOString();
+    const pendingReview = pendingReviewFromSession(session, stoppedAt);
+    state.pendingSessionStop = { ...session, stoppedAt };
     state.snapshot = {
       ...state.snapshot,
       activeStudySession: null,
       pendingStudyReviewSessionId: state.snapshot.pendingStudyReviewSessionId ?? session.id,
+      studyHistory: [...(state.snapshot.studyHistory ?? []).filter(item => item.id !== session.id), pendingReview],
     };
     state.sessionMessage = 'Study session stop pending. It will sync when Chrome reconnects.';
     await chromeApi.storage.local.set({ lastValidSnapshot: state.snapshot, pendingSessionStop: session });
@@ -825,9 +1047,12 @@ export async function initializeManagement({
     const pending = state.pendingSessionStop;
     if (!pending) return remote;
     if (!remote.snapshot.activeStudySession && remote.snapshot.pendingStudyReviewSessionId === pending.id) {
-      state.pendingSessionStop = null;
-      await chromeApi.storage.local.set({ pendingSessionStop: null });
-      return remote;
+      const existingReview = remote.snapshot.studyHistory?.find(item => item.id === pending.id);
+      if (existingReview) {
+        state.pendingSessionStop = null;
+        await chromeApi.storage.local.set({ pendingSessionStop: null });
+        return remote;
+      }
     }
     if (!remote.snapshot.activeStudySession
       && !remote.snapshot.pendingStudyReviewSessionId) {
@@ -842,6 +1067,8 @@ export async function initializeManagement({
       ...remote.snapshot,
       activeStudySession: null,
       pendingStudyReviewSessionId: remote.snapshot.pendingStudyReviewSessionId ?? pending.id,
+      studyHistory: [...(remote.snapshot.studyHistory ?? []).filter(item => item.id !== pending.id),
+        pendingReviewFromSession(pending, pending.stoppedAt ?? now().toISOString())],
     };
     const response = await fetchImpl(snapshotEndpoint(state.apiUrl), {
       method: 'PUT', headers: { Accept: 'application/json', Authorization: `Bearer ${state.apiToken}`, 'Content-Type': 'application/json' },

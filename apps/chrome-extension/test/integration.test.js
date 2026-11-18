@@ -104,7 +104,13 @@ function createHarness(initialStorage = {}, page = 'all') {
     },
     querySelectorAll(selector) { return selector === '.view-nav a' ? navigationLinks : []; },
     getElementById(id) {
-      if (!nodes.has(id)) nodes.set(id, createNode());
+      if (!nodes.has(id)) {
+        const node = createNode();
+        node.id = id;
+        if (id === 'focus-clock-minutes') node.dataset.value = '30';
+        if (id === 'focus-clock-seconds') node.dataset.value = '00';
+        nodes.set(id, node);
+      }
       return nodes.get(id);
     },
     createElement() { return createNode(); },
@@ -516,6 +522,118 @@ test('an Android timer snapshot shows its original end and remaining time while 
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
 });
 
+test('Chrome can review a pending shared study session and unblock the next timer', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const pending = {
+    id: 'phone-session-review', taskName: 'Read chapter four', durationMillis: 1_800_000,
+    accessProfile: 'ESSENTIALS_ONLY', startedAt: '2026-11-05T10:00:00.000Z',
+    endedAt: '2026-11-05T10:30:00.000Z', actualMillis: 1_800_000,
+    state: 'PENDING_REVIEW', completionStatus: null, note: '', remaining: '',
+    breakStartedAt: null, breakDurationMillis: 0, nextTask: '',
+  };
+  const snapshot = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: [], blocks: [], activeStudySession: null,
+    pendingStudyReviewSessionId: pending.id, studyHistory: [pending],
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  let saved;
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') {
+        saved = JSON.parse(options.body);
+        return { ok: true, json: async () => ({ revision: 8, updatedAt: now.toISOString(), snapshot: saved.snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 7, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+
+  assert.equal(harness.nodes.get('session-review').hidden, false);
+  assert.equal(harness.nodes.get('session-review-task').value, pending.taskName);
+  harness.nodes.get('session-review-status').value = 'PARTLY_DONE';
+  harness.nodes.get('session-review-note').value = 'Finished the key section';
+  harness.nodes.get('session-review-remaining').value = 'Review the examples';
+  await harness.nodes.get('session-review').listeners.get('submit')({ preventDefault() {} });
+
+  assert.equal(saved.expectedRevision, 7);
+  assert.equal(saved.snapshot.pendingStudyReviewSessionId, null);
+  assert.equal(saved.snapshot.studyHistory[0].state, 'REVIEWED');
+  assert.equal(saved.snapshot.studyHistory[0].completionStatus, 'PARTLY_DONE');
+  assert.equal(saved.snapshot.studyHistory[0].note, 'Finished the key section');
+  assert.equal(saved.snapshot.studyHistory[0].remaining, 'Review the examples');
+  assert.equal(harness.nodes.get('start-session').disabled, false);
+});
+
+test('Chrome can recover a pending review when sync only has the review id', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: [], blocks: [], activeStudySession: null,
+    pendingStudyReviewSessionId: 'legacy-phone-session', studyHistory: [],
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  let saved;
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options = {}) => {
+      if (options.method === 'PUT') {
+        saved = JSON.parse(options.body);
+        return { ok: true, json: async () => ({ revision: 8, updatedAt: now.toISOString(), snapshot: saved.snapshot }) };
+      }
+      return { ok: true, json: async () => ({ revision: 7, updatedAt: now.toISOString(), snapshot }) };
+    },
+  });
+
+  assert.equal(harness.nodes.get('session-review').hidden, false);
+  assert.equal(harness.nodes.get('session-review-duration').hidden, false);
+  harness.nodes.get('session-review-task').value = 'Read chapter four';
+  harness.nodes.get('session-review-status').value = 'PARTLY_DONE';
+  await harness.nodes.get('session-review').listeners.get('submit')({ preventDefault() {} });
+  assert.equal(saved, undefined);
+  assert.match(harness.nodes.get('session-review-status-message').textContent, /minutes studied/i);
+  harness.nodes.get('session-review-duration').value = '27';
+  await harness.nodes.get('session-review').listeners.get('submit')({ preventDefault() {} });
+
+  assert.equal(saved.snapshot.pendingStudyReviewSessionId, null);
+  assert.equal(saved.snapshot.studyHistory[0].id, 'legacy-phone-session');
+  assert.equal(saved.snapshot.studyHistory[0].state, 'REVIEWED');
+  assert.equal(saved.snapshot.studyHistory[0].actualMillis, 1_620_000);
+  assert.equal(saved.snapshot.studyHistory[0].completionStatus, 'PARTLY_DONE');
+  assert.equal(harness.nodes.get('start-session').disabled, false);
+});
+
+test('Chrome keeps a recovery review draft when the sync API rejects the save', async () => {
+  const now = new Date('2026-11-05T10:30:00.000Z');
+  const snapshot = {
+    version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
+    desktopBlockedDomains: [], blocks: [], activeStudySession: null,
+    pendingStudyReviewSessionId: 'legacy-phone-session', studyHistory: [],
+  };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' });
+  await initializeManagement({
+    ...harness,
+    now: () => now,
+    fetchImpl: async (_url, options = {}) => options.method === 'PUT'
+      ? { ok: false, status: 503, json: async () => ({}) }
+      : { ok: true, json: async () => ({ revision: 7, updatedAt: now.toISOString(), snapshot }) },
+  });
+  harness.nodes.get('session-review-task').value = 'Read chapter four';
+  harness.nodes.get('session-review-duration').value = '27';
+  harness.nodes.get('session-review-status').value = 'PARTLY_DONE';
+  harness.nodes.get('session-review-note').value = 'Finished the key section';
+
+  await harness.nodes.get('session-review').listeners.get('submit')({ preventDefault() {} });
+
+  assert.equal(harness.nodes.get('session-review-task').value, 'Read chapter four');
+  assert.equal(harness.nodes.get('session-review-duration').value, '27');
+  assert.equal(harness.nodes.get('session-review-status').value, 'PARTLY_DONE');
+  assert.equal(harness.nodes.get('session-review-note').value, 'Finished the key section');
+  assert.match(harness.nodes.get('session-review-status-message').textContent, /HTTP 503/i);
+});
+
 test('starting a duration in Chrome writes one Essentials-only shared session and blocks sites immediately', async () => {
   const now = new Date('2026-11-05T10:30:00.000Z');
   const snapshot = {
@@ -543,13 +661,20 @@ test('starting a duration in Chrome writes one Essentials-only shared session an
   });
 
   await harness.nodes.get('duration-45').listeners.get('click')();
-  assert.equal(harness.nodes.get('focus-clock-minutes').textContent, '45');
+  assert.match(harness.nodes.get('focus-clock-minutes').className, /is-flipping/);
+  assert.doesNotMatch(harness.nodes.get('focus-clock-seconds').className, /is-flipping/);
   assert.equal(harness.nodes.get('duration-45').attributes.get('aria-pressed'), 'true');
+  harness.nodes.get('focus-clock-minutes-flap-bottom').listeners.get('animationend')({ animationName: 'flip-unfold' });
+  assert.equal(harness.nodes.get('focus-clock-minutes-static-top-value').textContent, '45');
   await harness.nodes.get('duration-custom').listeners.get('click')();
   harness.documentRef.getElementById('session-duration').value = '75';
   await harness.nodes.get('session-duration').listeners.get('input')();
-  assert.equal(harness.nodes.get('focus-clock-minutes').textContent, '75');
+  assert.equal(harness.nodes.get('focus-clock-minutes-static-top-value').textContent, '75');
+  assert.equal(harness.nodes.get('focus-clock-minutes-static-bottom-value').textContent, '45');
+  assert.equal(harness.nodes.get('focus-clock-minutes-flap-top-value').textContent, '45');
+  assert.equal(harness.nodes.get('focus-clock-minutes-flap-bottom-value').textContent, '75');
   assert.equal(harness.nodes.get('duration-custom').attributes.get('aria-pressed'), 'true');
+  harness.nodes.get('focus-clock-minutes-flap-bottom').listeners.get('animationend')({ animationName: 'flip-unfold' });
   await harness.nodes.get('start-session').listeners.get('click')();
 
   assert.equal(writes.length, 1);
@@ -560,6 +685,27 @@ test('starting a duration in Chrome writes one Essentials-only shared session an
   assert.equal(harness.nodes.get('current-block').textContent, 'Study session');
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
   assert.match(harness.nodes.get('phone-receipt-state').textContent, /waiting for phone/i);
+});
+
+test('reduced motion updates split-flap clock layers without starting an animation', async () => {
+  const hadMatchMedia = Object.hasOwn(globalThis, 'matchMedia');
+  const originalMatchMedia = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  try {
+    const harness = createHarness();
+    await initializeManagement({ ...harness, fetchImpl: async () => { throw new Error('unexpected request'); } });
+
+    await harness.nodes.get('duration-45').listeners.get('click')();
+
+    const minuteGroup = harness.nodes.get('focus-clock-minutes');
+    assert.doesNotMatch(minuteGroup.className, /is-flipping/);
+    for (const layer of ['static-top', 'static-bottom', 'flap-top', 'flap-bottom']) {
+      assert.equal(harness.nodes.get(`focus-clock-minutes-${layer}-value`).textContent, '45');
+    }
+  } finally {
+    if (hadMatchMedia) globalThis.matchMedia = originalMatchMedia;
+    else delete globalThis.matchMedia;
+  }
 });
 
 test('a Chrome study session continues from the cached policy while offline and stays pending for the phone', async () => {
@@ -660,7 +806,11 @@ test('Chrome does not start a second session while the phone has a pending revie
   });
 
   assert.equal(harness.nodes.get('start-session').disabled, true);
-  assert.match(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+  assert.equal(harness.nodes.get('open-connection').hidden, true);
+  assert.equal(harness.nodes.get('session-review').hidden, false);
+  assert.equal(harness.nodes.get('session-review-duration').hidden, false);
+  assert.equal(harness.nodes.get('session-connection-label').textContent, 'Review needed');
+  assert.match(harness.nodes.get('session-review-summary').textContent, /best estimate/i);
   await harness.nodes.get('start-session').listeners.get('click')();
   assert.equal(writes, 0);
 });
@@ -698,8 +848,9 @@ test('stopping a shared timer in Chrome releases it and keeps the shared review 
   const stopped = JSON.parse(update.body).snapshot;
   assert.equal(stopped.activeStudySession, null);
   assert.equal(stopped.pendingStudyReviewSessionId, 'phone-session-stop');
+  assert.equal(stopped.studyHistory[0].state, 'PENDING_REVIEW');
   assert.equal(harness.storage.lastValidSnapshot.pendingStudyReviewSessionId, 'phone-session-stop');
-  assert.match(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+  assert.match(harness.nodes.get('session-start-status').textContent, /pending (?:session review|review details)/i);
 });
 
 test('Chrome queues an offline stop and publishes it after reconnecting', async () => {
@@ -816,7 +967,7 @@ test('Chrome clears a queued stop after Android clears reviewed history', async 
   assert.match(harness.nodes.get('sync-state').textContent, /synced/i);
 });
 
-test('an expired offline Chrome start remains locked for Android review', async () => {
+test('an expired offline Chrome start remains locked for session review', async () => {
   const now = new Date('2026-11-05T11:30:00.000Z');
   const pending = { id: 'chrome-expired-offline', taskName: 'Study session', startedAt: '2026-11-05T10:00:00.000Z', endsAt: '2026-11-05T11:00:00.000Z', accessProfile: 'ESSENTIALS_ONLY' };
   const empty = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' }, desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: null, studyHistory: [] };
@@ -841,7 +992,7 @@ test('an expired offline Chrome start remains locked for Android review', async 
   assert.equal(published.studyHistory[0].state, 'PENDING_REVIEW');
   assert.equal(harness.storage.pendingSessionStart, null);
   assert.equal(harness.nodes.get('start-session').disabled, true);
-  assert.match(harness.nodes.get('session-start-status').textContent, /pending phone review/i);
+  assert.match(harness.nodes.get('session-start-status').textContent, /save the pending session review here/i);
 });
 
 test('Chrome lets the user choose which imported history version to keep', async () => {

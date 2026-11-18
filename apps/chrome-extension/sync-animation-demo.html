@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dimky · Sync animation demo</title>
+    <link rel="stylesheet" href="management.css">
+    <link rel="stylesheet" href="sync-visual.css">
+    <style>
+      .demo-shell { padding-top: 38px; }
+      .demo-shell > h1 { margin-bottom: 8px; font-size: 2rem; }
+      .demo-shell > p { margin-bottom: 24px; color: var(--muted); }
+      .demo-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+      .demo-controls button { min-height: 44px; }
+      .demo-controls button[aria-pressed="true"] { outline: 2px solid var(--accent-periwinkle); outline-offset: 2px; }
+      .demo-status { min-height: 1.5em; }
+    </style>
+  </head>
+  <body>
+    <main class="app-shell demo-shell">
+      <h1>Connection animation demo</h1>
+      <p>Preview the five visual states without calling the sync API.</p>
+      <section id="connection-visual" class="connection-overview" data-sync-state="idle" data-has-sync-config="true" data-demo="true">
+        <span class="sync-ambient sync-ambient--one" aria-hidden="true"></span>
+        <span class="sync-ambient sync-ambient--two" aria-hidden="true"></span>
+        <span class="sync-ambient sync-ambient--three" aria-hidden="true"></span>
+        <div class="connection-intro"><h2>Connection</h2><p>Your focus plan travels from your phone to Chrome.</p></div>
+        <div class="connection-path" aria-hidden="true">
+          <div class="connection-device connection-device--phone"><span class="sync-radar-wave sync-radar-wave--one"></span><span class="sync-radar-wave sync-radar-wave--two"></span><span class="sync-radar-wave sync-radar-wave--three"></span><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="13" y="5" width="22" height="38" rx="5"/><path d="M21 37h6"/></svg><span>Phone</span></div>
+          <div class="connection-flow">
+            <svg class="sync-route" viewBox="0 0 1000 80" preserveAspectRatio="none" focusable="false">
+              <defs><linearGradient id="sync-energy-gradient" x1="0" x2="1"><stop offset="0" stop-color="#a5b4fc" stop-opacity=".12"/><stop offset=".48" stop-color="#ffc27a"/><stop offset="1" stop-color="#ffc27a" stop-opacity=".72"/></linearGradient></defs>
+              <path class="sync-route-base" d="M0 40H1000" pathLength="1000"/><path class="sync-route-energy" d="M0 40H1000" pathLength="1000"/>
+              <path class="sync-marker-diamond" d="m987 40 7-7 7 7-7 7z"/><path class="sync-marker-check" d="m980 40 8 8 14-17"/><circle class="sync-shockwave" cx="994" cy="40" r="8"/>
+            </svg>
+            <span class="sync-signal-marker" aria-hidden="true"></span>
+            <span class="sync-packet sync-packet--one"></span><span class="sync-packet sync-packet--two"></span><span class="sync-packet sync-packet--three"></span><span class="sync-packet sync-packet--four"></span>
+            <div class="sync-progress" role="progressbar" aria-label="Sync progress" aria-valuetext="Sync in progress" hidden><span></span></div>
+          </div>
+          <div class="connection-device connection-device--pc"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="5" y="7" width="38" height="27" rx="3"/><path d="M17 41h14m-7-7v7"/></svg><span>This PC</span></div>
+        </div>
+        <p class="connection-caption">Chrome blocks selected sites locally. The phone joins after it receives the shared session.</p>
+        <div class="connection-status">
+          <p id="phone-receipt-state" class="demo-status" role="status" aria-live="polite">No shared study session is waiting for the phone.</p>
+          <section class="sync" aria-label="Recent sync"><div class="sync-timestamp"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M16 9v8l5 3"/></svg><time id="last-sync">Last successful sync: Never</time></div></section>
+          <button class="sync-retry" type="button" hidden>Retry sync</button>
+        </div>
+      </section>
+      <div class="demo-controls" role="group" aria-label="Preview sync state">
+        <button type="button" data-state="idle" aria-pressed="true">Idle</button>
+        <button type="button" data-state="connecting" aria-pressed="false">Connecting</button>
+        <button type="button" data-state="syncing" aria-pressed="false">Syncing</button>
+        <button type="button" data-state="synced" aria-pressed="false">Synced</button>
+        <button type="button" data-state="error" aria-pressed="false">Error / offline</button>
+      </div>
+    </main>
+    <script type="module">
+      import { setSyncState } from './src/sync-visual.js';
+      const root = document.getElementById('connection-visual');
+      const receipt = document.getElementById('phone-receipt-state');
+      const labels = {
+        idle: 'No shared study session is waiting for the phone.',
+        connecting: 'Connecting to the phone…',
+        syncing: 'Syncing the shared study session…',
+        synced: 'Phone received this study session.',
+        error: 'Offline. Using the last synced plan.'
+      };
+      root.addEventListener('syncvisualstatechange', event => {
+        receipt.textContent = labels[event.detail.state];
+        document.querySelectorAll('[data-state]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.state === event.detail.state)));
+      });
+      document.querySelectorAll('[data-state]').forEach(button => button.addEventListener('click', () => {
+        const state = button.dataset.state;
+        receipt.textContent = labels[state];
+        if (state === 'synced') root.dataset.lastSyncAt = new Date().toISOString();
+        if (state === 'idle') root.dataset.lastSyncAt = '';
+        setSyncState(state);
+        document.querySelectorAll('[data-state]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+      }));
+      setSyncState('idle');
+    </script>
+  </body>
+</html>

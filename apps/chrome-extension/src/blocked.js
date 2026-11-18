@@ -1,13 +1,19 @@
 import { getActiveStudySession, getCurrentAndNext } from './policy.js';
+import { activeStudySession } from './study-session.js';
 
 export async function initializeBlockedPage({
   chromeApi = globalThis.chrome,
   documentRef = globalThis.document,
   now = () => new Date(),
 } = {}) {
-  const { lastValidSnapshot, blockedVariant } = await chromeApi.storage.local.get(['lastValidSnapshot', 'blockedVariant']);
+  const { lastValidSnapshot, lastStudySession, blockedVariant } = await chromeApi.storage.local.get(['lastValidSnapshot', 'lastStudySession', 'blockedVariant']);
   const currentTime = now();
-  const session = getActiveStudySession(lastValidSnapshot, currentTime);
+  const snapshotSession = getActiveStudySession(lastValidSnapshot, currentTime);
+  const localSession = activeStudySession(lastStudySession, currentTime) ? lastStudySession : null;
+  const session = snapshotSession ?? (localSession ? {
+    taskName: localSession.taskName || 'Study timer',
+    endsAt: new Date(Date.parse(localSession.startedAt) + localSession.durationMillis).toISOString(),
+  } : null);
   const block = session ? null : getCurrentAndNext(lastValidSnapshot, currentTime).current;
   documentRef.getElementById('blocked-activity').textContent = session?.taskName ?? block?.name ?? 'No active focus block';
   const plannedEnd = documentRef.getElementById('blocked-end');

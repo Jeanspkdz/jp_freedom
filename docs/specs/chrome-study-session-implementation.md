@@ -48,13 +48,13 @@ In Chrome, choose any positive duration and start a study timer. The timer immed
 
 ## Implementation Decisions
 
-- Chrome exposes the study timer, shared desktop site blocklist, and sync connection. Android owns planned-block editing, session reviews, and general settings.
+- Chrome exposes the study timer, shared desktop site blocklist, sync connection, and review form for a pending shared session. Android owns planned-block editing and general settings, and can also review sessions.
 - Chrome accepts any positive duration. Starting creates a shared session with absolute start and end times, begins local browser enforcement immediately, and shows whether Android has received it.
 - A Chrome-started session uses the Essentials list on Android. Android applies phone restrictions on receipt for the remaining duration. Chrome never applies allowed apps lists or the evening restriction.
 - Chrome blocks the shared desktop site list during a planned block or an active study timer, regardless of which device started the timer. Selected entries remain locked during either focus period; new entries take effect immediately. The blocked page has no bypass.
-- The sync API holds shared plans, settings, session state, study history, review data, and focus areas. Chrome writes session actions and the desktop site list. Android edits plans, reviews, and general settings. Credentials and device permissions stay local.
+- The sync API holds shared plans, settings, session state, study history, review data, and focus areas. Chrome writes session actions, reviews, and the desktop site list. Android edits plans, reviews, and general settings. Credentials and device permissions stay local.
 - Extend the revisioned sync contract with session state and history. Queue offline actions with visible pending status. Merge independent edits; ask the user about same-field conflicts. Preserve competing offline starts until the user chooses one shared session.
-- Enforce one active timer and the existing review-before-next-session rule across devices. Android remains the review interface; review data is shared.
+- Enforce one active timer and the existing review-before-next-session rule across devices. Either device can complete the shared review, and review data remains shared.
 - Duration always runs from the original start time. Expiry and early stop release each device's enforcement when it observes the change. Late Android delivery never starts an already expired restriction.
 - Import Android's existing history at rollout without overwriting conflicting data. Retain it until an explicit clear action.
 - Use the existing single-user bearer-token connection. Before the first valid snapshot, Chrome does not claim browser protection. While offline, it enforces its last valid cached policy.
@@ -72,7 +72,7 @@ In Chrome, choose any positive duration and start a study timer. The timer immed
 
 ## Out of Scope
 
-- Creating or editing planned blocks, doing reviews, or changing general settings in Chrome.
+- Creating or editing planned blocks or changing general settings in Chrome.
 - Android permission setup or access-profile selection in Chrome.
 - Desktop evening restriction or profile-based browser allowlisting; Chrome blocks only selected desktop sites.
 - Android roadmap features that have not shipped, including onboarding, weekly review, manual activity records, gap prompts, exceptional-day metadata, and configurable rest weekday.
