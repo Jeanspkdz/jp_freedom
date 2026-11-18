@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -35,7 +34,6 @@ fun BlockedScreen(
     onOpenSettings: () -> Unit,
     onBackToBlockedApp: () -> Unit,
 ) {
-    val isEveningRestriction = reason == BlockedReason.EVENING_RESTRICTION
     val isSiteFilterSetup = reason == BlockedReason.SITE_FILTER_SETUP
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(
@@ -57,7 +55,6 @@ fun BlockedScreen(
             Spacer(Modifier.height(20.dp))
             Text(
                 text = when {
-                    isEveningRestriction -> "Evening restriction is active"
                     isSiteFilterSetup -> "Website filter needs setup"
                     else -> "App blocked during focus time"
                 },
@@ -69,7 +66,6 @@ fun BlockedScreen(
             Spacer(Modifier.height(12.dp))
             Text(
                 text = when {
-                    isEveningRestriction -> "Complete the required blocks for tomorrow in your planner to unlock your phone."
                     isSiteFilterSetup -> "Turn on the website filter in Settings to use Chrome during a study session."
                     else -> "This app isn't included in the allowed apps list for this study session."
                 },
@@ -81,14 +77,6 @@ fun BlockedScreen(
             Button(
                 onClick = onOpenPlanner,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = if (isEveningRestriction) {
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                    )
-                } else {
-                    ButtonDefaults.buttonColors()
-                },
             ) {
                 Text("Open home")
             }

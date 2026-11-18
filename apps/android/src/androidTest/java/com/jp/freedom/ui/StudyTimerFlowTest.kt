@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.compose.runtime.Composable
 import android.Manifest
@@ -88,7 +89,7 @@ class StudyTimerFlowTest {
             }
         }
 
-        compose.onNodeWithText("Continue session").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Continue session").performScrollTo().assertIsDisplayed().performClick()
         compose.runOnIdle { assertTrue(continued) }
     }
 
@@ -178,7 +179,7 @@ class StudyTimerFlowTest {
             }
         }
 
-        compose.onNodeWithText("Continue session").assertIsDisplayed()
+        compose.onNodeWithText("Continue session").performScrollTo().assertIsDisplayed()
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("Continue session").fetchSemanticsNodes().isEmpty()
         }

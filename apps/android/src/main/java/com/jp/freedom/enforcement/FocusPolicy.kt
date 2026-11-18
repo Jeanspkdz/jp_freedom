@@ -11,7 +11,7 @@ import java.time.LocalDateTime
 data class FocusPolicyState(
     val blockedReason: BlockedReason?,
     val activeBlock: PlannedBlock?,
-    // Planned blocks schedule work; their legacy serialized profile is not a phone choice.
+    // The legacy profile field is retained while old session records migrate.
     val accessProfile: AccessProfile? = activeBlock?.let { AccessProfile.ESSENTIALS_ONLY },
     val allowedPackageSnapshot: Set<String>? = null,
     val allowedAppPackages: Set<String> = emptySet(),
@@ -48,7 +48,6 @@ object FocusPolicy {
     ): Set<String> {
         val allowed = (essentialPackages + ownPackage).toMutableSet()
         defaultInputMethodPackage?.takeIf(String::isNotBlank)?.let(allowed::add)
-        if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return allowed
         state.allowedPackageSnapshot?.let { return allowed + it }
 
         if (state.blockedReason != BlockedReason.FOCUS_BLOCK) return allowed

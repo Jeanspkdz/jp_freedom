@@ -129,7 +129,7 @@ class SiteFilterVpnService : VpnService() {
     }
 
     private fun isAllowedDomain(domain: String): Boolean {
-        val state = FocusPolicy.evaluate(LocalDateTime.now(), repository.allBlocks(), repository.settings(), repository.activeStudySession())
+        val state = FocusPolicy.evaluate(LocalDateTime.now(), emptyList(), repository.settings(), repository.activeStudySession())
         return SiteDomainPolicy.isAllowed(domain, state)
     }
 

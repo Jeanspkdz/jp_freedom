@@ -29,14 +29,12 @@ import com.jp.freedom.data.FocusRepository
 import com.jp.freedom.data.AllowedAppsCatalog
 import com.jp.freedom.data.PendingSyncState
 import com.jp.freedom.data.SyncStatus
-import com.jp.freedom.domain.BlockValidation
 import com.jp.freedom.domain.AllowedAppsList
 import com.jp.freedom.domain.AllowedAppsListPolicy
 import com.jp.freedom.domain.AllowedAppsListValidation
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.FocusArea
 import com.jp.freedom.domain.InstalledApp
-import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.StudyTimerSession
 import com.jp.freedom.domain.StudyTimerController
 import com.jp.freedom.domain.StudyTimerDestination
@@ -90,12 +88,10 @@ fun FocusApp(
     }
     var dayOffset by rememberSaveable { mutableIntStateOf(0) }
     var refreshVersion by remember { mutableIntStateOf(0) }
-    var allBlocks by remember { mutableStateOf<List<PlannedBlock>>(emptyList()) }
     var focusSettings by remember { mutableStateOf(FocusSettings()) }
     var desktopBlockedDomains by remember { mutableStateOf(com.jp.freedom.domain.DEFAULT_DESKTOP_BLOCKED_DOMAINS) }
     var syncState by remember { mutableStateOf(PendingSyncState(-1, 0, false, SyncStatus.NOT_CONFIGURED, null, emptySet())) }
     var syncConfiguration by remember { mutableStateOf(syncConfigurationStore.configuration()) }
-    var restrictionActive by remember { mutableStateOf(false) }
     var currentPolicyBlocked by remember { mutableStateOf(false) }
     var stateLoaded by remember { mutableStateOf(false) }
     var siteFilterEnabled by remember { mutableStateOf(SiteFilterVpnService.isRunning()) }
@@ -169,7 +165,6 @@ fun FocusApp(
     LaunchedEffect(dayOffset, activityResumeVersion, refreshVersion, page) {
         while (isActive) {
             val snapshot = withContext(Dispatchers.IO) {
-                val blocks = repository.allBlocks()
                 val settings = repository.settings()
                 val domains = repository.desktopBlockedDomains()
                 val sync = repository.syncState()
@@ -189,19 +184,16 @@ fun FocusApp(
                 val areas = repository.focusAreas()
                 val policy = FocusPolicy.evaluate(
                     now = LocalDateTime.now(),
-                    blocks = blocks,
+                    blocks = emptyList(),
                     settings = settings,
                     studySession = repository.activeStudySession(),
                 )
-                val restricted = policy.blockedReason == BlockedReason.EVENING_RESTRICTION
                 val policyBlocked = policy.blockedReason != null
-            PlannerSnapshot(blocks, settings, domains, sync, restricted, policyBlocked, timer, review, sessions, areas)
+            PlannerSnapshot(settings, domains, sync, policyBlocked, timer, review, sessions, areas)
             }
-            allBlocks = snapshot.blocks
             focusSettings = snapshot.settings
             desktopBlockedDomains = snapshot.desktopBlockedDomains
             syncState = snapshot.syncState
-            restrictionActive = snapshot.restricted
             currentPolicyBlocked = snapshot.policyBlocked
             studySession = snapshot.studySession
             pendingReview = snapshot.pendingReview
@@ -318,11 +310,7 @@ fun FocusApp(
         AppPage.SETTINGS -> SettingsScreen(
             settings = focusSettings,
             desktopBlockedDomains = desktopBlockedDomains,
-            activeFocusBlock = allBlocks.any { block ->
-                val now = LocalDateTime.now()
-                block.date == now.toLocalDate() && block.completionStatus != com.jp.freedom.domain.CompletionStatus.FINISHED &&
-                    !now.toLocalTime().isBefore(block.startTime) && now.toLocalTime().isBefore(block.endTime)
-            },
+            activeFocusBlock = currentPolicyBlocked,
             syncConfiguration = syncConfiguration,
             syncStatus = syncState.status,
             syncRevision = syncState.revision,
@@ -542,7 +530,7 @@ fun FocusApp(
         AppPage.DAILY_REVIEW -> DailyReviewScreen(
             review = com.jp.freedom.domain.StudyTimerPolicy.dailyReview(
                 dailyReviewDate, java.time.ZoneId.systemDefault(), focusSettings.studyHoursTargetMinutes,
-                studySessions, allBlocks,
+                studySessions,
             ),
             onBack = { page = AppPage.HOME },
             onResolveImportConflict = { phoneCopyId, keepPhoneVersion ->
@@ -597,11 +585,9 @@ fun FocusApp(
 }
 
 private data class PlannerSnapshot(
-    val blocks: List<PlannedBlock>,
     val settings: FocusSettings,
     val desktopBlockedDomains: List<String>,
     val syncState: PendingSyncState,
-    val restricted: Boolean,
     val policyBlocked: Boolean,
     val studySession: StudyTimerSession?,
     val pendingReview: StudyTimerSession?,

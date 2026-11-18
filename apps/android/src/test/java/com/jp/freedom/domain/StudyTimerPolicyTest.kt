@@ -38,7 +38,7 @@ class StudyTimerPolicyTest {
             reviewed("today", Instant.parse("2026-11-10T05:00:00Z"), 90, "Math", CompletionStatus.FINISHED, "note", ""),
             reviewed("yesterday", Instant.parse("2026-11-10T04:59:59Z"), 60, "History", CompletionStatus.PARTLY_DONE, "", "chapter 2"),
         )
-        val summary = StudyTimerPolicy.dailyReview(LocalDate.of(2026, 11, 10), java.time.ZoneId.of("America/Lima"), 180, sessions, emptyList())
+        val summary = StudyTimerPolicy.dailyReview(LocalDate.of(2026, 11, 10), java.time.ZoneId.of("America/Lima"), 180, sessions)
         assertEquals(90, summary.actualMinutes)
         assertEquals(180, summary.targetMinutes)
         assertEquals(1, summary.sessions.size)
@@ -52,7 +52,7 @@ class StudyTimerPolicyTest {
             reviewed("same-id-phone-copy", startedAt, 60, "Phone version", CompletionStatus.FINISHED, "", ""),
         )
 
-        val summary = StudyTimerPolicy.dailyReview(LocalDate.of(2026, 11, 10), ZoneId.of("UTC"), 180, sessions, emptyList())
+        val summary = StudyTimerPolicy.dailyReview(LocalDate.of(2026, 11, 10), ZoneId.of("UTC"), 180, sessions)
 
         assertEquals(60, summary.actualMinutes)
         assertEquals(2, summary.sessions.size)

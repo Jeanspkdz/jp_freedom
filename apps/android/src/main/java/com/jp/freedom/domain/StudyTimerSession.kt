@@ -132,7 +132,6 @@ object StudyTimerPolicy {
         zone: ZoneId,
         targetMinutes: Int,
         sessions: List<StudyTimerSession>,
-        blocks: List<PlannedBlock>,
         now: Instant = Instant.now(),
         focusAreas: List<FocusArea> = emptyList(),
     ): DailyReview {
@@ -155,7 +154,6 @@ object StudyTimerPolicy {
             sessions = todaysSessions,
             actualMinutes = countedSessions.sumOf { it.actualStudyMinutes(now) },
             targetMinutes = targetMinutes,
-            plannedBlocks = blocks.filter { it.date == date }.sortedBy { it.startTime },
             focusAreaMinutes = focusAreaMinutes,
         )
     }
@@ -195,6 +193,5 @@ data class DailyReview(
     val sessions: List<StudyTimerSession>,
     val actualMinutes: Long,
     val targetMinutes: Int,
-    val plannedBlocks: List<PlannedBlock>,
     val focusAreaMinutes: List<FocusAreaMinutes>,
 )

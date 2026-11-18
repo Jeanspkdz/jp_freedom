@@ -479,12 +479,9 @@ class FocusRepository(context: Context) : StudySessionStore {
         try {
             val previous = readDomains(db).toSet()
             val updated = domains.toSet()
-            val now = LocalDateTime.now()
-            val activeBlock = queryBlocks(db, "$COLUMN_DATE = ?", arrayOf(now.toLocalDate().toString())).any { block ->
-                block.completionStatus != CompletionStatus.FINISHED &&
-                    !now.toLocalTime().isBefore(block.startTime) && now.toLocalTime().isBefore(block.endTime)
-            }
-            if (activeBlock && !updated.containsAll(previous)) return BlocklistValidation.ActiveBlockLocked
+            val activeTimer = readStudySession(db, "state = ?", arrayOf(StudySessionState.ACTIVE.name))
+                ?.let { it.startedAt.plusMillis(it.durationMillis).isAfter(Instant.now()) } == true
+            if (activeTimer && !updated.containsAll(previous)) return BlocklistValidation.ActiveBlockLocked
             val paths = ((previous - updated) + (updated - previous)).map { "desktopBlockedDomains.$it" }
             if (paths.isNotEmpty()) {
                 db.delete(TABLE_DESKTOP_DOMAINS, null, null)
@@ -1175,6 +1172,11 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         private fun migrateAllowedAppsLists(db: SQLiteDatabase) {
             createAllowedAppsListTable(db)
+            createStudySessionTable(db)
+            createAccessProfileTable(db)
+            addColumnIfMissing(db, "study_sessions", "access_profile", "TEXT NOT NULL DEFAULT 'ESSENTIALS_ONLY'")
+            addColumnIfMissing(db, "study_sessions", "profile_id", "TEXT")
+            addColumnIfMissing(db, "study_sessions", "profile_name", "TEXT NOT NULL DEFAULT 'Essentials only'")
             addColumnIfMissing(db, "study_sessions", "allowed_list_id", "TEXT NOT NULL DEFAULT 'essentials'")
             addColumnIfMissing(db, "study_sessions", "allowed_list_name", "TEXT NOT NULL DEFAULT 'Essentials'")
             addColumnIfMissing(db, "study_sessions", "allowed_packages", "TEXT NOT NULL DEFAULT '[]'")

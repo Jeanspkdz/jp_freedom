@@ -13,7 +13,6 @@ object SiteDomainPolicy {
     private val searchHosts = setOf("google.com", "www.google.com", "www.gstatic.com", "encrypted-tbn0.gstatic.com")
 
     fun isAllowed(domain: String, state: FocusPolicyState): Boolean {
-        if (state.blockedReason == BlockedReason.EVENING_RESTRICTION) return false
         if (state.blockedReason == null && state.activeBlock == null) return true
 
         val normalized = domain.trimEnd('.').lowercase()

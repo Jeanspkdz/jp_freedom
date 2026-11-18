@@ -8,14 +8,13 @@ class BlockedReasonTest {
     @Test
     fun reasonsUseStableIntentIds() {
         assertEquals("focus_block", BlockedReason.FOCUS_BLOCK.toIntentId())
-        assertEquals("evening_restriction", BlockedReason.EVENING_RESTRICTION.toIntentId())
         assertEquals("site_filter_setup", BlockedReason.SITE_FILTER_SETUP.toIntentId())
     }
 
     @Test
     fun stableIntentIdsRestoreTheirBlockedReasons() {
         assertEquals(BlockedReason.FOCUS_BLOCK, BlockedReason.fromIntentId("focus_block"))
-        assertEquals(BlockedReason.EVENING_RESTRICTION, BlockedReason.fromIntentId("evening_restriction"))
+        assertNull(BlockedReason.fromIntentId("evening_restriction"))
         assertEquals(BlockedReason.SITE_FILTER_SETUP, BlockedReason.fromIntentId("site_filter_setup"))
     }
 

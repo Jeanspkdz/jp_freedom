@@ -67,7 +67,7 @@ class FocusAccessibilityService : AccessibilityService() {
         }
         val policy = FocusPolicy.evaluate(
             now = LocalDateTime.now(),
-            blocks = repository.allBlocks(),
+            blocks = emptyList(),
             settings = repository.settings(),
             studySession = repository.activeStudySession(),
         )

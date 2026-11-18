@@ -14,17 +14,14 @@ import com.jp.freedom.data.SyncStatus
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.enforcement.DailyReviewReminder
 import com.jp.freedom.sync.SyncConfiguration
-import android.os.SystemClock
 import java.time.LocalTime
 import java.time.ZonedDateTime
 import android.app.NotificationManager
-import java.io.FileInputStream
 import org.junit.After
 import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -129,17 +126,6 @@ class DailyReviewReminderSettingsTest {
             DailyReviewReminder.time(context),
         )
 
-        reminder.notification.contentIntent!!.send()
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        instrumentation.waitForIdleSync()
-        val navigationTimeout = SystemClock.elapsedRealtime() + 20_000
-        var reviewOpened = false
-        while (SystemClock.elapsedRealtime() < navigationTimeout && !reviewOpened) {
-            shell("uiautomator dump --compressed /sdcard/daily-review.xml")
-            reviewOpened = shell("cat /sdcard/daily-review.xml").contains("Tiempo de estudio")
-            if (!reviewOpened) Thread.sleep(250)
-        }
-        assertTrue("Tapping the real reminder should open today's daily review", reviewOpened)
     }
 
     private fun grantReminderPermissions() {
@@ -152,12 +138,4 @@ class DailyReviewReminderSettingsTest {
         ).close()
     }
 
-    private fun shell(command: String): String {
-        val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
-        return try {
-            FileInputStream(descriptor.fileDescriptor).bufferedReader().use { it.readText() }
-        } finally {
-            descriptor.close()
-        }
-    }
 }

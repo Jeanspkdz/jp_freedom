@@ -56,7 +56,7 @@ fun HomeScreen(
     onOpenDailyReview: () -> Unit,
 ) {
     val actualMinutes = StudyTimerPolicy.dailyReview(
-        date, ZoneId.systemDefault(), settings.studyHoursTargetMinutes, studySessions, emptyList(),
+        date, ZoneId.systemDefault(), settings.studyHoursTargetMinutes, studySessions,
     ).actualMinutes.toInt()
     Scaffold(
         topBar = {

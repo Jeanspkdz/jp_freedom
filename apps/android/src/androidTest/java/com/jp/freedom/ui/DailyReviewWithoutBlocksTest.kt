@@ -4,9 +4,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.jp.freedom.domain.DailyReview
-import com.jp.freedom.domain.PlannedBlock
 import java.time.LocalDate
-import java.time.LocalTime
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,7 +24,6 @@ class DailyReviewWithoutBlocksTest {
                         sessions = emptyList(),
                         actualMinutes = 0,
                         targetMinutes = 180,
-                        plannedBlocks = listOf(PlannedBlock("old", date, "Old planned block", LocalTime.NOON, LocalTime.of(13, 0))),
                         focusAreaMinutes = emptyList(),
                     ),
                     onBack = {},
@@ -37,6 +34,5 @@ class DailyReviewWithoutBlocksTest {
 
         compose.onNodeWithText("Timer sessions").assertExists()
         compose.onNodeWithText("Planned blocks").assertDoesNotExist()
-        compose.onNodeWithText("Old planned block", substring = true).assertDoesNotExist()
     }
 }

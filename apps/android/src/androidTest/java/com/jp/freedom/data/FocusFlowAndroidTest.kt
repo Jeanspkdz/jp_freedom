@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.jp.freedom.domain.AllowedAppsList
+import com.jp.freedom.domain.BlocklistValidation
 import com.jp.freedom.domain.FocusArea
 import com.jp.freedom.domain.SessionOutcome
 import com.jp.freedom.domain.StudySessionState
@@ -24,6 +25,22 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class FocusFlowAndroidTest {
+    @Test fun activeTimerLocksExistingDesktopSites() {
+        val context = isolatedContext()
+        context.deleteDatabase("jp-freedom.db")
+        try {
+            val repository = FocusRepository(context)
+            assertEquals(BlocklistValidation.Valid, repository.saveDesktopBlockedDomains(listOf("reddit.com")))
+            repository.saveStudySession(
+                StudyTimerSession.start("Reading", Duration.ofMinutes(25), AllowedAppsList.ESSENTIALS, Instant.now()),
+            )
+            assertEquals(BlocklistValidation.ActiveBlockLocked, repository.saveDesktopBlockedDomains(emptyList()))
+            assertEquals(listOf("reddit.com"), repository.desktopBlockedDomains())
+        } finally {
+            context.deleteDatabase("jp-freedom.db")
+        }
+    }
+
     @Test fun versionTwentyDatabaseWithoutFocusAreasRecoversOnUpgrade() {
         val context = isolatedContext()
         context.deleteDatabase("jp-freedom.db")
@@ -54,7 +71,7 @@ class FocusFlowAndroidTest {
             assertEquals("English", area.name)
 
             SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath("jp-freedom.db"), null).use { db ->
-                assertEquals(21, db.version)
+                assertEquals(22, db.version)
                 db.query("focus_areas", arrayOf("id", "name", "position"), null, null, null, null, null).use { cursor ->
                     assertEquals(1, cursor.count)
                     assertEquals(setOf("id", "name", "position"), (0 until cursor.columnCount).map { cursor.getColumnName(it) }.toSet())
@@ -106,6 +123,9 @@ class FocusFlowAndroidTest {
 
     @Test fun reminderTimePersistsAndReceiverPostsNotificationForToday() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
+            context.packageName, android.Manifest.permission.POST_NOTIFICATIONS,
+        )
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         val originalTime = DailyReviewReminder.time(context)
         try {

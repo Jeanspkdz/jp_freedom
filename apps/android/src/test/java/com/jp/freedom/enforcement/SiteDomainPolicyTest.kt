@@ -60,16 +60,6 @@ class SiteDomainPolicyTest {
         assertFalse(SiteDomainPolicy.isAllowed("example.com", state))
     }
 
-    @Test
-    fun eveningRestrictionBlocksWebsitesEvenWhenBlockWouldAllowThem() {
-        assertFalse(
-            SiteDomainPolicy.isAllowed(
-                "chatgpt.com",
-                FocusPolicyState(BlockedReason.EVENING_RESTRICTION, activeBlock.copy(accessProfile = AccessProfile.ESSENTIALS_WITH_CHATGPT)),
-            ),
-        )
-    }
-
     private fun activeState(profile: AccessProfile) =
         FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, profile)
 }
