@@ -90,6 +90,8 @@ class DailyReviewReminderSettingsTest {
             }
         }
 
+        compose.onNodeWithText("Required blocks").assertDoesNotExist()
+        compose.onNodeWithText("Cutoff time").assertDoesNotExist()
         compose.onNodeWithText(initialTime.toString()).performScrollTo().performClick()
         compose.onNodeWithText("Confirm").assertIsDisplayed()
         compose.onNodeWithTag("daily-review-hour-picker").performTouchInput { swipeUp() }

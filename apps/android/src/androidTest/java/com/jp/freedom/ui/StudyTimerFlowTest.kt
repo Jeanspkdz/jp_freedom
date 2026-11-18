@@ -34,6 +34,13 @@ class StudyTimerFlowTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
+    fun homeHasNoPlannedBlockControls() {
+        compose.setContent { FocusTheme { planner() } }
+        compose.onNodeWithText("Add block").assertDoesNotExist()
+        compose.onNodeWithText("Tomorrow").assertDoesNotExist()
+    }
+
+    @Test
     fun plannerButtonOpensTheActiveSessionInsteadOfSayingStart() {
         val active = session(StudySessionState.ACTIVE)
         var opened = false
@@ -43,7 +50,7 @@ class StudyTimerFlowTest {
             }
         }
 
-        compose.onNodeWithText("Ver sesión en curso").assertIsDisplayed().performClick()
+        compose.onNodeWithText("View active session").assertIsDisplayed().performClick()
         compose.runOnIdle { assertTrue(opened) }
     }
 
@@ -55,7 +62,7 @@ class StudyTimerFlowTest {
             }
         }
 
-        compose.onNodeWithText("Revisar sesión").assertIsDisplayed()
+        compose.onNodeWithText("Review session").assertIsDisplayed()
     }
 
     @Test
@@ -243,7 +250,7 @@ class StudyTimerFlowTest {
         org.junit.Assert.assertTrue("The chronometer should count down", notification.extras.getBoolean("android.chronometerCountDown"))
         org.junit.Assert.assertEquals(active.startedAt.toEpochMilli() + active.durationMillis, notification.`when`)
         org.junit.Assert.assertEquals("Lectura", notification.extras.getString(Notification.EXTRA_TITLE))
-        org.junit.Assert.assertEquals("Tiempo de estudio restante", notification.extras.getString(Notification.EXTRA_TEXT))
+        org.junit.Assert.assertEquals("Study time remaining", notification.extras.getString(Notification.EXTRA_TEXT))
         org.junit.Assert.assertNotNull("The notification should reopen the session screen", notification.contentIntent)
         StudySessionNotifier.dismiss(context)
     }
@@ -254,29 +261,16 @@ class StudyTimerFlowTest {
         pendingReview: StudyTimerSession? = null,
         onOpenStudyTimer: () -> Unit = {},
     ) {
-        PlannerScreen(
+        HomeScreen(
             date = LocalDate.of(2026, 11, 16),
-            isTodaySelected = true,
-            blocks = emptyList(),
-            allBlocks = emptyList(),
             studySessions = emptyList(),
             activeStudySession = activeSession,
             pendingSessionReview = pendingReview,
             settings = FocusSettings(),
-            restrictionActive = false,
-            hasSyncKey = false,
-            syncStatus = SyncStatus.NOT_CONFIGURED,
             accessibilityEnabled = true,
-            exactAlarmsAllowed = true,
-            onSelectToday = {},
-            onSelectTomorrow = {},
             onOpenSettings = {},
             onOpenStudyTimer = onOpenStudyTimer,
             onOpenDailyReview = {},
-            onSyncNow = {},
-            onOpenTomorrowPlan = {},
-            onAddBlock = {},
-            onEditBlock = {},
         )
     }
 

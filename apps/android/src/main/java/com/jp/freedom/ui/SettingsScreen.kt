@@ -126,7 +126,7 @@ fun SettingsScreen(
             AlertDialog(
                 onDismissRequest = { confirmHistoryClear = false },
                 title = { Text("Clear study history?") },
-                text = { Text("This removes synced study sessions and reviews from this phone and the shared record. Plans and blocked websites stay unchanged.") },
+                text = { Text("This removes synced study sessions and reviews from this phone and the shared record. Blocked websites stay unchanged.") },
                 confirmButton = {
                     TextButton(onClick = { confirmHistoryClear = false; onClearStudyHistory() }) { Text("Clear history") }
                 },
@@ -144,14 +144,14 @@ fun SettingsScreen(
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Your study routine", style = MaterialTheme.typography.headlineMedium, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
                 Text(
-                    "Plan tomorrow and choose when the evening restriction starts.",
+                    "Set your daily study goal and the break after each session.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("01", "Planning")
+                SectionHeading("01", "Study routine")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),
@@ -169,7 +169,7 @@ fun SettingsScreen(
                                 Icon(Icons.Outlined.Add, contentDescription = "Increase study-hours target")
                             }
                         }
-                        Text("Planned study time for the next required day must reach this target to lift the evening restriction.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Compare your recorded study time with this daily goal.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Surface(
@@ -190,46 +190,6 @@ fun SettingsScreen(
                             }
                         }
                         Text("Phone restrictions pause after you save the required session review.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                ) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                        Text("Required blocks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("${settings.requiredBlockCount}", style = MaterialTheme.typography.displayMedium, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { onSettingsChange(settings.copy(requiredBlockCount = settings.requiredBlockCount - 1)) }, enabled = settings.requiredBlockCount > 1) {
-                                Icon(Icons.Outlined.Remove, contentDescription = "Decrease minimum")
-                            }
-                            IconButton(onClick = { onSettingsChange(settings.copy(requiredBlockCount = settings.requiredBlockCount + 1)) }, enabled = settings.requiredBlockCount < Int.MAX_VALUE) {
-                                Icon(Icons.Outlined.Add, contentDescription = "Increase minimum")
-                            }
-                        }
-                        Text("Minimum number of blocks in the next required day plan before Chrome sends planning reminders.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                ) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Cutoff time", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text("If the plan is still incomplete, the evening restriction begins.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            SUPPORTED_EVENING_CUTOFFS.forEachIndexed { index, cutoff ->
-                                SegmentedButton(
-                                    selected = settings.eveningCutoff == cutoff,
-                                    onClick = { onSettingsChange(settings.copy(eveningCutoff = cutoff)) },
-                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = SUPPORTED_EVENING_CUTOFFS.size),
-                                ) { Text(cutoff.label()) }
-                            }
-                        }
                     }
                 }
             }
@@ -262,7 +222,7 @@ fun SettingsScreen(
                     description = if (siteFilterEnabled) {
                         "The filter applies your list to DNS queries sent through this VPN. It has not been verified to block every HTTPS connection to a site."
                     } else {
-                        "Filters DNS queries through a local VPN during blocks. It has not been verified to block every HTTPS connection to a site. Android will ask for permission to set up the VPN."
+                        "Filters DNS queries through a local VPN during study sessions. It has not been verified to block every HTTPS connection to a site. Android will ask for permission to set up the VPN."
                     },
                     actionLabel = if (siteFilterEnabled) "Manage in Settings" else "Turn on website filter",
                     onAction = onRequestSiteFilter,
@@ -275,20 +235,20 @@ fun SettingsScreen(
                     description = if (accessibilityEnabled) {
                         "Tally can keep allowed apps available and return other apps to your plan."
                     } else {
-                        "Turn on the accessibility service to restrict other apps during focus blocks or the evening restriction."
+                        "Turn on the accessibility service to restrict other apps during study sessions."
                     },
                     actionLabel = if (accessibilityEnabled) "Manage in Settings" else "Turn on in Settings",
                     onAction = onOpenAccessibilitySettings,
                 )
                 PermissionCard(
                     icon = Icons.Outlined.Alarm,
-                    title = "On-time block start",
+                    title = "Timer scheduling",
                     enabled = exactAlarmsAllowed,
                     status = if (exactAlarmsAllowed) "Available" else "Permission needed",
                     description = if (exactAlarmsAllowed) {
-                        "Android can start blocks and check the cutoff time on schedule."
+                        "Android can check when a study session ends on schedule."
                     } else {
-                        "Without this permission, Android may delay a block's start or the cutoff check."
+                        "Without this permission, Android may delay the timer completion check."
                     },
                     actionLabel = if (exactAlarmsAllowed) "View permission" else "Allow exact alarms",
                     onAction = onRequestExactAlarmAccess,
@@ -309,7 +269,7 @@ fun SettingsScreen(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            "Your plans and settings are saved on this phone and stay available offline.",
+                            "Your settings and study sessions are saved on this phone and stay available offline.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -546,7 +506,7 @@ fun SettingsScreen(
                 }
 
                 Text("Blocked websites in Chrome", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("You can also add websites during a block. Selected websites stay blocked until it ends.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("You can also add websites during a session. Selected websites stay blocked until it ends.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 desktopBlockedDomains.forEach { domain ->
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(domain, modifier = Modifier.weight(1f))
@@ -565,7 +525,7 @@ fun SettingsScreen(
                     val domain = DesktopSiteBlocklist.normalize(newDomain)
                     when (DesktopSiteBlocklist.validate(desktopBlockedDomains + domain)) {
                         BlocklistValidation.Valid -> { onDesktopDomainsChange(desktopBlockedDomains + domain); newDomain = "" }
-                        BlocklistValidation.ActiveBlockLocked -> formError = "Selected websites can't be removed during a block."
+                        BlocklistValidation.ActiveBlockLocked -> formError = "Selected websites can't be removed during a session."
                         BlocklistValidation.DuplicateDomain -> formError = "That domain is already selected."
                         BlocklistValidation.TooManyDomains -> formError = "The list supports up to 100 domains."
                         is BlocklistValidation.InvalidDomain -> formError = "Enter a domain only, such as example.com."

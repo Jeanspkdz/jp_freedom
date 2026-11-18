@@ -60,8 +60,7 @@ import java.time.Duration
 import java.time.Instant
 
 private enum class AppPage {
-    PLANNER,
-    BLOCK_EDITOR,
+    HOME,
     SETTINGS,
     ALLOWED_APPS_LISTS,
     ALLOWED_APPS_LIST_EDITOR,
@@ -87,11 +86,9 @@ fun FocusApp(
     val scope = rememberCoroutineScope()
     val syncConfigurationStore = remember(context) { SyncConfigurationStore(context) }
     var page by rememberSaveable {
-        mutableStateOf(if (initialBlockedReason == null) AppPage.PLANNER else AppPage.BLOCKED)
+        mutableStateOf(if (initialBlockedReason == null) AppPage.HOME else AppPage.BLOCKED)
     }
     var dayOffset by rememberSaveable { mutableIntStateOf(0) }
-    var editingBlock by remember { mutableStateOf<PlannedBlock?>(null) }
-    var editorDate by remember { mutableStateOf(LocalDate.now()) }
     var refreshVersion by remember { mutableIntStateOf(0) }
     var allBlocks by remember { mutableStateOf<List<PlannedBlock>>(emptyList()) }
     var focusSettings by remember { mutableStateOf(FocusSettings()) }
@@ -237,7 +234,7 @@ fun FocusApp(
     LaunchedEffect(openSessionReviewVersion, stateLoaded) {
         if (openSessionReviewVersion > 0 && stateLoaded) {
             val destination = withContext(Dispatchers.IO) { studyTimerController.destination(openReviewRequest = true) }
-            page = if (destination == StudyTimerDestination.REVIEW) AppPage.SESSION_REVIEW else AppPage.PLANNER
+            page = if (destination == StudyTimerDestination.REVIEW) AppPage.SESSION_REVIEW else AppPage.HOME
         }
     }
 
@@ -246,7 +243,7 @@ fun FocusApp(
             page = when {
                 pendingReview != null -> AppPage.SESSION_REVIEW
                 studySession != null -> AppPage.STUDY_TIMER
-                else -> AppPage.PLANNER
+                else -> AppPage.HOME
             }
         }
     }
@@ -267,15 +264,15 @@ fun FocusApp(
     }
 
     LaunchedEffect(page, currentPolicyBlocked, stateLoaded) {
-        if (stateLoaded && page == AppPage.BLOCKED && !currentPolicyBlocked) page = AppPage.PLANNER
+        if (stateLoaded && page == AppPage.BLOCKED && !currentPolicyBlocked) page = AppPage.HOME
     }
 
-    BackHandler(enabled = page != AppPage.PLANNER) {
+    BackHandler(enabled = page != AppPage.HOME) {
         page = when (page) {
-            AppPage.BLOCK_EDITOR, AppPage.SETTINGS, AppPage.BLOCKED, AppPage.STUDY_TIMER, AppPage.SESSION_REVIEW, AppPage.DAILY_REVIEW -> AppPage.PLANNER
+            AppPage.SETTINGS, AppPage.BLOCKED, AppPage.STUDY_TIMER, AppPage.SESSION_REVIEW, AppPage.DAILY_REVIEW -> AppPage.HOME
             AppPage.ALLOWED_APPS_LISTS -> allowedAppsListsReturnPage
             AppPage.ALLOWED_APPS_LIST_EDITOR -> AppPage.ALLOWED_APPS_LISTS
-            AppPage.PLANNER -> AppPage.PLANNER
+            AppPage.HOME -> AppPage.HOME
         }
     }
 
@@ -303,63 +300,19 @@ fun FocusApp(
 
     TallySplashHost(ready = stateLoaded, enabled = showLaunchSplash) {
     when (page) {
-        AppPage.PLANNER -> PlannerScreen(
-            date = selectedDate,
-            isTodaySelected = dayOffset == 0,
-            blocks = allBlocks.filter { it.date == selectedDate },
-            allBlocks = allBlocks,
+        AppPage.HOME -> HomeScreen(
+            date = LocalDate.now(),
             studySessions = studySessions,
             activeStudySession = studySession,
             pendingSessionReview = pendingReview,
             settings = focusSettings,
-            restrictionActive = restrictionActive,
-            hasSyncKey = syncConfiguration.hasWriteToken,
-            syncStatus = syncState.status,
             accessibilityEnabled = accessibilityEnabled,
-            exactAlarmsAllowed = exactAlarmsAllowed,
-            onSelectToday = { dayOffset = 0 },
-            onSelectTomorrow = { dayOffset = 1 },
             onOpenSettings = { page = AppPage.SETTINGS },
             onOpenStudyTimer = {
                 if (studySession == null && pendingReview == null) selectedAllowedAppsList = AllowedAppsList.ESSENTIALS
                 page = if (pendingReview != null) AppPage.SESSION_REVIEW else AppPage.STUDY_TIMER
             },
             onOpenDailyReview = { page = AppPage.DAILY_REVIEW },
-            onSyncNow = syncNow,
-            onOpenTomorrowPlan = {
-                dayOffset = 1
-                page = AppPage.PLANNER
-            },
-            onAddBlock = {
-                editingBlock = null
-                editorDate = selectedDate
-                page = AppPage.BLOCK_EDITOR
-            },
-            onEditBlock = { block ->
-                editingBlock = block
-                editorDate = block.date
-                page = AppPage.BLOCK_EDITOR
-            },
-        )
-
-        AppPage.BLOCK_EDITOR -> BlockEditorScreen(
-            date = editorDate,
-            block = editingBlock,
-            onBack = { page = AppPage.PLANNER },
-            onSave = { block ->
-                val result = withContext(Dispatchers.IO) { repository.saveBlock(block) }
-                if (result == BlockValidation.Valid) {
-                    PolicyAlarmScheduler.scheduleNext(context)
-                    refreshVersion++
-                }
-                result
-            },
-            onDelete = { id ->
-                withContext(Dispatchers.IO) { repository.deleteBlock(id) }
-                PolicyAlarmScheduler.scheduleNext(context)
-                refreshVersion++
-                page = AppPage.PLANNER
-            },
         )
 
         AppPage.SETTINGS -> SettingsScreen(
@@ -399,7 +352,7 @@ fun FocusApp(
                 }
             },
             onRequestNotificationPermission = requestNotificationPermission,
-            onBack = { page = AppPage.PLANNER },
+            onBack = { page = AppPage.HOME },
             onSettingsChange = { updated ->
                 focusSettings = updated
                 scope.launch {
@@ -525,7 +478,7 @@ fun FocusApp(
             focusAreas = focusAreas,
             notificationPermissionDenied = notificationPermissionDenied,
             selectedAllowedAppsList = selectedAllowedAppsList,
-            onBack = { page = AppPage.PLANNER },
+            onBack = { page = AppPage.HOME },
             onStart = startTimer,
             onOpenAllowedAppsLists = {
                 allowedAppsListsReturnPage = AppPage.STUDY_TIMER
@@ -579,7 +532,7 @@ fun FocusApp(
                         studySession = null
                         PolicyAlarmScheduler.scheduleNext(context)
                         PolicyAlarmScheduler.broadcastRecheck(context)
-                        page = AppPage.PLANNER
+                        page = AppPage.HOME
                         refreshVersion++
                     }
                 }
@@ -591,7 +544,7 @@ fun FocusApp(
                 dailyReviewDate, java.time.ZoneId.systemDefault(), focusSettings.studyHoursTargetMinutes,
                 studySessions, allBlocks,
             ),
-            onBack = { page = AppPage.PLANNER },
+            onBack = { page = AppPage.HOME },
             onResolveImportConflict = { phoneCopyId, keepPhoneVersion ->
                 val serverId = phoneCopyId.removeSuffix("-phone-copy")
                 scope.launch {
@@ -605,7 +558,7 @@ fun FocusApp(
 
         AppPage.BLOCKED -> BlockedScreen(
             reason = initialBlockedReason,
-            onOpenPlanner = { page = AppPage.PLANNER },
+            onOpenPlanner = { page = AppPage.HOME },
             onOpenSettings = { page = AppPage.SETTINGS },
             onBackToBlockedApp = {
                 context.startActivity(
