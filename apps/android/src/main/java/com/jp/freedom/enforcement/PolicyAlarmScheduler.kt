@@ -6,8 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.jp.freedom.data.FocusRepository
-import com.jp.freedom.domain.DayPlanPolicy
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -20,8 +18,6 @@ object PolicyAlarmScheduler {
         val pendingIntent = pendingIntent(context)
         val now = LocalDateTime.now()
         val repository = FocusRepository(context)
-        val settings = repository.settings()
-        val blocks = repository.allBlocks()
         val upcoming = mutableListOf<LocalDateTime>()
         repository.activeStudySession()?.let { session ->
             val ending = if (session.state == com.jp.freedom.domain.StudySessionState.BREAKING) {
@@ -29,20 +25,6 @@ object PolicyAlarmScheduler {
             } else session.startedAt.plusMillis(session.durationMillis)
             ending?.let { LocalDateTime.ofInstant(it, ZoneId.systemDefault()).takeIf { end -> end.isAfter(now) } ?: now.plusSeconds(1) }?.let(upcoming::add)
         }
-
-        for (offset in 0L..1L) {
-            val date = LocalDate.now().plusDays(offset)
-            blocks.asSequence()
-                .filter { it.date == date }
-                .flatMap { sequenceOf(date.atTime(it.startTime), date.atTime(it.endTime)) }
-                .filter { it.isAfter(now) }
-                .forEach(upcoming::add)
-
-            if (DayPlanPolicy.requiredPlanDateForEvening(date) != null) {
-                date.atTime(settings.eveningCutoff).takeIf { it.isAfter(now) }?.let(upcoming::add)
-            }
-        }
-        LocalDate.now().plusDays(1).atStartOfDay().takeIf { it.isAfter(now) }?.let(upcoming::add)
 
         val next = upcoming.minOrNull()
         if (next == null) {
