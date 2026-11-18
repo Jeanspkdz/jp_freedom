@@ -67,12 +67,14 @@ class DailyReviewReminderSettingsTest {
                     siteFilterEnabled = false,
                     dailyReviewReminderTime = displayedTime,
                     focusAreas = emptyList(),
+                    studyHistoryCount = 0,
                     notificationsAllowed = true,
                     onDailyReviewReminderTimeChange = { value ->
                         displayedTime = value
                         DailyReviewReminder.saveTime(context, LocalTime.parse(value))
                     },
                     onFocusAreasChange = {},
+                    onClearStudyHistory = {},
                     onRequestNotificationPermission = {},
                     onBack = {},
                     onSettingsChange = {},
@@ -89,9 +91,9 @@ class DailyReviewReminderSettingsTest {
         }
 
         compose.onNodeWithText(initialTime.toString()).performScrollTo().performClick()
-        compose.onNodeWithText("Confirmar").assertIsDisplayed()
+        compose.onNodeWithText("Confirm").assertIsDisplayed()
         compose.onNodeWithTag("daily-review-hour-picker").performTouchInput { swipeUp() }
-        compose.onNodeWithText("Confirmar").performClick()
+        compose.onNodeWithText("Confirm").performClick()
         compose.waitForIdle()
 
         assertNotEquals(initialTime.toString(), displayedTime)

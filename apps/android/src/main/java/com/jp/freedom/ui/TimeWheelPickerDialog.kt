@@ -82,7 +82,7 @@ fun TimeWheelPickerDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(LocalTime.of(hourPicker.value, minutePicker.value)) }) {
-                Text("Confirmar")
+                Text("Confirm")
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },

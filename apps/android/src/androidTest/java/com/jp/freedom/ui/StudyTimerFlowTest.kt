@@ -75,7 +75,7 @@ class StudyTimerFlowTest {
                     onStop = {},
                     onResumeSession = { continued = true },
                     onOpenFocusAreaSettings = {},
-                    onReview = { _, _, _ -> },
+                    onReview = { _, _, _, _ -> },
                     onEndBreak = {},
                 )
             }
@@ -102,7 +102,7 @@ class StudyTimerFlowTest {
                     onStop = {},
                     onResumeSession = {},
                     onOpenFocusAreaSettings = {},
-                    onReview = { _, _, _ -> },
+                    onReview = { _, _, _, _ -> },
                     onEndBreak = {},
                 )
             }
@@ -133,7 +133,7 @@ class StudyTimerFlowTest {
                     onStop = {},
                     onResumeSession = {},
                     onOpenFocusAreaSettings = {},
-                    onReview = { _, _, _ -> },
+                    onReview = { _, _, _, _ -> },
                     onEndBreak = {},
                 )
             }
@@ -165,7 +165,7 @@ class StudyTimerFlowTest {
                     onStop = {},
                     onResumeSession = {},
                     onOpenFocusAreaSettings = {},
-                    onReview = { _, _, _ -> },
+                    onReview = { _, _, _, _ -> },
                     onEndBreak = {},
                 )
             }
@@ -193,7 +193,7 @@ class StudyTimerFlowTest {
                     onStop = {},
                     onResumeSession = {},
                     onOpenFocusAreaSettings = {},
-                    onReview = { _, _, _ -> },
+                    onReview = { _, _, _, _ -> },
                     onEndBreak = {},
                 )
             }

@@ -7,6 +7,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.ui.platform.LocalDensity
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.jp.freedom.domain.InstalledApp
 import com.jp.freedom.domain.AllowedAppsList
@@ -21,6 +26,30 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AllowedAppsListsFlowTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun createListButtonStaysAboveSystemNavigation() {
+        var navigationInsetDp = 0f
+        compose.setContent {
+            val density = LocalDensity.current
+            navigationInsetDp = with(density) { WindowInsets.navigationBars.getBottom(density).toDp().value }
+            FocusTheme {
+                AllowedAppsListsScreen(
+                    lists = emptyList(),
+                    installedApps = emptyList(),
+                    selectedListId = AllowedAppsList.ESSENTIALS_ID,
+                    selectionMode = true,
+                    lockedListId = null,
+                    onBack = {}, onSelect = {}, onCreate = {}, onEdit = {}, onDelete = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Create list").assertIsDisplayed()
+        val rootBottom = compose.onRoot().getUnclippedBoundsInRoot().bottom.value
+        val buttonBottom = compose.onNodeWithText("Create list").getUnclippedBoundsInRoot().bottom.value
+        assertTrue("The button must clear the navigation bar", buttonBottom <= rootBottom - navigationInsetDp)
+    }
 
     @Test
     fun newListCanBeNamedAndSavedWhenNoTimerIsActive() {

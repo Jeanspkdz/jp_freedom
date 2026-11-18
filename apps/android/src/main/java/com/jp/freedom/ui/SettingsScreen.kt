@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.FocusArea
 import com.jp.freedom.domain.BlocklistValidation
@@ -578,9 +579,17 @@ fun SettingsScreen(
 
 @Composable
 private fun SectionHeading(number: String, title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(number, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Text(title, style = MaterialTheme.typography.titleLarge, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondary) {
+            Text(
+                number,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondary,
+            )
+        }
+        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
     }
 }
 
