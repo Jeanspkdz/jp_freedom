@@ -76,6 +76,8 @@ test('plan, sites, and connection are separate extension documents', async () =>
   assert.doesNotMatch(sites, /id="view-plan"|id="view-connection"/);
   assert.doesNotMatch(connection, /id="view-plan"|id="view-sites"/);
   for (const html of [plan, sites, connection]) {
+    assert.match(html, />Session<\/a>/);
+    assert.doesNotMatch(html, />Plan<\/a>/);
     assert.match(html, /href="management\.css"/);
     assert.match(html, /src="src\/page-entry\.js"/);
     assert.doesNotMatch(html, /<script>/);
