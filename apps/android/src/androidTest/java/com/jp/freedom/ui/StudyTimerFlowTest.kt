@@ -153,6 +153,7 @@ class StudyTimerFlowTest {
     @Test
     fun continueOptionDisappearsWhenTheRemainingTimeExpiresOnTheReviewScreen() {
         val startedAt = Instant.now()
+        var testNow = startedAt.plusSeconds(1)
         val aboutToExpire = session(StudySessionState.PENDING_REVIEW).copy(
             startedAt = startedAt,
             durationMillis = 3_000,
@@ -175,11 +176,13 @@ class StudyTimerFlowTest {
                     onOpenFocusAreaSettings = {},
                     onReview = { _, _, _, _ -> },
                     onEndBreak = {},
+                    clock = { testNow },
                 )
             }
         }
 
         compose.onNodeWithText("Continue session").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { testNow = startedAt.plusSeconds(4) }
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("Continue session").fetchSemanticsNodes().isEmpty()
         }

@@ -78,6 +78,7 @@ fun StudyTimerScreen(
     onOpenFocusAreaSettings: () -> Unit,
     onReview: (String, CompletionStatus, String, String) -> Unit,
     onEndBreak: (String) -> Unit,
+    clock: () -> Instant = Instant::now,
 ) {
     var minutes by remember { mutableIntStateOf(60) }
     var showDurationPicker by remember { mutableStateOf(false) }
@@ -120,7 +121,7 @@ fun StudyTimerScreen(
         ) {
             when {
                 pendingReview != null -> {
-                    val now = remember(clockTick) { Instant.now() }
+                    val now = remember(clockTick) { clock() }
                     RitmyMascot(modifier = Modifier.align(Alignment.CenterHorizontally), size = 100.dp, cheerful = true)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("Session complete", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -162,7 +163,7 @@ fun StudyTimerScreen(
                 }
 
                 session?.state == StudySessionState.BREAKING -> {
-                    val now = remember(clockTick) { Instant.now() }
+                    val now = remember(clockTick) { clock() }
                     val remainingTime = StudyTimerPolicy.breakRemaining(session, now)
                     StatusHero(icon = { Icon(Icons.Filled.PauseCircle, contentDescription = null) }, heading = "Take a break", detail = "Restrictions are paused during your break.")
                     TimerReadout("${remainingTime.toMinutes().toString().padStart(2, '0')}:${(remainingTime.seconds % 60).toString().padStart(2, '0')}", "Break remaining")
@@ -172,7 +173,7 @@ fun StudyTimerScreen(
                 }
 
                 session != null -> {
-                    val now = remember(clockTick) { Instant.now() }
+                    val now = remember(clockTick) { clock() }
                     val remainingTime = StudyTimerPolicy.remaining(session, now)
                     val elapsedTime = Duration.ofMillis((session.durationMillis - remainingTime.toMillis()).coerceAtLeast(0))
                     StatusHero(icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) }, heading = session.taskName.ifBlank { "Session in progress" }, detail = "Keep going: your session keeps counting even when you leave the app.")
