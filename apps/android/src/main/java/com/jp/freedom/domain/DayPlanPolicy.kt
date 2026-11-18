@@ -34,12 +34,6 @@ data class FocusSettings(
     }
 }
 
-enum class AccessProfile(val title: String) {
-    ESSENTIALS_ONLY("Solo esenciales"),
-    ESSENTIALS_WITH_CHATGPT("Esenciales y ChatGPT"),
-    ESSENTIALS_WITH_CHATGPT_AND_SEARCH("Esenciales, ChatGPT y Google Search"),
-}
-
 enum class CompletionStatus {
     NOT_STARTED,
     FINISHED,
@@ -53,7 +47,6 @@ data class PlannedBlock(
     val name: String,
     val startTime: LocalTime,
     val endTime: LocalTime,
-    val accessProfile: AccessProfile = AccessProfile.ESSENTIALS_ONLY,
     val completionStatus: CompletionStatus = CompletionStatus.NOT_STARTED,
     val note: String? = null,
 )

@@ -92,7 +92,7 @@ function createHarness(initialStorage = {}, page = 'all') {
   });
   const sessionValues = new Map();
   const documentRef = {
-    title: 'Dimky · Focus plan',
+    title: 'Tally · Focus plan',
     documentElement: { dataset: { page }, classList: { add() {}, remove() {} } },
     location: { href: '' },
     defaultView: {
@@ -138,7 +138,7 @@ test('separate management page links carry direction and degrade to ordinary nav
   harness.navigationLinks[0].listeners.get('click')({ button: 0 });
 
   assert.equal(harness.documentRef.documentElement.dataset.nav, 'back');
-  assert.equal(harness.sessionValues.get('dimky-nav-direction'), 'back');
+  assert.equal(harness.sessionValues.get('Tally-nav-direction'), 'back');
   assert.equal(harness.documentRef.location.href, '');
 });
 
@@ -796,7 +796,7 @@ test('the worker reminds from cached plan data offline without installing browsi
   await refreshFocusState(harness.chromeApi, now);
 
   assert.equal(harness.notifications.shown.length, 1);
-  assert.match(harness.notifications.shown[0].options.message, /Open Dimky on your phone/);
+  assert.match(harness.notifications.shown[0].options.message, /Open Tally on your phone/);
   assert.equal(harness.alarms.get('planning-reminder-repeat').periodInMinutes, 30);
   assert.deepEqual(harness.rules, []);
 });

@@ -1,5 +1,5 @@
 ---
-name: Dimky
+name: Tally
 description: A daily focus planner whose schedule determines what the phone allows.
 colors:
   night-primary: "#FFC27A"
@@ -95,13 +95,13 @@ components:
     padding: "8dp 12dp"
 ---
 
-# Design System: Dimky
+# Design System: Tally
 
 ## Overview
 
 **Creative North Star: “A live timetable board”**
 
-Dimky presents the day as a readable schedule on a deep navy canvas. Warm amber marks primary actions, studied time, and the active block; medium purple brings planned time, selected durations, and focus guidance forward. The established dark palette stays familiar while its two accents carry clear, consistent roles.
+Tally presents the day as a readable schedule on a deep navy canvas. Warm amber marks primary actions, studied time, and the active block; medium purple brings planned time, selected durations, and focus guidance forward. The established dark palette stays familiar while its two accents carry clear, consistent roles.
 
 The Android app follows Material 3 for navigation, controls, and semantic color pairing. Agenda rows remain light and time ordered; grouped surfaces organize summaries and settings without turning every item into a card. System text scaling and Android navigation behavior remain intact.
 

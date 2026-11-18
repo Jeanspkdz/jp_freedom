@@ -14,7 +14,7 @@ import java.time.ZonedDateTime
 class StudyTimerPolicyTest {
     @Test fun dailyReviewCountsElapsedTimeOfAnActiveSessionAfterReturningToTheApp() {
         val startedAt = Instant.parse("2026-11-10T15:00:00Z")
-        val active = StudyTimerSession.start("", Duration.ofMinutes(90), AccessProfile.ESSENTIALS_ONLY, startedAt)
+        val active = StudyTimerSession.start("", Duration.ofMinutes(90), AllowedAppsList.ESSENTIALS, startedAt)
         val review = StudyTimerPolicy.dailyReview(
             LocalDate.of(2026, 11, 10), ZoneId.of("America/Lima"), 180,
             listOf(active), emptyList(), startedAt.plusSeconds(35 * 60),
@@ -68,7 +68,8 @@ class StudyTimerPolicyTest {
 
     private fun reviewed(id: String, startedAt: Instant, actualMinutes: Long, task: String, outcome: SessionOutcome, note: String, remaining: String) =
         StudyTimerSession(
-            id = id, taskName = task, durationMillis = 3_600_000, accessProfile = AccessProfile.ESSENTIALS_ONLY,
+            id = id, taskName = task, durationMillis = 3_600_000,
+            allowedAppsListId = AllowedAppsList.ESSENTIALS_ID, allowedAppsListName = "Essentials", allowedAppPackages = emptySet(),
             startedAt = startedAt, endedAt = startedAt.plusSeconds(3600), actualMillis = actualMinutes * 60_000,
             state = StudySessionState.REVIEWED, outcome = outcome, note = note, remaining = remaining,
         )
@@ -83,7 +84,7 @@ class StudyTimerPolicyTest {
     private val start = Instant.parse("2026-11-10T12:00:00Z")
 
     @Test fun expiryRecordsPlannedDurationAndRequiresReview() {
-        val session = StudyTimerSession.start("Math", Duration.ofHours(1), AccessProfile.ESSENTIALS_ONLY, start)
+        val session = StudyTimerSession.start("Math", Duration.ofHours(1), AllowedAppsList.ESSENTIALS, start)
         val ended = StudyTimerPolicy.finishIfDue(session, start.plus(Duration.ofHours(1)))!!
         assertEquals(60, ended.actualMillis / 60_000)
         assertEquals(StudySessionState.PENDING_REVIEW, ended.state)
@@ -91,14 +92,14 @@ class StudyTimerPolicyTest {
     }
 
     @Test fun earlyStopRecordsElapsedTimeAndReviewUnlocksNextSession() {
-        val session = StudyTimerSession.start("Reading", Duration.ofHours(1), AccessProfile.ESSENTIALS_WITH_CHATGPT, start)
+        val session = StudyTimerSession.start("Reading", Duration.ofHours(1), AllowedAppsList.fromLegacyAccessProfile("ESSENTIALS_WITH_CHATGPT"), start)
         val ended = StudyTimerPolicy.stop(session, start.plusSeconds(20 * 60L))
         assertEquals(20, ended.actualMillis / 60_000)
         assertTrue(StudyTimerPolicy.canStartAnother(StudyTimerPolicy.review(ended, "Reading", SessionOutcome.NOT_FINISHED, "")))
     }
 
     @Test fun sessionReviewKeepsOneOfItsTwoOutcomesAndOptionalNotes() {
-        val session = StudyTimerSession.start("Reading", Duration.ofHours(1), AccessProfile.ESSENTIALS_ONLY, start)
+        val session = StudyTimerSession.start("Reading", Duration.ofHours(1), AllowedAppsList.ESSENTIALS, start)
         val ended = StudyTimerPolicy.stop(session, start.plusSeconds(20 * 60L))
 
         val reviewed = StudyTimerPolicy.review(ended, "Reading", SessionOutcome.NOT_FINISHED, "Finish chapter 2 tomorrow")
@@ -109,7 +110,7 @@ class StudyTimerPolicyTest {
     }
 
     @Test fun remainingTimeNeverGoesNegativeAndPresetsIncludeNinetyMinutes() {
-        val session = StudyTimerSession.start("", Duration.ofMinutes(90), AccessProfile.ESSENTIALS_ONLY, start)
+        val session = StudyTimerSession.start("", Duration.ofMinutes(90), AllowedAppsList.ESSENTIALS, start)
         assertEquals(Duration.ofMinutes(90), StudyTimerPolicy.remaining(session, start))
         assertEquals(Duration.ZERO, StudyTimerPolicy.remaining(session, start.plus(Duration.ofMinutes(91))))
         assertTrue(StudyTimerPolicy.PRESETS.contains(Duration.ofMinutes(90)))

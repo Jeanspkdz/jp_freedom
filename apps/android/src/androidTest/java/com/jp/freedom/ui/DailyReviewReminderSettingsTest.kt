@@ -81,6 +81,7 @@ class DailyReviewReminderSettingsTest {
                     onSyncNow = {},
                     onResolveReviewConflict = {},
                     onOpenAccessibilitySettings = {},
+                    onOpenAllowedAppsLists = {},
                     onRequestExactAlarmAccess = {},
                     onRequestSiteFilter = {},
                 )

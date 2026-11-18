@@ -10,7 +10,7 @@ The extension uses the Android app's dark navy, amber, and periwinkle visual lan
 
 The user chooses any study duration in Chrome and starts the session. The control's final label is a design detail; it should clearly communicate that it starts a timed focus session. The timer begins immediately, and Chrome blocks every site in the shared desktop site blocklist until the session ends. A session can also end early when the user stops it.
 
-The same session is sent to Android. A Chrome-started session uses Android's Essentials-only access profile. Android applies phone restrictions when it receives the session; Chrome does not apply Android access profiles or the evening restriction. If Android reconnects after the timer has started, it enforces only the remaining duration. If the session has already elapsed, Android records its completion without starting a stale restriction. The session review remains in Android.
+The same session is sent to Android. A Chrome-started session uses Android's Essentials list. Android applies phone restrictions when it receives the session; Chrome does not apply allowed apps lists or the evening restriction. If Android reconnects after the timer has started, it enforces only the remaining duration. If the session has already elapsed, Android records its completion without starting a stale restriction. The session review remains in Android.
 
 The Android app can also start a session that activates Chrome's shared site blocklist after sync. Planned blocks continue to activate that list on Chrome. Chrome's timer does not create or edit planned blocks.
 

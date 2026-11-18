@@ -29,7 +29,7 @@ function notificationFor(status, iconUrl) {
     type: 'basic',
     iconUrl,
     title: 'Incomplete day plan',
-    message: `Your plan for ${status.planDate} has ${status.plannedCount} of ${status.requiredBlockCount} required blocks. Open Dimky on your phone to finish planning.`,
+    message: `Your plan for ${status.planDate} has ${status.plannedCount} of ${status.requiredBlockCount} required blocks. Open Tally on your phone to finish planning.`,
   };
 }
 

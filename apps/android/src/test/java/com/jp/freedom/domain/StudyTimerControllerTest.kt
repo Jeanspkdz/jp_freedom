@@ -14,7 +14,7 @@ import org.junit.Test
 class StudyTimerControllerTest {
     @Test fun startingStoppingNotificationReviewAndStartingAgainFollowTheSessionFlow() {
         val store = MemorySessionStore()
-        val started = controller(store, "2026-11-10T12:00:00Z").start(Duration.ofMinutes(90), AccessProfile.ESSENTIALS_ONLY)
+        val started = controller(store, "2026-11-10T12:00:00Z").start(Duration.ofMinutes(90), AllowedAppsList.ESSENTIALS)
         assertNotNull(started)
         assertEquals(StudyTimerDestination.TIMER, controller(store, "2026-11-10T12:05:00Z").destination())
 
@@ -24,20 +24,20 @@ class StudyTimerControllerTest {
         assertEquals(StudyTimerDestination.REVIEW, reviewController.destination(openReviewRequest = true))
         assertEquals(StudyTimerDestination.PLANNER, reviewController.dismissReview())
         assertFalse(reviewController.canStartAnother())
-        assertNull(reviewController.start(Duration.ofMinutes(60), AccessProfile.ESSENTIALS_ONLY))
+        assertNull(reviewController.start(Duration.ofMinutes(60), AllowedAppsList.ESSENTIALS))
 
         assertNotNull(reviewController.review("Read chapter 4", SessionOutcome.NOT_FINISHED, "Good progress"))
         assertFalse(reviewController.canStartAnother())
         assertNotNull(reviewController.endBreak("Review exercises"))
         assertTrue(reviewController.canStartAnother())
         assertEquals(StudyTimerDestination.PLANNER, reviewController.destination())
-        assertNotNull(reviewController.start(Duration.ofMinutes(60), AccessProfile.ESSENTIALS_ONLY))
+        assertNotNull(reviewController.start(Duration.ofMinutes(60), AllowedAppsList.ESSENTIALS))
     }
 
     @Test fun reviewingStartsAnUnrestrictedBreakThatCanOnlyEndAfterNamingTheNextTask() {
         val store = MemorySessionStore()
         val controller = controller(store, "2026-11-10T12:00:00Z")
-        controller.start(Duration.ofMinutes(45), AccessProfile.ESSENTIALS_ONLY)
+        controller.start(Duration.ofMinutes(45), AllowedAppsList.ESSENTIALS)
         controller.stop()
         val reviewed = controller.review("Math", SessionOutcome.FINISHED, "", Duration.ofMinutes(15))
 
@@ -52,7 +52,7 @@ class StudyTimerControllerTest {
     @Test fun startingAStudySessionKeepsItsSelectedFocusArea() {
         val store = MemorySessionStore()
         val started = controller(store, "2026-11-10T12:00:00Z")
-            .start(Duration.ofMinutes(45), AccessProfile.ESSENTIALS_ONLY, focusAreaId = "english")
+            .start(Duration.ofMinutes(45), AllowedAppsList.ESSENTIALS, focusAreaId = "english")
 
         assertEquals("english", started?.focusAreaId)
         assertEquals("english", store.activeStudySession()?.focusAreaId)
@@ -61,7 +61,7 @@ class StudyTimerControllerTest {
     @Test fun returningToAStoppedSessionRestoresItsOriginalDeadline() {
         val store = MemorySessionStore()
         val timer = controller(store, "2026-11-10T12:00:00Z")
-        val started = timer.start(Duration.ofMinutes(90), AccessProfile.ESSENTIALS_ONLY)!!
+        val started = timer.start(Duration.ofMinutes(90), AllowedAppsList.ESSENTIALS)!!
         val review = controller(store, "2026-11-10T12:20:00Z")
         review.stop()
 
@@ -76,7 +76,7 @@ class StudyTimerControllerTest {
 
     @Test fun expiredSessionsCannotReturnToAnOngoingTimer() {
         val store = MemorySessionStore()
-        controller(store, "2026-11-10T12:00:00Z").start(Duration.ofMinutes(20), AccessProfile.ESSENTIALS_ONLY)
+        controller(store, "2026-11-10T12:00:00Z").start(Duration.ofMinutes(20), AllowedAppsList.ESSENTIALS)
         val review = controller(store, "2026-11-10T12:20:00Z")
         review.finishIfDue()
 

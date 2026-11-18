@@ -13,7 +13,6 @@ import android.os.ParcelFileDescriptor
 import android.content.pm.ServiceInfo
 import android.util.Log
 import com.jp.freedom.data.FocusRepository
-import com.jp.freedom.domain.AccessProfile
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.DatagramPacket
@@ -88,7 +87,7 @@ class SiteFilterVpnService : VpnService() {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Dimky website filter", NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL_ID, "Tally website filter", NotificationManager.IMPORTANCE_LOW),
             )
         }
         val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -130,7 +129,12 @@ class SiteFilterVpnService : VpnService() {
     }
 
     private fun isAllowedDomain(domain: String): Boolean {
-        val state = FocusPolicy.evaluate(LocalDateTime.now(), repository.allBlocks(), repository.settings())
+        val state = FocusPolicy.evaluate(
+            LocalDateTime.now(),
+            repository.allBlocks(),
+            repository.settings(),
+            repository.activeStudySession(),
+        )
         return SiteDomainPolicy.isAllowed(domain, state)
     }
 
@@ -166,14 +170,14 @@ class SiteFilterVpnService : VpnService() {
     companion object {
         private const val DNS_TUNNEL_ADDRESS = "10.77.0.1"
         private const val DNS_SERVER_ADDRESS = "10.77.0.2"
-        private const val SESSION_NAME = "Dimky"
+        private const val SESSION_NAME = "Tally"
         private const val FALLBACK_DNS = "1.1.1.1"
         private const val DNS_PORT = 53
         private const val DNS_TIMEOUT_MS = 2_000
         private const val MAX_DNS_PACKET_BYTES = 4_096
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "site-filter"
-        private const val TAG = "DimkyVpn"
+        private const val TAG = "TallyVpn"
         private const val CHATGPT_PACKAGE = "com.openai.chatgpt"
         private const val GOOGLE_SEARCH_PACKAGE = "com.google.android.googlequicksearchbox"
         // This runtime flag resets on process death instead of surviving as a stale preference.

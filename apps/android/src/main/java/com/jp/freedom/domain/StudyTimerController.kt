@@ -34,9 +34,9 @@ class StudyTimerController(
     fun canStartAnother(): Boolean =
         StudyTimerPolicy.canStartAnother(store.activeStudySession() ?: store.pendingStudyReview())
 
-    fun start(duration: Duration, profile: AccessProfile, focusAreaId: String? = null): StudyTimerSession? {
+    fun start(duration: Duration, allowedAppsList: AllowedAppsList, focusAreaId: String? = null): StudyTimerSession? {
         if (!canStartAnother()) return null
-        return StudyTimerSession.start("", duration, profile, Instant.now(clock))
+        return StudyTimerSession.start("", duration, allowedAppsList, Instant.now(clock))
             .copy(focusAreaId = focusAreaId)
             .takeIf(store::startStudySession)
     }

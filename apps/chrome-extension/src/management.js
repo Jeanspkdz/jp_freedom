@@ -324,7 +324,7 @@ export async function initializeManagement({
     documentRef.documentElement.dataset.nav = targetIndex < currentIndex ? 'back' : 'forward';
     try {
       const sessionStorage = documentRef.defaultView?.sessionStorage ?? globalThis.sessionStorage;
-      sessionStorage?.setItem('dimky-nav-direction', documentRef.documentElement.dataset.nav);
+      sessionStorage?.setItem('Tally-nav-direction', documentRef.documentElement.dataset.nav);
     } catch {
       // The new page defaults to a forward transition when session storage is unavailable.
     }
@@ -342,7 +342,7 @@ export async function initializeManagement({
     }
     // Extension URLs currently skip cross-document View Transitions in Chromium.
     leaving = true;
-    try { view.sessionStorage?.setItem('dimky-nav-fallback', '1'); } catch { /* Direct navigation remains available. */ }
+    try { view.sessionStorage?.setItem('Tally-nav-fallback', '1'); } catch { /* Direct navigation remains available. */ }
     documentRef.documentElement.classList.add('is-leaving');
     const duration = view.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 100 : 200;
     globalThis.setTimeout(() => { location.href = href; }, duration);
@@ -371,7 +371,7 @@ export async function initializeManagement({
     const openTabDocument = () => {
       setNavigationDirection(target);
       documentRef.documentElement.classList.add('tab-pill-only');
-      try { documentRef.defaultView?.sessionStorage?.setItem('dimky-tab-pill-only', '1'); } catch { /* Direct navigation still works. */ }
+      try { documentRef.defaultView?.sessionStorage?.setItem('Tally-tab-pill-only', '1'); } catch { /* Direct navigation still works. */ }
       (documentRef.defaultView?.location ?? documentRef.location ?? globalThis.location).href = href;
     };
     if (!nav || !from || !to || documentRef.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {

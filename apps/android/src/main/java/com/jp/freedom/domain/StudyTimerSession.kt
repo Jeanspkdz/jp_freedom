@@ -14,7 +14,9 @@ data class StudyTimerSession(
     val id: String,
     val taskName: String,
     val durationMillis: Long,
-    val accessProfile: AccessProfile,
+    val allowedAppsListId: String,
+    val allowedAppsListName: String,
+    val allowedAppPackages: Set<String>,
     val startedAt: Instant,
     val endedAt: Instant? = null,
     val actualMillis: Long = 0,
@@ -28,8 +30,16 @@ data class StudyTimerSession(
     val nextTask: String = "",
 ) {
     companion object {
-        fun start(taskName: String, duration: Duration, accessProfile: AccessProfile, now: Instant) =
-            StudyTimerSession(java.util.UUID.randomUUID().toString(), taskName, duration.toMillis(), accessProfile, now)
+        fun start(taskName: String, duration: Duration, allowedAppsList: AllowedAppsList, now: Instant) =
+            StudyTimerSession(
+                id = java.util.UUID.randomUUID().toString(),
+                taskName = taskName,
+                durationMillis = duration.toMillis(),
+                allowedAppsListId = allowedAppsList.id,
+                allowedAppsListName = allowedAppsList.name,
+                allowedAppPackages = allowedAppsList.packageNames,
+                startedAt = now,
+            )
     }
 }
 

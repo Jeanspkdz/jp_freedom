@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +39,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,7 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.jp.freedom.domain.AccessProfile
+import com.jp.freedom.domain.AllowedAppsList
 import com.jp.freedom.domain.FocusArea
 import com.jp.freedom.domain.SessionOutcome
 import com.jp.freedom.domain.StudySessionState
@@ -69,7 +71,9 @@ fun StudyTimerScreen(
     session: StudyTimerSession?, pendingReview: StudyTimerSession?,
     focusAreas: List<FocusArea>,
     notificationPermissionDenied: Boolean,
-    onBack: () -> Unit, onStart: (Duration, AccessProfile, String?) -> Unit, onStop: () -> Unit,
+    selectedAllowedAppsList: AllowedAppsList,
+    onBack: () -> Unit, onStart: (Duration, AllowedAppsList, String?) -> Unit,
+    onOpenAllowedAppsLists: () -> Unit, onStop: () -> Unit,
     onResumeSession: () -> Unit,
     onOpenFocusAreaSettings: () -> Unit,
     onReview: (String, SessionOutcome, String) -> Unit,
@@ -77,7 +81,7 @@ fun StudyTimerScreen(
 ) {
     var minutes by remember { mutableIntStateOf(60) }
     var showDurationPicker by remember { mutableStateOf(false) }
-    var profile by remember { mutableStateOf(AccessProfile.ESSENTIALS_ONLY) }
+    var showStartConfirmation by remember { mutableStateOf(false) }
     var focusAreaId by remember(pendingReview?.id) { mutableStateOf<String?>(pendingReview?.focusAreaId) }
     var task by remember(pendingReview?.id) { mutableStateOf(pendingReview?.taskName.orEmpty()) }
     var note by remember(pendingReview?.id) { mutableStateOf(pendingReview?.note.orEmpty()) }
@@ -95,16 +99,16 @@ fun StudyTimerScreen(
     }
 
     val title = when {
-        pendingReview != null -> "Revisar sesión"
-        session?.state == StudySessionState.BREAKING -> "Descanso"
-        session != null -> "Sesión de estudio"
-        else -> "Temporizador"
+        pendingReview != null -> "Session review"
+        session?.state == StudySessionState.BREAKING -> "Break"
+        session != null -> "Study session"
+        else -> "Timer"
     }
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(title) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
             )
         },
     ) { padding ->
@@ -118,11 +122,11 @@ fun StudyTimerScreen(
                     val now = remember(clockTick) { Instant.now() }
                     RitmyMascot(modifier = Modifier.align(Alignment.CenterHorizontally), size = 100.dp, cheerful = true)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Sesión completada", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text("Estudiaste ${pendingReview.actualMillis / 60_000} min. Guarda cómo te fue para cerrar la sesión.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Session complete", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("You studied ${pendingReview.actualMillis / 60_000} min. Save how it went to close the session.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    OutlinedTextField(task, { task = it }, label = { Text("Actividad") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                    Text("¿Cómo te fue?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(task, { task = it }, label = { Text("Activity") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    Text("How did it go?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     listOf(SessionOutcome.FINISHED, SessionOutcome.NOT_FINISHED).forEach { option ->
                         val selected = status == option
                         Surface(
@@ -133,58 +137,58 @@ fun StudyTimerScreen(
                         ) {
                             Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Icon(if (selected) Icons.Filled.CheckCircle else Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = if (selected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(option.label(), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                                if (selected) Text("Seleccionado", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                Text(if (option == SessionOutcome.FINISHED) "Finished" else "Not finished", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                if (selected) Text("Selected", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
                             }
                         }
                     }
-                    OutlinedTextField(note, { note = it }, label = { Text("Notas (opcional)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
-                    Button(onClick = { status?.let { onReview(task.trim(), it, note) } }, enabled = task.isNotBlank() && status != null, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Guardar revisión") }
+                    OutlinedTextField(note, { note = it }, label = { Text("Notes (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    Button(onClick = { status?.let { onReview(task.trim(), it, note) } }, enabled = task.isNotBlank() && status != null, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Save review") }
                     if (!StudyTimerPolicy.remaining(pendingReview, now).isZero) {
                         OutlinedButton(onClick = onResumeSession, modifier = Modifier.fillMaxWidth().height(52.dp)) {
                             Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
                             Spacer(Modifier.size(8.dp))
-                            Text("Continuar sesión")
+                            Text("Continue session")
                         }
                     }
-                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Más tarde") }
+                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Later") }
                 }
 
                 session?.state == StudySessionState.BREAKING -> {
                     val now = remember(clockTick) { Instant.now() }
                     val remainingTime = StudyTimerPolicy.breakRemaining(session, now)
-                    StatusHero(icon = { Icon(Icons.Filled.PauseCircle, contentDescription = null) }, heading = "Tómate un respiro", detail = "Las restricciones están pausadas durante el descanso.")
-                    TimerReadout("${remainingTime.toMinutes().toString().padStart(2, '0')}:${(remainingTime.seconds % 60).toString().padStart(2, '0')}", "Descanso restante")
-                    OutlinedTextField(nextTask, { nextTask = it }, label = { Text("¿En qué trabajarás después?") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                    Button(onClick = { onEndBreak(nextTask.trim()) }, enabled = nextTask.isNotBlank(), modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Terminar descanso") }
-                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Volver al plan") }
+                    StatusHero(icon = { Icon(Icons.Filled.PauseCircle, contentDescription = null) }, heading = "Take a break", detail = "Restrictions are paused during your break.")
+                    TimerReadout("${remainingTime.toMinutes().toString().padStart(2, '0')}:${(remainingTime.seconds % 60).toString().padStart(2, '0')}", "Break remaining")
+                    OutlinedTextField(nextTask, { nextTask = it }, label = { Text("What will you work on next?") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    Button(onClick = { onEndBreak(nextTask.trim()) }, enabled = nextTask.isNotBlank(), modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("End break") }
+                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Back to plan") }
                 }
 
                 session != null -> {
                     val now = remember(clockTick) { Instant.now() }
                     val remainingTime = StudyTimerPolicy.remaining(session, now)
                     val elapsedTime = Duration.ofMillis((session.durationMillis - remainingTime.toMillis()).coerceAtLeast(0))
-                    StatusHero(icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) }, heading = session.taskName.ifBlank { "Sesión en curso" }, detail = "Mantén el ritmo: tu sesión sigue contando aunque salgas de la app.")
+                    StatusHero(icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) }, heading = session.taskName.ifBlank { "Session in progress" }, detail = "Keep going: your session keeps counting even when you leave the app.")
                     TimerReadout(
                         "${remainingTime.toHours().toString().padStart(2, '0')}:${(remainingTime.toMinutes() % 60).toString().padStart(2, '0')}:${(remainingTime.seconds % 60).toString().padStart(2, '0')}",
-                        "Tiempo restante",
+                        "Time remaining",
                     )
                     LinearProgressIndicator(
                         progress = { (elapsedTime.toMillis().toFloat() / session.durationMillis.coerceAtLeast(1)).coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().height(8.dp),
                     )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Transcurrido ${formatClock(elapsedTime)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Elapsed ${formatClock(elapsedTime)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("Total ${formatClock(Duration.ofMillis(session.durationMillis))}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(18.dp)) {
                         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Icon(Icons.Filled.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
                             Column {
-                                Text("Acceso protegido", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text("Protected access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.secondary) {
                                     Text(
-                                        session.accessProfile.title,
+                                        session.allowedAppsListName,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                                         style = MaterialTheme.typography.labelLarge,
                                         fontWeight = FontWeight.SemiBold,
@@ -194,15 +198,15 @@ fun StudyTimerScreen(
                             }
                         }
                     }
-                    Button(onClick = onStop, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Terminar y revisar") }
-                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Volver al plan") }
+                    Button(onClick = onStop, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("End and review") }
+                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Back to plan") }
                 }
 
                 else -> {
                     RitmyMascot(modifier = Modifier.align(Alignment.CenterHorizontally), size = 116.dp)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Un bloque para ti", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text("Elige cuánto tiempo quieres dedicarle y empieza cuando estés listo.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("A block for you", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("Choose how much time you want to spend and start when you're ready.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -216,8 +220,8 @@ fun StudyTimerScreen(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text("Duración", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                    Text("Elige un tiempo habitual o personalízalo.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Duration", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                    Text("Choose a preset or set a custom duration.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Text(
                                     formatDuration(selectedMinutes),
@@ -249,30 +253,40 @@ fun StudyTimerScreen(
                             OutlinedButton(onClick = { showDurationPicker = true }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
                                 Icon(Icons.Filled.AccessTime, contentDescription = null)
                                 Spacer(Modifier.size(8.dp))
-                                Text("Elegir otra duración")
+                                Text("Choose another duration")
                             }
                             if (!validDuration) {
-                                Text("Elige una duración entre 1 min y 12 h.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                Text("Choose a duration between 1 min and 12 hr.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
-                    Text("Acceso durante el bloque", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    AccessProfile.values().forEachIndexed { index, option ->
-                        val selected = profile == option
-                        FilterChip(
-                            selected = selected,
-                            onClick = { profile = option },
-                            label = { Text(option.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium) },
-                            leadingIcon = { Icon(if (selected) Icons.Filled.CheckCircle else Icons.Filled.Shield, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                    Text("Allowed apps", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        shape = RoundedCornerShape(18.dp),
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(selectedAllowedAppsList.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (selectedAllowedAppsList.id == AllowedAppsList.ESSENTIALS_ID) {
+                                    "Only essential apps; all other apps are blocked."
+                                } else {
+                                    "${selectedAllowedAppsList.packageNames.size} apps allowed; all other apps are blocked."
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            OutlinedButton(onClick = onOpenAllowedAppsLists, modifier = Modifier.fillMaxWidth()) {
+                                Text("Choose list")
+                            }
+                        }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Área de enfoque", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        Text("Administrar", color = MaterialTheme.colorScheme.primary, modifier = Modifier.clickable(onClick = onOpenFocusAreaSettings).padding(8.dp))
+                        Text("Focus area", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text("Manage", color = MaterialTheme.colorScheme.primary, modifier = Modifier.clickable(onClick = onOpenFocusAreaSettings).padding(8.dp))
                     }
                     if (focusAreas.isEmpty()) {
-                        Text("Agrega hasta dos áreas en Ajustes para ver en qué enfocas tu tiempo.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        Text("Add up to two areas in Settings to track what you focus on.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             focusAreas.forEach { area ->
@@ -286,14 +300,14 @@ fun StudyTimerScreen(
                         }
                     }
                     if (notificationPermissionDenied) {
-                        Text("Activa las notificaciones para seguir la sesión fuera de la app.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        Text("Turn on notifications to keep track of your session outside the app.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
-                    Button(onClick = { onStart(Duration.ofMinutes(selectedMinutes.toLong()), profile, focusAreaId) }, enabled = validDuration, modifier = Modifier.fillMaxWidth().height(58.dp)) {
+                    Button(onClick = { showStartConfirmation = true }, enabled = validDuration, modifier = Modifier.fillMaxWidth().height(58.dp)) {
                         Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
                         Spacer(Modifier.size(10.dp))
-                        Text("Iniciar sesión")
+                        Text("Start session")
                     }
-                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Volver al plan") }
+                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Back to plan") }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -301,13 +315,31 @@ fun StudyTimerScreen(
     }
     if (showDurationPicker) {
         TimeWheelPickerDialog(
-            title = "Duración personalizada",
+            title = "Custom duration",
             time = LocalTime.of(selectedMinutes / 60, selectedMinutes % 60),
             maxHour = 12,
             onDismiss = { showDurationPicker = false },
             onConfirm = { selected ->
                 minutes = selected.hour * 60 + selected.minute
                 showDurationPicker = false
+            },
+        )
+    }
+    if (showStartConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showStartConfirmation = false },
+            title = { Text("Confirm allowed apps") },
+            text = {
+                Text("${selectedAllowedAppsList.name} will stay available during the session. All other apps will be blocked, and this list can't be changed until the session ends.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showStartConfirmation = false
+                    onStart(Duration.ofMinutes(selectedMinutes.toLong()), selectedAllowedAppsList, focusAreaId)
+                }) { Text("Start session") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartConfirmation = false }) { Text("Back") }
             },
         )
     }

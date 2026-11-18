@@ -87,6 +87,7 @@ fun SettingsScreen(
     onSyncNow: () -> Unit,
     onResolveReviewConflict: (Boolean) -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
+    onOpenAllowedAppsLists: () -> Unit,
     onRequestExactAlarmAccess: () -> Unit,
     onRequestSiteFilter: () -> Unit,
 ) {
@@ -223,7 +224,7 @@ fun SettingsScreen(
                     enabled = accessibilityEnabled,
                     status = if (accessibilityEnabled) "On" else "Off",
                     description = if (accessibilityEnabled) {
-                        "Dimky can keep allowed apps available and return other apps to your plan."
+                        "Tally can keep allowed apps available and return other apps to your plan."
                     } else {
                         "Turn on the accessibility service to restrict other apps during focus blocks or the evening restriction."
                     },
@@ -335,7 +336,28 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("04", "Focus areas")
+                SectionHeading("04", "Allowed apps")
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            "Create reusable lists of apps to keep available during your sessions.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedButton(onClick = onOpenAllowedAppsLists, modifier = Modifier.fillMaxWidth()) {
+                            Text("Manage lists")
+                        }
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionHeading("05", "Focus areas")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -385,7 +407,7 @@ fun SettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionHeading("05", "Sync with Chrome")
+                SectionHeading("06", "Sync with Chrome")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),

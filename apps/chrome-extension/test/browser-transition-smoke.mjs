@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const extension = resolve(import.meta.dirname, '..');
-const profile = await mkdtemp(join(tmpdir(), 'dimky-transition-test-'));
+const profile = await mkdtemp(join(tmpdir(), 'Tally-transition-test-'));
 const browserCache = join(process.env.LOCALAPPDATA ?? '', 'ms-playwright');
 const installed = await readdir(browserCache).catch(() => []);
 const playwrightChromium = installed.filter(name => /^chromium-\d+$/.test(name))
@@ -192,7 +192,7 @@ try {
 } finally {
   socket?.close();
   chrome.kill();
-  if (profile.startsWith(tmpdir()) && profile.includes('dimky-transition-test-')) {
+  if (profile.startsWith(tmpdir()) && profile.includes('Tally-transition-test-')) {
     await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {});
   }
 }

@@ -18,6 +18,7 @@ const accessProfiles = new Set([
   'ESSENTIALS_WITH_CHATGPT',
   'ESSENTIALS_WITH_CHATGPT_AND_SEARCH',
 ]);
+const packageNamePattern = /^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/;
 const completionStatuses = new Set(['NOT_STARTED', 'FINISHED', 'PARTLY_DONE', 'NOT_DONE']);
 const supportedCutoffs = new Set(['21:00', '22:00', '23:00']);
 const domainPattern = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
@@ -83,7 +84,7 @@ export function validateSnapshot(snapshot) {
       || typeof block.name !== 'string' || block.name.trim().length === 0 || block.name.length > 200
       || minutes(block.startTime) === null || minutes(block.endTime) === null
       || minutes(block.startTime) >= minutes(block.endTime)
-      || !accessProfiles.has(block.accessProfile)
+      || (block.accessProfile !== undefined && !accessProfiles.has(block.accessProfile))
       || !completionStatuses.has(block.completionStatus)
       || (block.note !== undefined && (typeof block.note !== 'string' || block.note.length > 2000))) {
       return 'invalid_blocks';
@@ -111,8 +112,17 @@ function validateSession(session) {
   if (typeof session.id !== 'string' || !blockIdPattern.test(session.id)) return false;
   if (!Number.isFinite(Date.parse(session.startedAt)) || !Number.isInteger(session.durationMillis)
     || session.durationMillis < 60_000 || session.durationMillis > 24 * 60 * 60_000) return false;
+  const hasLegacyProfile = accessProfiles.has(session.accessProfile);
+  const hasAllowedAppsList = typeof session.allowedAppsListId === 'string'
+    && session.allowedAppsListId.length > 0 && session.allowedAppsListId.length <= 80
+    && typeof session.allowedAppsListName === 'string'
+    && session.allowedAppsListName.trim().length > 0 && session.allowedAppsListName.length <= 40
+    && Array.isArray(session.allowedAppPackages) && session.allowedAppPackages.length <= 500
+    && session.allowedAppPackages.every(name => typeof name === 'string'
+      && name.length <= 160 && packageNamePattern.test(name))
+    && new Set(session.allowedAppPackages).size === session.allowedAppPackages.length;
   if (!['ACTIVE', 'PENDING_REVIEW', 'BREAKING', 'REVIEWED'].includes(session.state)
-    || !accessProfiles.has(session.accessProfile) || typeof session.taskName !== 'string'
+    || (!hasLegacyProfile && !hasAllowedAppsList) || typeof session.taskName !== 'string'
     || session.taskName.length > 200 || (session.note !== undefined && (typeof session.note !== 'string' || session.note.length > 2000))
     || (session.actualMillis !== undefined && (!Number.isInteger(session.actualMillis)
       || session.actualMillis < 0 || session.actualMillis > session.durationMillis))) return false;

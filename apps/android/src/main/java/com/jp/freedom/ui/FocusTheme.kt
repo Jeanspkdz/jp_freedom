@@ -5,7 +5,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-internal val PulsoColors = darkColorScheme(
+internal val TallyColors = darkColorScheme(
     primary = Color(0xFFFFC27A), onPrimary = Color(0xFF402D12),
     primaryContainer = Color(0xFF563C1D), onPrimaryContainer = Color(0xFFFFDDB2),
     secondary = Color(0xFFB39DDB), onSecondary = Color(0xFF2E243D),
@@ -24,7 +24,7 @@ fun FocusTheme(
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = PulsoColors,
+        colorScheme = TallyColors,
         content = content,
     )
 }

@@ -1,14 +1,14 @@
 // Mark scripted pages before CSS paints so entry motion never flashes content.
 document.documentElement.classList.add('js');
 try {
-  if (sessionStorage.getItem('dimky-tab-pill-only')) {
+  if (sessionStorage.getItem('Tally-tab-pill-only')) {
     document.documentElement.classList.add('tab-pill-only');
-    sessionStorage.removeItem('dimky-tab-pill-only');
+    sessionStorage.removeItem('Tally-tab-pill-only');
   }
-  if (sessionStorage.getItem('dimky-nav-fallback')) {
+  if (sessionStorage.getItem('Tally-nav-fallback')) {
     document.documentElement.classList.add('page-fallback-enter');
-    document.documentElement.dataset.nav = sessionStorage.getItem('dimky-nav-direction') ?? 'forward';
-    sessionStorage.removeItem('dimky-nav-fallback');
+    document.documentElement.dataset.nav = sessionStorage.getItem('Tally-nav-direction') ?? 'forward';
+    sessionStorage.removeItem('Tally-nav-fallback');
   }
 } catch { /* Navigation remains available without session storage. */ }
 
@@ -42,8 +42,8 @@ addEventListener('pagereveal', event => {
   if (document.documentElement.classList.contains('tab-pill-only')) event.viewTransition?.skipTransition();
   let direction = null;
   try {
-    direction = sessionStorage.getItem('dimky-nav-direction');
-    if (direction) sessionStorage.removeItem('dimky-nav-direction');
+    direction = sessionStorage.getItem('Tally-nav-direction');
+    if (direction) sessionStorage.removeItem('Tally-nav-direction');
   } catch { /* Traversal metadata can still supply the direction. */ }
   if (direction) document.documentElement.dataset.nav = direction;
   else {

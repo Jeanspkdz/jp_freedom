@@ -5,7 +5,7 @@ import android.content.ContextWrapper
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.jp.freedom.domain.AccessProfile
+import com.jp.freedom.domain.AllowedAppsList
 import com.jp.freedom.domain.FocusArea
 import com.jp.freedom.domain.SessionOutcome
 import com.jp.freedom.domain.StudySessionState
@@ -81,7 +81,9 @@ class FocusFlowAndroidTest {
                     id = "session-1",
                     taskName = "Vocabulary",
                     durationMillis = Duration.ofMinutes(25).toMillis(),
-                    accessProfile = AccessProfile.ESSENTIALS_ONLY,
+                    allowedAppsListId = AllowedAppsList.ESSENTIALS_ID,
+                    allowedAppsListName = AllowedAppsList.ESSENTIALS.name,
+                    allowedAppPackages = emptySet(),
                     startedAt = Instant.parse("2026-11-13T15:00:00Z"),
                     endedAt = Instant.parse("2026-11-13T15:25:00Z"),
                     actualMillis = Duration.ofMinutes(25).toMillis(),

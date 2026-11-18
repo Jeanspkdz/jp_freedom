@@ -15,7 +15,7 @@ import android.os.Build
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.FileInputStream
 import com.jp.freedom.data.SyncStatus
-import com.jp.freedom.domain.AccessProfile
+import com.jp.freedom.domain.AllowedAppsList
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.SessionOutcome
 import com.jp.freedom.domain.StudySessionState
@@ -68,8 +68,10 @@ class StudyTimerFlowTest {
                     pendingReview = session(StudySessionState.PENDING_REVIEW),
                     focusAreas = emptyList(),
                     notificationPermissionDenied = false,
+                    selectedAllowedAppsList = AllowedAppsList.ESSENTIALS,
                     onBack = {},
                     onStart = { _, _, _ -> },
+                    onOpenAllowedAppsLists = {},
                     onStop = {},
                     onResumeSession = { continued = true },
                     onOpenFocusAreaSettings = {},
@@ -79,8 +81,35 @@ class StudyTimerFlowTest {
             }
         }
 
-        compose.onNodeWithText("Continuar sesión").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Continue session").assertIsDisplayed().performClick()
         compose.runOnIdle { assertTrue(continued) }
+    }
+
+    @Test
+    fun timerCanOpenAllowedAppsPickerBeforeStartingASession() {
+        var pickerOpened = false
+        compose.setContent {
+            FocusTheme {
+                StudyTimerScreen(
+                    session = null,
+                    pendingReview = null,
+                    focusAreas = emptyList(),
+                    notificationPermissionDenied = false,
+                    selectedAllowedAppsList = AllowedAppsList.ESSENTIALS,
+                    onBack = {},
+                    onStart = { _, _, _ -> },
+                    onOpenAllowedAppsLists = { pickerOpened = true },
+                    onStop = {},
+                    onResumeSession = {},
+                    onOpenFocusAreaSettings = {},
+                    onReview = { _, _, _ -> },
+                    onEndBreak = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Choose list").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertTrue(pickerOpened) }
     }
 
     @Test
@@ -97,8 +126,10 @@ class StudyTimerFlowTest {
                     pendingReview = expired,
                     focusAreas = emptyList(),
                     notificationPermissionDenied = false,
+                    selectedAllowedAppsList = AllowedAppsList.ESSENTIALS,
                     onBack = {},
                     onStart = { _, _, _ -> },
+                    onOpenAllowedAppsLists = {},
                     onStop = {},
                     onResumeSession = {},
                     onOpenFocusAreaSettings = {},
@@ -108,7 +139,7 @@ class StudyTimerFlowTest {
             }
         }
 
-        compose.onNodeWithText("Continuar sesión").assertDoesNotExist()
+        compose.onNodeWithText("Continue session").assertDoesNotExist()
     }
 
     @Test
@@ -127,8 +158,10 @@ class StudyTimerFlowTest {
                     pendingReview = aboutToExpire,
                     focusAreas = emptyList(),
                     notificationPermissionDenied = false,
+                    selectedAllowedAppsList = AllowedAppsList.ESSENTIALS,
                     onBack = {},
                     onStart = { _, _, _ -> },
+                    onOpenAllowedAppsLists = {},
                     onStop = {},
                     onResumeSession = {},
                     onOpenFocusAreaSettings = {},
@@ -138,9 +171,9 @@ class StudyTimerFlowTest {
             }
         }
 
-        compose.onNodeWithText("Continuar sesión").assertIsDisplayed()
+        compose.onNodeWithText("Continue session").assertIsDisplayed()
         compose.waitUntil(5_000) {
-            compose.onAllNodesWithText("Continuar sesión").fetchSemanticsNodes().isEmpty()
+            compose.onAllNodesWithText("Continue session").fetchSemanticsNodes().isEmpty()
         }
     }
 
@@ -153,8 +186,10 @@ class StudyTimerFlowTest {
                     pendingReview = null,
                     focusAreas = emptyList(),
                     notificationPermissionDenied = false,
+                    selectedAllowedAppsList = AllowedAppsList.ESSENTIALS,
                     onBack = {},
                     onStart = { _, _, _ -> },
+                    onOpenAllowedAppsLists = {},
                     onStop = {},
                     onResumeSession = {},
                     onOpenFocusAreaSettings = {},
@@ -164,10 +199,10 @@ class StudyTimerFlowTest {
             }
         }
 
-        compose.onNodeWithText("Tiempo restante").assertIsDisplayed()
-        compose.onNodeWithText("Transcurrido 00:10").assertIsDisplayed()
+        compose.onNodeWithText("Time remaining").assertIsDisplayed()
+        compose.onNodeWithText("Elapsed 00:10").assertIsDisplayed()
         compose.onNodeWithText("Total 01:00").assertIsDisplayed()
-        compose.onNodeWithText("Terminar y revisar").assertIsDisplayed()
+        compose.onNodeWithText("End and review").assertIsDisplayed()
     }
 
     @Test
@@ -247,7 +282,7 @@ class StudyTimerFlowTest {
 
     private fun session(state: StudySessionState): StudyTimerSession {
         val startedAt = Instant.now().minus(Duration.ofMinutes(10))
-        return StudyTimerSession.start("Lectura", Duration.ofMinutes(60), AccessProfile.ESSENTIALS_ONLY, startedAt)
+        return StudyTimerSession.start("Lectura", Duration.ofMinutes(60), AllowedAppsList.ESSENTIALS, startedAt)
             .copy(
                 state = state,
                 endedAt = if (state == StudySessionState.PENDING_REVIEW) startedAt.plus(Duration.ofMinutes(10)) else null,

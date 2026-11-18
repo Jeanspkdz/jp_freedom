@@ -4,7 +4,7 @@ import com.jp.freedom.data.SyncSnapshotCodec
 import com.jp.freedom.domain.SyncSnapshot
 import com.jp.freedom.domain.StudyTimerSession
 import com.jp.freedom.domain.StudySessionState
-import com.jp.freedom.domain.AccessProfile
+import com.jp.freedom.domain.AllowedAppsList
 import java.time.Instant
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -79,7 +79,10 @@ class SyncApiClient(private val endpoint: String, private val writeToken: String
     private fun encodeStudySession(session: StudyTimerSession) = JSONObject().apply {
         put("id", session.id); put("taskName", session.taskName)
         put("startedAt", session.startedAt.toString()); put("durationMillis", session.durationMillis)
-        put("accessProfile", session.accessProfile.name); put("state", session.state.name)
+        put("allowedAppsListId", session.allowedAppsListId)
+        put("allowedAppsListName", session.allowedAppsListName)
+        put("allowedAppPackages", org.json.JSONArray(session.allowedAppPackages.sorted()))
+        put("state", session.state.name)
         session.endedAt?.let { put("endedAt", it.toString()) }
         put("actualMillis", session.actualMillis)
         session.outcome?.let { put("outcome", it.name) }
@@ -89,10 +92,18 @@ class SyncApiClient(private val endpoint: String, private val writeToken: String
         session.focusAreaId?.let { put("focusAreaId", it) }
     }
 
-    private fun decodeStudySession(value: JSONObject) = StudyTimerSession(
+    private fun decodeStudySession(value: JSONObject): StudyTimerSession {
+        val legacy = AllowedAppsList.fromLegacyAccessProfile(value.optString("accessProfile"))
+        val packageJson = value.optJSONArray("allowedAppPackages")
+        val packages = if (packageJson == null) legacy.packageNames else buildSet {
+            for (index in 0 until packageJson.length()) add(packageJson.getString(index))
+        }
+        return StudyTimerSession(
         id = value.getString("id"), taskName = value.optString("taskName"),
         durationMillis = value.getLong("durationMillis"),
-        accessProfile = AccessProfile.valueOf(value.getString("accessProfile")),
+        allowedAppsListId = value.optString("allowedAppsListId").ifBlank { legacy.id },
+        allowedAppsListName = value.optString("allowedAppsListName").ifBlank { legacy.name },
+        allowedAppPackages = packages,
         startedAt = Instant.parse(value.getString("startedAt")),
         endedAt = value.optString("endedAt").takeIf(String::isNotBlank)?.let(Instant::parse),
         actualMillis = value.optLong("actualMillis"),
@@ -103,6 +114,7 @@ class SyncApiClient(private val endpoint: String, private val writeToken: String
         breakStartedAt = value.optString("breakStartedAt").takeIf(String::isNotBlank)?.let(Instant::parse),
         breakDurationMillis = value.optLong("breakDurationMillis"), nextTask = value.optString("nextTask"),
     )
+    }
     fun getSnapshot(): ServerSnapshot {
         val response = request("GET")
         try {

@@ -44,7 +44,7 @@ test('Chrome reminds at the cutoff, asks the user to plan on Android, and repeat
 
   assert.equal(chrome.notifications.shown.length, 1);
   assert.equal(chrome.notifications.shown[0].id, PLANNING_REMINDER_NOTIFICATION);
-  assert.match(chrome.notifications.shown[0].options.message, /Open Dimky on your phone/);
+  assert.match(chrome.notifications.shown[0].options.message, /Open Tally on your phone/);
   assert.equal(chrome.alarms.records.get(PLANNING_REMINDER_ALARM).periodInMinutes, 30);
   assert.equal(chrome.alarms.records.get(PLANNING_REMINDER_ALARM).delayInMinutes, 30);
   assert.equal(

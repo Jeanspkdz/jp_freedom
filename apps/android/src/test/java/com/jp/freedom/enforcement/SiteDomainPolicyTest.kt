@@ -1,6 +1,5 @@
 package com.jp.freedom.enforcement
 
-import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.PlannedBlock
 import java.time.LocalDate
 import java.time.LocalTime
@@ -24,13 +23,13 @@ class SiteDomainPolicyTest {
 
     @Test
     fun essentialsModeBlocksEverySite() {
-        assertFalse(SiteDomainPolicy.isAllowed("chatgpt.com", activeState(AccessProfile.ESSENTIALS_ONLY)))
-        assertFalse(SiteDomainPolicy.isAllowed("www.google.com", activeState(AccessProfile.ESSENTIALS_ONLY)))
+        assertFalse(SiteDomainPolicy.isAllowed("chatgpt.com", activeState(emptySet())))
+        assertFalse(SiteDomainPolicy.isAllowed("www.google.com", activeState(emptySet())))
     }
 
     @Test
     fun chatGptModeAllowsChatGptDomainsAndBlocksSearch() {
-        val state = activeState(AccessProfile.ESSENTIALS_WITH_CHATGPT)
+        val state = activeState(setOf("com.openai.chatgpt"))
         assertTrue(SiteDomainPolicy.isAllowed("chatgpt.com", state))
         assertTrue(SiteDomainPolicy.isAllowed("chat.openai.com", state))
         assertTrue(SiteDomainPolicy.isAllowed("cdn.oaistatic.com", state))
@@ -44,7 +43,7 @@ class SiteDomainPolicyTest {
 
     @Test
     fun searchIsAllowedOnlyInTheThirdMode() {
-        val state = activeState(AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH)
+        val state = activeState(setOf("com.openai.chatgpt", "com.google.android.googlequicksearchbox"))
         assertTrue(SiteDomainPolicy.isAllowed("www.google.com", state))
         assertTrue(SiteDomainPolicy.isAllowed("encrypted-tbn0.gstatic.com", state))
         assertFalse(SiteDomainPolicy.isAllowed("mail.google.com", state))
@@ -56,11 +55,11 @@ class SiteDomainPolicyTest {
         assertFalse(
             SiteDomainPolicy.isAllowed(
                 "chatgpt.com",
-                FocusPolicyState(BlockedReason.EVENING_RESTRICTION, activeBlock.copy(accessProfile = AccessProfile.ESSENTIALS_WITH_CHATGPT)),
+                FocusPolicyState(BlockedReason.EVENING_RESTRICTION, activeBlock, setOf("com.openai.chatgpt")),
             ),
         )
     }
 
-    private fun activeState(profile: AccessProfile) =
-        FocusPolicyState(BlockedReason.FOCUS_BLOCK, activeBlock.copy(accessProfile = profile))
+    private fun activeState(packages: Set<String>) =
+        FocusPolicyState(BlockedReason.FOCUS_BLOCK, activeBlock, packages)
 }

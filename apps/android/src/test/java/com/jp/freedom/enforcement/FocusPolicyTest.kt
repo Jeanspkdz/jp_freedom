@@ -1,6 +1,6 @@
 package com.jp.freedom.enforcement
 
-import com.jp.freedom.domain.AccessProfile
+import com.jp.freedom.domain.AllowedAppsList
 import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
@@ -29,10 +29,12 @@ class FocusPolicyTest {
     )
 
     @Test
-    fun blockIsActiveFromItsStartUntilItsEnd() {
-        assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 0)).blockedReason)
-        assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 59)).blockedReason)
+    fun plannedBlocksDoNotStartPhoneRestrictions() {
+        assertNull(evaluate(LocalTime.of(10, 0)).blockedReason)
+        assertNull(evaluate(LocalTime.of(10, 59)).blockedReason)
         assertNull(evaluate(LocalTime.of(11, 0)).blockedReason)
+        assertTrue(evaluate(LocalTime.of(10, 0)).activeBlock != null)
+        assertNull(evaluate(LocalTime.of(11, 0)).activeBlock)
     }
 
     @Test
@@ -44,9 +46,11 @@ class FocusPolicyTest {
     }
 
     @Test
-    fun otherCompletionStatusesDoNotEndAnActiveBlockEarly() {
+    fun otherCompletionStatusesKeepThePlannedBlockForWebsiteFiltering() {
         listOf(CompletionStatus.PARTLY_DONE, CompletionStatus.NOT_DONE).forEach { status ->
-            assertEquals(BlockedReason.FOCUS_BLOCK, evaluate(LocalTime.of(10, 30), block.copy(completionStatus = status)).blockedReason)
+            val state = evaluate(LocalTime.of(10, 30), block.copy(completionStatus = status))
+            assertNull(state.blockedReason)
+            assertTrue(state.activeBlock != null)
         }
     }
 
@@ -79,10 +83,10 @@ class FocusPolicyTest {
     }
 
     @Test
-    fun allowedAppsFollowTheChosenProfile() {
-        val essentials = activeState(AccessProfile.ESSENTIALS_ONLY)
-        val withChatGpt = activeState(AccessProfile.ESSENTIALS_WITH_CHATGPT)
-        val withSearch = activeState(AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH)
+    fun allowedAppsFollowTheChosenList() {
+        val essentials = activeState(emptySet())
+        val withChatGpt = activeState(setOf("com.openai.chatgpt"))
+        val withSearch = activeState(setOf("com.openai.chatgpt", "com.google.android.googlequicksearchbox"))
         val essentialPackages = setOf("phone", "messages")
 
         assertEquals(essentialPackages + "jp", FocusPolicy.allowedPackages(essentials, "jp", essentialPackages))
@@ -95,9 +99,9 @@ class FocusPolicyTest {
 
     @Test
     fun chromeIsAvailableForAllowedSitesOnlyWhenTheDnsFilterIsRunning() {
-        val essentials = activeState(AccessProfile.ESSENTIALS_ONLY)
-        val withChatGpt = activeState(AccessProfile.ESSENTIALS_WITH_CHATGPT)
-        val withSearch = activeState(AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH)
+        val essentials = activeState(emptySet())
+        val withChatGpt = activeState(setOf("com.openai.chatgpt", "com.android.chrome"))
+        val withSearch = activeState(setOf("com.openai.chatgpt", "com.google.android.googlequicksearchbox", "com.android.chrome"))
         val essentialPackages = setOf("phone", "messages")
 
         assertFalse(
@@ -142,17 +146,13 @@ class FocusPolicyTest {
     fun selectedInputMethodRemainsAvailableForTextEntry() {
         val essentialPackages = setOf("phone", "messages")
         val inputMethod = "com.google.android.inputmethod.latin"
-        val profiles = listOf(
-            AccessProfile.ESSENTIALS_ONLY,
-            AccessProfile.ESSENTIALS_WITH_CHATGPT,
-            AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH,
-        )
+        val appLists = listOf(emptySet(), setOf("com.openai.chatgpt"), setOf("com.google.android.googlequicksearchbox"))
 
-        profiles.forEach { profile ->
+        appLists.forEach { packages ->
             assertTrue(
                 "The selected keyboard must work in every focus profile",
                 inputMethod in FocusPolicy.allowedPackages(
-                    activeState(profile),
+                    activeState(packages),
                     "jp",
                     essentialPackages,
                     defaultInputMethodPackage = inputMethod,
@@ -162,9 +162,9 @@ class FocusPolicyTest {
     }
 
     @Test
-    fun activeStudyTimerAppliesItsPhoneAccessProfileWithoutCreatingPlannedBlock() {
+    fun activeStudyTimerAppliesItsAllowedAppsListWithoutCreatingPlannedBlock() {
         val session = StudyTimerSession.start(
-            "Reading", Duration.ofMinutes(60), AccessProfile.ESSENTIALS_WITH_CHATGPT,
+            "Reading", Duration.ofMinutes(60), AllowedAppsList.fromLegacyAccessProfile("ESSENTIALS_WITH_CHATGPT"),
             LocalDateTime.of(2026, 11, 3, 10, 0).atZone(ZoneId.systemDefault()).toInstant(),
         )
         val state = FocusPolicy.evaluate(
@@ -180,7 +180,7 @@ class FocusPolicyTest {
     @Test
     fun breakPausesPhoneRestrictionsAndRechecksEveningRestrictionWhenTimeExpires() {
         val start = LocalDateTime.of(2026, 11, 3, 21, 0).atZone(ZoneId.systemDefault()).toInstant()
-        val breaking = StudyTimerSession.start("Reading", Duration.ofMinutes(30), AccessProfile.ESSENTIALS_ONLY, start).copy(
+        val breaking = StudyTimerSession.start("Reading", Duration.ofMinutes(30), AllowedAppsList.ESSENTIALS, start).copy(
             state = StudySessionState.BREAKING,
             breakStartedAt = start,
             breakDurationMillis = Duration.ofMinutes(15).toMillis(),
@@ -199,11 +199,7 @@ class FocusPolicyTest {
     private fun evaluate(time: LocalTime, candidate: PlannedBlock = block) =
         FocusPolicy.evaluate(date.atTime(time), listOf(candidate), settings())
 
-    private fun activeState(profile: AccessProfile) = FocusPolicy.evaluate(
-        date.atTime(10, 30),
-        listOf(block.copy(accessProfile = profile)),
-        settings(),
-    )
+    private fun activeState(packages: Set<String>) = FocusPolicyState(BlockedReason.FOCUS_BLOCK, null, packages)
 
     private fun settings(targetMinutes: Int = 180) = FocusSettings(studyHoursTargetMinutes = targetMinutes)
 }

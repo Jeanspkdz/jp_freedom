@@ -126,7 +126,9 @@ internal class StudySessionSync(context: Context) {
 
     private fun fingerprint(session: StudyTimerSession): String = JSONObject().apply {
         put("id", session.id); put("state", session.state.name); put("startedAt", session.startedAt.toString())
-        put("accessProfile", session.accessProfile.name)
+        put("allowedAppsListId", session.allowedAppsListId)
+        put("allowedAppsListName", session.allowedAppsListName)
+        put("allowedAppPackages", org.json.JSONArray(session.allowedAppPackages.sorted()))
         put("durationMillis", session.durationMillis); put("endedAt", session.endedAt?.toString())
         put("actualMillis", session.actualMillis); put("taskName", session.taskName)
         put("outcome", session.outcome?.name); put("note", session.note); put("remaining", session.remaining)
