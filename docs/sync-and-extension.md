@@ -91,7 +91,7 @@ single-user installation, not an account or multi-user service.
 4. Copy `.env.example` to `.env.local` and add a random `SYNC_API_TOKEN` (keep the file private).
 5. Apply the schema: `pnpm run migrate`.
 6. Deploy the function: `pnpm dlx neon deploy --env .env.local`.
-7. Copy the function URL and token into Dimky on Android and the Chrome
+7. Copy the function URL and token into Tally on Android and the Chrome
    extension's connection settings.
 
 The local API can run from `services/sync-api` with `pnpm run start`; it listens on port 8787

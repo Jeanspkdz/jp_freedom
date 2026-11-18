@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-11-16T04:34:19.794Z",
-  "title": "Design System: Dimky",
+  "title": "Design System: Tally",
   "extensions": {
     "colorMeta": {
       "night-primary": {
@@ -204,17 +204,17 @@
       "css": ".ds-settings-stepper{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#F2F0EA;font:400 14px/1.4 Roboto,Arial,sans-serif}.ds-settings-stepper strong{font-size:16px;font-weight:600}.ds-settings-stepper p{margin:4px 0 0;color:#B4BED8}.ds-counter{display:flex;align-items:center;min-height:48px;border-radius:16px;background:#222E47}.ds-counter button{min-width:48px;min-height:48px;border:0;border-radius:16px;background:transparent;color:#B4BED8;font-size:20px}.ds-counter output{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}"
     },
     {
-      "name": "Dimky splash mark",
+      "name": "Tally splash mark",
       "kind": "custom",
       "refersTo": null,
       "description": "Three lavender rounded pieces that assemble into the app mark on the dark navy splash and launcher icon.",
-      "html": "<svg class=\"ds-splash-mark\" viewBox=\"0 0 100 100\" role=\"img\" aria-label=\"Dimky\"><path d=\"M11 28h9q11 0 11 11v50q0 11-11 11h-9q-11 0-11-11v-50q0-11 11-11z\"/><path d=\"M46 0h41q13 0 13 13v34q0 13-13 13h-26q-4 0-4-4v-14h-11q-13 0-13-13v-16q0-13 13-13z\"/><path d=\"M47 65h42q11 0 11 11v13q0 11-11 11h-42q-11 0-11-11v-13q0-11 11-11z\"/></svg>",
+      "html": "<svg class=\"ds-splash-mark\" viewBox=\"0 0 100 100\" role=\"img\" aria-label=\"Tally\"><path d=\"M11 28h9q11 0 11 11v50q0 11-11 11h-9q-11 0-11-11v-50q0-11 11-11z\"/><path d=\"M46 0h41q13 0 13 13v34q0 13-13 13h-26q-4 0-4-4v-14h-11q-13 0-13-13v-16q0-13 13-13z\"/><path d=\"M47 65h42q11 0 11 11v13q0 11-11 11h-42q-11 0-11-11v-13q0-11 11-11z\"/></svg>",
       "css": ".ds-splash-mark{display:block;width:108px;height:108px;padding:18px;border-radius:24px;background:#0F1B33;fill:#A99BE8}"
     }
   ],
   "narrative": {
     "northStar": "A live timetable board",
-    "overview": "Dimky presents the day as a readable schedule on a deep navy canvas. Warm amber marks primary actions, studied time, and the active block; medium purple brings planned time, selected durations, and focus guidance forward. The established dark palette stays familiar while its two accents carry clear, consistent roles.\n\nThe Android app follows Material 3 for navigation, controls, and semantic color pairing. Agenda rows remain light and time ordered; grouped surfaces organize summaries and settings without turning every item into a card. System text scaling and Android navigation behavior remain intact.",
+    "overview": "Tally presents the day as a readable schedule on a deep navy canvas. Warm amber marks primary actions, studied time, and the active block; medium purple brings planned time, selected durations, and focus guidance forward. The established dark palette stays familiar while its two accents carry clear, consistent roles.\n\nThe Android app follows Material 3 for navigation, controls, and semantic color pairing. Agenda rows remain light and time ordered; grouped surfaces organize summaries and settings without turning every item into a card. System text scaling and Android navigation behavior remain intact.",
     "keyCharacteristics": [
       "Deep navy surfaces create the app's persistent night setting.",
       "Warm amber identifies primary actions, studied time, and active blocks.",

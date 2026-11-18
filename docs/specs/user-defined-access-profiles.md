@@ -12,7 +12,7 @@ On Android, let the user create and manage named access profiles from the curren
 
 1. As an Android user, I want to see the apps currently installed on my phone, so that I can decide which remain available while studying.
 2. As an Android user, I want launchable system apps such as Messages and Settings in the picker, so that I can decide whether they remain available.
-3. As an Android user, I want calls, emergency access, the home screen, keyboard, and Dimky to remain available, so that a profile cannot make essential phone functions inaccessible.
+3. As an Android user, I want calls, emergency access, the home screen, keyboard, and Tally to remain available, so that a profile cannot make essential phone functions inaccessible.
 4. As an Android user, I want to create a named access profile, so that I can reuse my preferred app selection.
 5. As an Android user, I want to select any combination of eligible apps, so that the access profile fits my study activity.
 6. As an Android user, I want to save a profile with no selected optional apps, so that only permanently available apps remain accessible.

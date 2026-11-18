@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Dimky",
+  "name": "Tally",
   "version": "1.0.0",
   "description": "Sync focus plans and block selected desktop sites during focus blocks.",
   "minimum_chrome_version": "111",

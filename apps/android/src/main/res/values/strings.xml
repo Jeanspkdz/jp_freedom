@@ -1,3 +1,5 @@
 <resources>
+    <string name="app_name">Tally</string>
+    <string name="focus_accessibility_service_label">Tally: focus service</string>
     <string name="focus_accessibility_description">Keeps the planner and essential apps available during focus blocks and the evening restriction.</string>
 </resources>

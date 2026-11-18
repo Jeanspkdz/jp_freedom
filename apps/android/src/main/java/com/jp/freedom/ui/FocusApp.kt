@@ -263,7 +263,7 @@ fun FocusApp(
         }
     }
 
-    DimkySplashHost(ready = stateLoaded, enabled = showLaunchSplash) {
+    TallySplashHost(ready = stateLoaded, enabled = showLaunchSplash) {
     when (page) {
         AppPage.PLANNER -> PlannerScreen(
             date = selectedDate,

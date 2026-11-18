@@ -1,4 +1,4 @@
-# Dimky
+# Tally
 
 ## Repository layout
 

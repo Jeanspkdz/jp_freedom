@@ -16,11 +16,11 @@ Una persona que quiere mejorar sus hábitos de estudio y reducir distracciones e
 
 ## Product Purpose
 
-Dimky ayuda al usuario a planificar cada día y cumplir bloques de enfoque en Android. Chrome bloquea los sitios seleccionados durante bloques planificados y sesiones de estudio con temporizador. El usuario puede iniciar una sesión con duración elegida desde Chrome; Android aplica las restricciones del teléfono cuando recibe esa sesión. Si no planifica el día siguiente antes de la hora elegida, restringe el uso del teléfono hasta completar el mínimo de bloques configurado. El éxito significa que la planificación y el bloqueo entre dispositivos apoyan una rutina de estudio que el usuario puede sostener.
+Tally ayuda al usuario a planificar cada día y cumplir bloques de enfoque en Android. Chrome bloquea los sitios seleccionados durante bloques planificados y sesiones de estudio con temporizador. El usuario puede iniciar una sesión con duración elegida desde Chrome; Android aplica las restricciones del teléfono cuando recibe esa sesión. Si no planifica el día siguiente antes de la hora elegida, restringe el uso del teléfono hasta completar el mínimo de bloques configurado. El éxito significa que la planificación y el bloqueo entre dispositivos apoyan una rutina de estudio que el usuario puede sostener.
 
 ## Positioning
 
-Dimky es una app personal y de código abierto para planificar cada día como rutina y aplicar bloqueos según el plan. Android es la fuente de verdad para planes, ajustes y estados de finalización; la extensión de Chrome aplica el bloqueo de sitios de escritorio compartido y permite editar esa lista.
+Tally es una app personal y de código abierto para planificar cada día como rutina y aplicar bloqueos según el plan. Android es la fuente de verdad para planes, ajustes y estados de finalización; la extensión de Chrome aplica el bloqueo de sitios de escritorio compartido y permite editar esa lista.
 
 ## Brand Commitments
 

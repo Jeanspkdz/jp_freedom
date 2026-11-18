@@ -46,7 +46,7 @@ private val SplashLavender = Color(0xFFA99BE8)
 
 /** The main screen composes and loads underneath; startup never waits for network sync. */
 @Composable
-fun DimkySplashHost(ready: Boolean, enabled: Boolean, content: @Composable () -> Unit) {
+fun TallySplashHost(ready: Boolean, enabled: Boolean, content: @Composable () -> Unit) {
     var dismissed by rememberSaveable { mutableStateOf(!enabled) }
     val reducedMotion = rememberReducedMotion()
     val pieces = remember { List(3) { Animatable(0f) } }
@@ -90,7 +90,7 @@ fun DimkySplashHost(ready: Boolean, enabled: Boolean, content: @Composable () ->
                     .graphicsLayer { alpha = opacity.value }
                     .background(SplashNavy)
                     .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }
-                    .clearAndSetSemantics { contentDescription = "Dimky" },
+                    .clearAndSetSemantics { contentDescription = "Tally" },
                 contentAlignment = Alignment.Center,
             ) {
                 val iconSize = minOf(160.dp, maxWidth * 0.42f, maxHeight * 0.34f)

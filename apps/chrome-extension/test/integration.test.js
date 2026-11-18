@@ -1184,7 +1184,7 @@ test('the worker reminds from cached plan data offline without installing browsi
   await refreshFocusState(harness.chromeApi, now);
 
   assert.equal(harness.notifications.shown.length, 1);
-  assert.match(harness.notifications.shown[0].options.message, /Open Dimky on your phone/);
+  assert.match(harness.notifications.shown[0].options.message, /Open Tally on your phone/);
   assert.equal(harness.alarms.get('planning-reminder-repeat').periodInMinutes, 30);
   assert.deepEqual(harness.rules, []);
 });
