@@ -1,5 +1,7 @@
 # User-defined allowed apps lists for study timer sessions
 
+> Historical specification: planned-block references below describe the original scope. ADR-0005 supersedes them; only study sessions activate app and site blocking.
+
 ## Problem Statement
 
 The three fixed app choices do not let a person choose which installed Android apps remain available during a study timer session. Repeatedly choosing the same apps should be easy, and a session should keep a predictable set of available apps once it starts.
@@ -59,3 +61,4 @@ On Android, let the user create and manage named allowed apps lists from the cur
 ## Further Notes
 
 The current Android implementation stores one of three access-profile enum values on study sessions and planned blocks, and its accessibility policy always allows a hard-coded set of essential packages. The change needs migration for existing stored values and separation of permanently available functions from optional apps currently grouped under Essentials. Existing synchronization decisions in ADR-0003 still apply to study session state.
+
