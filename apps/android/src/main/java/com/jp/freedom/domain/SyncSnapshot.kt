@@ -72,7 +72,7 @@ object SyncSnapshotReconciler {
         pendingPaths: Set<String>,
     ): SnapshotMergeResult {
         if ("snapshot.replaceAll" in pendingPaths) {
-            return SnapshotMergeResult(snapshot = local, conflictedPaths = emptySet())
+            return SnapshotMergeResult(snapshot = local.copy(blocks = emptyList()), conflictedPaths = emptySet())
         }
         val conflicts = mutableSetOf<String>()
         val fieldConflicts = linkedMapOf<String, SyncFieldConflict>()
@@ -122,36 +122,8 @@ object SyncSnapshotReconciler {
             }
         }.sorted()
 
-        val remoteBlocks = remote.blocks.associateBy(PlannedBlock::id)
-        val localBlocks = local.blocks.associateBy(PlannedBlock::id)
-        val allIds = remoteBlocks.keys + localBlocks.keys
-        val blocks = allIds.mapNotNull { id ->
-            val remoteBlock = remoteBlocks[id]
-            val localBlock = localBlocks[id]
-            val deletedPath = "blocks.$id.deleted"
-            if (deletedPath in pendingPaths) {
-                if (remoteBlock != null) conflicts += deletedPath
-                return@mapNotNull null
-            }
-            when {
-                remoteBlock == null && localBlock == null -> null
-                remoteBlock == null -> {
-                    if (localBlock != null && pendingPaths.any { it.startsWith("blocks.$id.") }) {
-                        localBlock
-                    } else {
-                        null
-                    }
-                }
-                localBlock == null -> {
-                    if (pendingPaths.any { it.startsWith("blocks.$id.") }) {
-                        remoteBlock
-                    } else {
-                        remoteBlock
-                    }
-                }
-                else -> mergeBlock(remoteBlock, localBlock, pendingPaths, conflicts, fieldConflicts)
-            }
-        }.sortedWith(compareBy<PlannedBlock>({ it.date }, { it.startTime }, { it.id }))
+        // Version 1 snapshots retain this field for decoding, but plans are no longer synced.
+        val blocks = emptyList<PlannedBlock>()
 
         val competingStarts = if ("activeStudySession" in pendingPaths
             && remote.activeStudySession != null
@@ -239,38 +211,8 @@ object SyncSnapshotReconciler {
         return (merged + conflictAlternates).distinctBy(StudyTimerSession::id).sortedByDescending(StudyTimerSession::startedAt)
     }
 
-    private fun mergeBlock(
-        remote: PlannedBlock,
-        local: PlannedBlock,
-        pendingPaths: Set<String>,
-        conflicts: MutableSet<String>,
-        fieldConflicts: MutableMap<String, SyncFieldConflict>,
-    ): PlannedBlock {
-        fun <T> field(name: String, remoteValue: T, localValue: T): T {
-            val path = "blocks.${local.id}.$name"
-            if (path !in pendingPaths) return remoteValue
-            val explicitlyResolved = "fieldConflicts.$path.resolved" in pendingPaths
-            if (remoteValue != localValue) {
-                if (!explicitlyResolved) conflicts += path
-                if (!explicitlyResolved && isChoiceField(path)) fieldConflicts[path] = SyncFieldConflict(path, conflictValue(remoteValue), conflictValue(localValue))
-            }
-            return localValue
-        }
-
-        return PlannedBlock(
-            id = local.id,
-            date = field("date", remote.date, local.date),
-            name = field("name", remote.name, local.name),
-            startTime = field("startTime", remote.startTime, local.startTime),
-            endTime = field("endTime", remote.endTime, local.endTime),
-            completionStatus = field("completionStatus", remote.completionStatus, local.completionStatus),
-            note = field("note", remote.note, local.note),
-        )
-    }
-
     private fun conflictValue(value: Any?): String = value?.toString() ?: "<null>"
 
     private fun isChoiceField(path: String): Boolean = path.startsWith("settings.")
         || path.startsWith("desktopBlockedDomains.")
-        || path.startsWith("blocks.")
 }

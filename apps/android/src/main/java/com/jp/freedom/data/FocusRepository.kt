@@ -8,16 +8,12 @@ import com.jp.freedom.domain.AllowedAppsList
 import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.AllowedAppsListPolicy
 import com.jp.freedom.domain.AllowedAppsListValidation
-import com.jp.freedom.domain.BlockValidation
 import com.jp.freedom.domain.BlocklistValidation
-import com.jp.freedom.domain.CompletionStatus
 import com.jp.freedom.domain.DEFAULT_DESKTOP_BLOCKED_DOMAINS
-import com.jp.freedom.domain.DayPlanPolicy
 import com.jp.freedom.domain.DesktopSiteBlocklist
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.FocusArea
 import com.jp.freedom.domain.FocusAreaPolicy
-import com.jp.freedom.domain.PlannedBlock
 import com.jp.freedom.domain.SyncSnapshot
 import com.jp.freedom.domain.SharedStudySession
 import com.jp.freedom.domain.StudyTimerSession
@@ -122,11 +118,6 @@ class FocusRepository(context: Context) : StudySessionStore {
     private fun jsonPackages(json: String): Set<String> = JSONArray(json).let { array ->
         (0 until array.length()).map(array::getString).toSet()
     }
-
-    fun blocksForDate(date: LocalDate): List<PlannedBlock> =
-        queryBlocks(database.readableDatabase, "date = ?", arrayOf(date.toString()))
-
-    fun allBlocks(): List<PlannedBlock> = queryBlocks(database.readableDatabase, null, null)
 
     fun settings(): FocusSettings = readSettings(database.readableDatabase)
 
@@ -397,77 +388,6 @@ class FocusRepository(context: Context) : StudySessionStore {
         scheduleSync()
     }
 
-    fun saveBlock(block: PlannedBlock): BlockValidation {
-        val db = database.writableDatabase
-        var validation: BlockValidation = BlockValidation.Valid
-        var changed = false
-        db.beginTransaction()
-        try {
-            val previous = queryBlocks(db, "$COLUMN_ID = ?", arrayOf(block.id)).firstOrNull()
-            val otherBlocks = queryBlocks(db, "date = ? AND id != ?", arrayOf(block.date.toString(), block.id))
-            validation = DayPlanPolicy.validateBlocks(otherBlocks + block)
-            if (validation == BlockValidation.Valid) {
-                db.insertWithOnConflict(TABLE_BLOCKS, null, block.toContentValues(), SQLiteDatabase.CONFLICT_REPLACE)
-                val paths = changedBlockPaths(previous, block)
-                if (previous == null || paths.isNotEmpty()) {
-                    db.delete(TABLE_SYNC_CHANGES, "$COLUMN_PATH = ?", arrayOf("blocks.${block.id}.deleted"))
-                    markDirty(db, paths)
-                    changed = paths.isNotEmpty() || previous == null
-                }
-                db.setTransactionSuccessful()
-            }
-        } finally {
-            db.endTransaction()
-        }
-        if (changed) scheduleSync()
-        return validation
-    }
-
-    fun deleteBlock(id: String) {
-        val db = database.writableDatabase
-        var changed = false
-        db.beginTransaction()
-        try {
-            changed = db.delete(TABLE_BLOCKS, "$COLUMN_ID = ?", arrayOf(id)) == 1
-            if (changed) {
-                val paths = db.query(TABLE_SYNC_CHANGES, arrayOf(COLUMN_PATH), null, null, null, null, null)
-                    .use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }
-                paths.filter { it.startsWith("blocks.$id.") }.forEach { path ->
-                    db.delete(TABLE_SYNC_CHANGES, "$COLUMN_PATH = ?", arrayOf(path))
-                }
-                markDirty(db, listOf("blocks.$id.deleted"))
-                db.setTransactionSuccessful()
-            }
-        } finally {
-            db.endTransaction()
-        }
-        if (changed) scheduleSync()
-    }
-
-    fun updateCompletionStatus(id: String, status: CompletionStatus): Boolean {
-        val db = database.writableDatabase
-        var changed = false
-        var exists = false
-        db.beginTransaction()
-        try {
-            val current = queryBlocks(db, "$COLUMN_ID = ?", arrayOf(id)).firstOrNull()
-            exists = current != null
-            if (current != null) {
-                changed = current.completionStatus != status
-                if (changed) {
-                    val values = ContentValues().apply { put(COLUMN_COMPLETION_STATUS, status.name) }
-                    db.update(TABLE_BLOCKS, values, "$COLUMN_ID = ?", arrayOf(id))
-                    markDirty(db, listOf("blocks.$id.completionStatus"))
-                    db.setTransactionSuccessful()
-                }
-            }
-        } finally {
-            db.endTransaction()
-        }
-        if (changed) scheduleSync()
-        return exists
-    }
-
     fun saveDesktopBlockedDomains(input: List<String>): BlocklistValidation {
         val domains = input.map(DesktopSiteBlocklist::normalize)
         val validation = DesktopSiteBlocklist.validate(domains)
@@ -700,29 +620,6 @@ class FocusRepository(context: Context) : StudySessionStore {
                 if (value == "included") db.insertWithOnConflict(TABLE_DESKTOP_DOMAINS, null, ContentValues().apply { put(COLUMN_DOMAIN, domain) }, SQLiteDatabase.CONFLICT_REPLACE)
                 else db.delete(TABLE_DESKTOP_DOMAINS, "$COLUMN_DOMAIN = ?", arrayOf(domain))
             }
-            path.startsWith("blocks.") -> {
-                val segments = path.split('.', limit = 3)
-                if (segments.size != 3) return
-                val column = when (segments[2]) {
-                    "date" -> COLUMN_DATE
-                    "name" -> COLUMN_NAME
-                    "startTime" -> COLUMN_START_MINUTE
-                    "endTime" -> COLUMN_END_MINUTE
-                    "accessProfile" -> COLUMN_ACCESS_PROFILE
-                    "completionStatus" -> COLUMN_COMPLETION_STATUS
-                    "note" -> COLUMN_NOTE
-                    else -> return
-                }
-                val values = ContentValues().apply {
-                    when (column) {
-                        COLUMN_DATE -> put(column, LocalDate.parse(value).toString())
-                        COLUMN_START_MINUTE, COLUMN_END_MINUTE -> put(column, LocalTime.parse(value).toMinuteOfDay())
-                        COLUMN_NOTE -> if (value == "<null>") putNull(column) else put(column, value)
-                        else -> put(column, value)
-                    }
-                }
-                db.update(TABLE_BLOCKS, values, "$COLUMN_ID = ?", arrayOf(segments[1]))
-            }
         }
     }
 
@@ -781,7 +678,7 @@ class FocusRepository(context: Context) : StudySessionStore {
     private fun readSnapshot(db: SQLiteDatabase) = SyncSnapshot(
         settings = readSettings(db),
         desktopBlockedDomains = readDomains(db),
-        blocks = queryBlocks(db, null, null),
+        blocks = emptyList(),
         activeStudySession = readStudySession(db, "state = ?", arrayOf(StudySessionState.ACTIVE.name))?.let { session ->
             SharedStudySession(
                 id = session.id,
@@ -893,7 +790,6 @@ class FocusRepository(context: Context) : StudySessionStore {
             SQLiteDatabase.CONFLICT_REPLACE,
         )
         db.delete(TABLE_BLOCKS, null, null)
-        snapshot.blocks.forEach { db.insertWithOnConflict(TABLE_BLOCKS, null, it.toContentValues(), SQLiteDatabase.CONFLICT_REPLACE) }
         db.delete(TABLE_DESKTOP_DOMAINS, null, null)
         snapshot.desktopBlockedDomains.forEach { domain ->
             db.insert(TABLE_DESKTOP_DOMAINS, null, ContentValues().apply { put(COLUMN_DOMAIN, domain) })
@@ -924,57 +820,6 @@ class FocusRepository(context: Context) : StudySessionStore {
         db.insertWithOnConflict("study_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
-    private fun queryBlocks(db: SQLiteDatabase, selection: String?, selectionArgs: Array<String>?): List<PlannedBlock> =
-        db.query(
-            TABLE_BLOCKS,
-            BLOCK_COLUMNS,
-            selection,
-            selectionArgs,
-            null,
-            null,
-            "$COLUMN_DATE ASC, $COLUMN_START_MINUTE ASC",
-        ).use { cursor ->
-            buildList {
-                while (cursor.moveToNext()) {
-                    add(
-                        PlannedBlock(
-                            id = cursor.getString(0),
-                            date = LocalDate.parse(cursor.getString(1)),
-                            name = cursor.getString(2),
-                            startTime = cursor.getInt(3).toLocalTime(),
-                            endTime = cursor.getInt(4).toLocalTime(),
-                            completionStatus = CompletionStatus.valueOf(cursor.getString(5)),
-                            note = cursor.nullableString(6),
-                        ),
-                    )
-                }
-            }
-        }
-
-    private fun changedBlockPaths(previous: PlannedBlock?, updated: PlannedBlock): List<String> {
-        val values = listOf(
-            "date" to (previous?.date != updated.date),
-            "name" to (previous?.name != updated.name),
-            "startTime" to (previous?.startTime != updated.startTime),
-            "endTime" to (previous?.endTime != updated.endTime),
-            "completionStatus" to (previous?.completionStatus != updated.completionStatus),
-            "note" to (previous?.note != updated.note),
-        )
-        return values.filter { it.second }.map { "blocks.${updated.id}.${it.first}" }
-    }
-
-    private fun PlannedBlock.toContentValues() = ContentValues().apply {
-        put(COLUMN_ID, id)
-        put(COLUMN_DATE, date.toString())
-        put(COLUMN_NAME, name.trim())
-        put(COLUMN_START_MINUTE, startTime.toMinuteOfDay())
-        put(COLUMN_END_MINUTE, endTime.toMinuteOfDay())
-        put(COLUMN_ACCESS_PROFILE, "ESSENTIALS_ONLY")
-        put(COLUMN_COMPLETION_STATUS, completionStatus.name)
-        if (note == null) putNull(COLUMN_NOTE) else put(COLUMN_NOTE, note)
-    }
-
-    private fun Int.toLocalTime() = LocalTime.of(this / 60, this % 60)
     private fun LocalTime.toMinuteOfDay() = hour * 60 + minute
     private fun android.database.Cursor.nullableString(column: Int) = if (isNull(column)) null else getString(column)
     private fun String.toPackageSet(): Set<String> = runCatching {

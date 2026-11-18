@@ -59,7 +59,7 @@ class SyncSnapshotTest {
         assertEquals(4, result.snapshot.settings.requiredBlockCount)
         assertEquals(LocalTime.of(22, 0), result.snapshot.settings.eveningCutoff)
         assertEquals(listOf("facebook.com", "instagram.com", "reddit.com"), result.snapshot.desktopBlockedDomains)
-        assertEquals(setOf("local-block", "remote-block"), result.snapshot.blocks.map(PlannedBlock::id).toSet())
+        assertTrue("Legacy blocks are discarded", result.snapshot.blocks.isEmpty())
         assertEquals(
             setOf("settings.requiredBlockCount", "desktopBlockedDomains.reddit.com"),
             result.conflictedPaths,
@@ -91,57 +91,6 @@ class SyncSnapshotTest {
         assertEquals(phone, result.snapshot.activeStudySession)
         assertEquals(setOf("phone-start", "chrome-start"), result.snapshot.sessionStartCandidates.map(SharedStudySession::id).toSet())
         assertEquals(setOf("activeStudySession"), result.conflictedPaths)
-    }
-
-    @Test
-    fun staleRevisionMergeKeepsLocalBlockNameAndAcceptsRemoteCompletionStatus() {
-        val date = LocalDate.of(2026, 11, 5)
-        val local = PlannedBlock(
-            id = "same-block",
-            date = date,
-            name = "Phone edit",
-            startTime = LocalTime.of(9, 0),
-            endTime = LocalTime.of(10, 0),
-        )
-        val remote = local.copy(name = "Server edit", completionStatus = CompletionStatus.FINISHED)
-        val result = SyncSnapshotReconciler.merge(
-            remote = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, listOf(remote)),
-            local = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, listOf(local)),
-            pendingPaths = setOf("blocks.same-block.name"),
-        )
-
-        assertEquals("Phone edit", result.snapshot.blocks.single().name)
-        assertEquals(CompletionStatus.FINISHED, result.snapshot.blocks.single().completionStatus)
-        assertEquals(setOf("blocks.same-block.name"), result.conflictedPaths)
-    }
-
-    @Test
-    fun staleRevisionMergePreservesPendingLocalNoteAndImportsRemoteNote() {
-        val date = LocalDate.of(2026, 11, 5)
-        val base = PlannedBlock(
-            id = "same-block",
-            date = date,
-            name = "Study",
-            startTime = LocalTime.of(9, 0),
-            endTime = LocalTime.of(10, 0),
-        )
-        val remote = base.copy(note = "Remote note")
-        val local = base.copy(note = "Phone note")
-
-        val pendingNote = SyncSnapshotReconciler.merge(
-            remote = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, listOf(remote)),
-            local = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, listOf(local)),
-            pendingPaths = setOf("blocks.same-block.note"),
-        )
-        val uneditedNote = SyncSnapshotReconciler.merge(
-            remote = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, listOf(remote)),
-            local = SyncSnapshot(FocusSettings(), DEFAULT_DESKTOP_BLOCKED_DOMAINS, listOf(base)),
-            pendingPaths = emptySet(),
-        )
-
-        assertEquals("Phone note", pendingNote.snapshot.blocks.single().note)
-        assertEquals(setOf("blocks.same-block.note"), pendingNote.conflictedPaths)
-        assertEquals("Remote note", uneditedNote.snapshot.blocks.single().note)
     }
 
     @Test
@@ -204,7 +153,7 @@ class SyncSnapshotTest {
     }
 
     @Test
-    fun explicitHistoryClearDoesNotChangePlansOrDesktopSites() {
+    fun explicitHistoryClearDoesNotChangeDesktopSites() {
         val block = PlannedBlock("plan-1", LocalDate.of(2026, 11, 5), "Study", LocalTime.of(9, 0), LocalTime.of(10, 0))
         val remote = SyncSnapshot(FocusSettings(), listOf("reddit.com"), listOf(block), studyHistory = listOf(historySession("session", "Study")))
         val local = remote.copy(studyHistory = emptyList())
@@ -212,7 +161,7 @@ class SyncSnapshotTest {
         val result = SyncSnapshotReconciler.merge(remote, local, setOf("studyHistory.clear"))
 
         assertTrue(result.snapshot.studyHistory.isEmpty())
-        assertEquals(listOf(block), result.snapshot.blocks)
+        assertTrue(result.snapshot.blocks.isEmpty())
         assertEquals(listOf("reddit.com"), result.snapshot.desktopBlockedDomains)
     }
 
