@@ -20,6 +20,17 @@ import org.junit.Test
 
 class FocusPolicyTest {
     @Test
+    fun plannedBlocksNeverRestrictPhoneAtNight() {
+        val state = FocusPolicy.evaluate(
+            now = LocalDateTime.of(2026, 11, 3, 22, 0),
+            blocks = emptyList(),
+            settings = FocusSettings(),
+        )
+        assertNull(state.blockedReason)
+        assertNull(state.activeBlock)
+    }
+
+    @Test
     fun activeCustomProfileAllowsOnlyItsSelectedAppsAndPermanentFunctions() {
         val state = FocusPolicyState(
             BlockedReason.FOCUS_BLOCK, null, AccessProfile.ESSENTIALS_ONLY,
@@ -52,7 +63,7 @@ class FocusPolicyTest {
         val legacyBlock = block.copy(accessProfile = AccessProfile.ESSENTIALS_WITH_CHATGPT_AND_SEARCH)
         val state = FocusPolicy.evaluate(date.atTime(10, 30), listOf(legacyBlock), settings())
 
-        assertEquals(AccessProfile.ESSENTIALS_ONLY, state.accessProfile)
+        assertNull(state.accessProfile)
         assertFalse("com.openai.chatgpt" in FocusPolicy.allowedPackages(state, "jp", setOf("phone")))
     }
 
@@ -79,28 +90,25 @@ class FocusPolicyTest {
     }
 
     @Test
-    fun eveningRestrictionOverridesTheBlockMode() {
+    fun nightTimeDoesNotRestrictPhoneFromAPlan() {
         val nextDay = date.plusDays(1)
         val state = FocusPolicy.evaluate(
             now = date.atTime(21, 0),
             blocks = listOf(block.copy(date = nextDay, startTime = LocalTime.NOON, endTime = LocalTime.of(13, 0))),
             settings = settings(targetMinutes = 120),
         )
-        assertEquals(BlockedReason.EVENING_RESTRICTION, state.blockedReason)
+        assertNull(state.blockedReason)
         assertNull(state.activeBlock)
     }
 
     @Test
-    fun eveningRestrictionClearsAsSoonAsTheNextDayPlanMeetsItsStudyTarget() {
+    fun plannedMinutesDoNotChangePhoneAccessAtNight() {
         val nextDay = date.plusDays(1)
         val twoHours = block.copy(date = nextDay, startTime = LocalTime.NOON, endTime = LocalTime.of(14, 0))
         val threeHours = twoHours.copy(id = "second", startTime = LocalTime.of(14, 0), endTime = LocalTime.of(15, 0))
         val now = date.atTime(21, 0)
 
-        assertEquals(
-            BlockedReason.EVENING_RESTRICTION,
-            FocusPolicy.evaluate(now, listOf(twoHours), FocusSettings(studyHoursTargetMinutes = 180)).blockedReason,
-        )
+        assertNull(FocusPolicy.evaluate(now, listOf(twoHours), FocusSettings(studyHoursTargetMinutes = 180)).blockedReason)
         assertNull(
             FocusPolicy.evaluate(now, listOf(twoHours, threeHours), FocusSettings(studyHoursTargetMinutes = 180)).blockedReason,
         )
@@ -206,7 +214,7 @@ class FocusPolicyTest {
     }
 
     @Test
-    fun breakPausesPhoneRestrictionsAndRechecksEveningRestrictionWhenTimeExpires() {
+    fun breakEndsWithoutStartingAnEveningRestriction() {
         val start = LocalDateTime.of(2026, 11, 3, 21, 0).atZone(ZoneId.systemDefault()).toInstant()
         val breaking = StudyTimerSession.start("Reading", Duration.ofMinutes(30), AccessProfile.ESSENTIALS_ONLY, start).copy(
             state = StudySessionState.BREAKING,
@@ -218,10 +226,7 @@ class FocusPolicyTest {
         val shortPlan = listOf(block.copy(date = date.plusDays(1)))
 
         assertNull(FocusPolicy.evaluate(now, shortPlan, settings, breaking).blockedReason)
-        assertEquals(
-            BlockedReason.EVENING_RESTRICTION,
-            FocusPolicy.evaluate(now.plusMinutes(10), shortPlan, settings, breaking.copy(breakDurationMillis = Duration.ofMinutes(5).toMillis())).blockedReason,
-        )
+        assertNull(FocusPolicy.evaluate(now.plusMinutes(10), shortPlan, settings, breaking.copy(breakDurationMillis = Duration.ofMinutes(5).toMillis())).blockedReason)
     }
 
     private fun evaluate(time: LocalTime, candidate: PlannedBlock = block) =

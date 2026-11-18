@@ -92,7 +92,31 @@ test('a valid Android snapshot is revisioned and returned to other devices', asy
 
   const read = await api(request('/v1/snapshot'));
   assert.equal(read.status, 200);
-  assert.deepEqual((await read.json()).snapshot, snapshot);
+  assert.deepEqual((await read.json()).snapshot, { ...snapshot, blocks: [] });
+});
+
+test('legacy planned blocks are discarded when a snapshot is saved', async () => {
+  const api = createSyncApi({ store: fakeStore(), token });
+  const legacy = { ...emptySnapshot, blocks: [{
+    id: 'old-plan', date: '2026-11-18', name: 'Old plan', startTime: '09:00', endTime: '10:00',
+    accessProfile: 'ESSENTIALS_ONLY', completionStatus: 'NOT_STARTED',
+  }] };
+  const write = await api(request('/v1/snapshot', {
+    method: 'PUT', body: { expectedRevision: 0, snapshot: legacy },
+  }));
+  assert.equal(write.status, 200);
+  const saved = (await (await api(request('/v1/snapshot'))).json()).snapshot;
+  assert.deepEqual(saved.blocks, []);
+});
+
+test('legacy planned blocks are hidden when an older snapshot is read', async () => {
+  const stored = { revision: 4, updatedAt: '2026-11-18T00:00:00.000Z', snapshot: {
+    ...emptySnapshot, blocks: [{ id: 'old-plan' }],
+  } };
+  const api = createSyncApi({ store: fakeStore(stored), token });
+  const response = await api(request('/v1/snapshot'));
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).snapshot.blocks, []);
 });
 
 test('the revisioned sync contract preserves an Android-started session for Chrome', async () => {

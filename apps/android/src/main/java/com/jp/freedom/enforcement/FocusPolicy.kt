@@ -1,6 +1,5 @@
 package com.jp.freedom.enforcement
 
-import com.jp.freedom.domain.DayPlanPolicy
 import com.jp.freedom.domain.AccessProfile
 import com.jp.freedom.domain.FocusSettings
 import com.jp.freedom.domain.PlannedBlock
@@ -37,24 +36,7 @@ object FocusPolicy {
                 allowedAppPackages = studySession.allowedAppPackages,
             )
         }
-        val eveningRestriction = DayPlanPolicy.shouldRestrictEvening(
-            now = now,
-            cutoff = settings.eveningCutoff,
-            studyHoursTargetMinutes = settings.studyHoursTargetMinutes,
-            blocks = blocks,
-        )
-        if (eveningRestriction) return FocusPolicyState(BlockedReason.EVENING_RESTRICTION, null)
-
-        val activeBlock = blocks.firstOrNull { block ->
-            block.date == now.toLocalDate() &&
-                block.completionStatus != com.jp.freedom.domain.CompletionStatus.FINISHED &&
-                !now.toLocalTime().isBefore(block.startTime) &&
-                now.toLocalTime().isBefore(block.endTime)
-        }
-        return FocusPolicyState(
-            blockedReason = null,
-            activeBlock = activeBlock,
-        )
+        return FocusPolicyState(blockedReason = null, activeBlock = null)
     }
 
     fun allowedPackages(

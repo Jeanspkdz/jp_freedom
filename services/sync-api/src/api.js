@@ -272,7 +272,8 @@ export function createSyncApi({ store, token }) {
 
     if (request.method === 'GET') {
       try {
-        return json(await store.read());
+        const current = await store.read();
+        return json({ ...current, snapshot: { ...current.snapshot, blocks: [] } });
       } catch {
         return json({ error: 'storage_unavailable' }, 503);
       }
@@ -292,7 +293,7 @@ export function createSyncApi({ store, token }) {
     if (validationError) return json({ error: validationError }, 422);
 
     try {
-      const result = await store.replace(body.expectedRevision, body.snapshot);
+      const result = await store.replace(body.expectedRevision, { ...body.snapshot, blocks: [] });
       if (result.conflict) {
         return json({ error: 'revision_conflict', currentRevision: result.revision }, 409);
       }
