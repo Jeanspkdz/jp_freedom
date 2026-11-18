@@ -19,7 +19,7 @@ test('separate management pages follow the approved focus, sites, and connection
   assert.match(connection, /id="view-connection"/);
   assert.match(html, /class="brand-icon" viewBox="0 0 100 100"/);
   assert.equal((html.match(/class="brand-icon-piece brand-icon-piece--/g) ?? []).length, 3);
-  assert.match(connection, /class="connection-flow" aria-hidden="true"><div class="connection-beams">/);
+  assert.match(connection, /class="connection-flow" aria-hidden="true">\s*<svg class="sync-route"/);
 
   const root = css.match(/:root\s*\{([^}]+)\}/)?.[1];
   assert.ok(root, 'management.css defines root palette tokens');

@@ -137,22 +137,13 @@ test('without a valid snapshot, management reports inactive protection and leave
   assert.deepEqual(harness.rules, []);
 });
 
-test('separate management page links carry direction and degrade to ordinary navigation', async () => {
+test('separate management pages use ordinary links', async () => {
   const harness = createHarness({}, 'sites');
   await initializeManagement({ ...harness, fetchImpl: async () => { throw new Error('unexpected request'); } });
-
+  assert.deepEqual(harness.navigationLinks.map(link => link.attributes.get('href')),
+    ['management.html', 'sites.html', 'connection.html']);
   harness.navigationLinks[0].listeners.get('click')({ button: 0 });
-
-  harness.nodes.get('tab-connection').listeners.get('click')();
-  assert.equal(harness.nodes.get('view-sites').hidden, true);
-  assert.equal(harness.nodes.get('view-connection').hidden, false);
-
-  harness.nodes.get('tab-plan').listeners.get('click')();
-  assert.equal(harness.nodes.get('view-plan').hidden, false);
-  assert.equal(harness.documentRef.getElementById('tomorrow-plan').hidden, false);
-  harness.nodes.get('open-connection').listeners.get('click')();
-  assert.equal(harness.nodes.get('view-plan').hidden, true);
-  assert.equal(harness.nodes.get('view-connection').hidden, false);
+  assert.equal(harness.sessionValues.get('Tally-nav-direction'), 'back');
 });
 
 test('an unreachable local test API explains how to restore the connection', async () => {
@@ -436,31 +427,29 @@ test('a timer can start without a connection and stays pending for sync', async 
     ['facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'reddit.com']);
 });
 
-test('Plan lets the user choose the Chrome timer after an offline conflict', async () => {
+test('Plan lets the user choose between conflicting shared session starts', async () => {
   const now = new Date('2026-11-16T12:05:00.000Z');
-  const local = { id: 'chrome-1', startedAt: '2026-11-16T12:00:00.000Z', durationMillis: 1_800_000,
-    state: 'ACTIVE', accessProfile: 'ESSENTIALS_ONLY', taskName: '' };
+  const local = { id: 'chrome-1', startedAt: '2026-11-16T12:00:00.000Z', endsAt: '2026-11-16T12:30:00.000Z',
+    accessProfile: 'ESSENTIALS_ONLY', taskName: 'Study session' };
   const remote = { ...local, id: 'android-1' };
   const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
-    desktopBlockedDomains: ['reddit.com'], blocks: [] };
-  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token',
-    lastStudySession: local, studyPending: true, studyConflict: true }, 'plan');
+    desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: remote,
+    sessionStartCandidates: [remote, local] };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token' }, 'plan');
   let chosen;
-  const fetchImpl = async (url, options) => {
-    if (url.endsWith('/v1/snapshot')) return new Response(JSON.stringify({ revision: 1, updatedAt: now.toISOString(), snapshot }));
+  const fetchImpl = async (_url, options = {}) => {
     if (options.method === 'PUT') {
-      chosen = JSON.parse(options.body).session;
-      return new Response(JSON.stringify({ revision: 3, session: chosen }));
+      chosen = JSON.parse(options.body).snapshot;
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: now.toISOString(), snapshot: chosen }) };
     }
-    return new Response(JSON.stringify({ revision: 2, session: remote }));
+    return { ok: true, json: async () => ({ revision: 1, updatedAt: now.toISOString(), snapshot }) };
   };
   await initializeManagement({ ...harness, fetchImpl, now: () => now });
-  assert.equal(harness.nodes.get('study-conflict-actions').hidden, false);
-  await harness.nodes.get('keep-chrome-timer').listeners.get('click')();
-  assert.equal(chosen.id, 'chrome-1');
-  assert.deepEqual(chosen.supersededAttemptIds, ['android-1']);
-  assert.equal(harness.storage.studyConflict, false);
-  assert.equal(harness.storage.studyPending, false);
+  assert.equal(harness.nodes.get('session-conflict-controls').hidden, false);
+  harness.nodes.get('session-start-choice').value = 'chrome-1';
+  await harness.nodes.get('choose-session-start').listeners.get('click')();
+  assert.equal(chosen.activeStudySession.id, 'chrome-1');
+  assert.deepEqual(chosen.sessionStartCandidates, []);
 });
 
 test('a successful sync shows the active block and planned end, saves the snapshot, and installs its rules', async () => {
@@ -484,7 +473,7 @@ test('a successful sync shows the active block and planned end, saves the snapsh
     },
   });
 
-  assert.equal(request.url, 'https://sync.example/v1/session');
+  assert.equal(request.url, 'https://sync.example/v1/snapshot');
   assert.equal(request.options.headers.Authorization, 'Bearer secret-token');
   assert.equal(harness.nodes.get('current-block').textContent, 'Deep work');
   assert.equal(harness.nodes.get('planned-end').textContent, 'Planned end: 11:30');
@@ -1392,49 +1381,47 @@ test('the background worker polls for Android completion and releases rules with
   assert.deepEqual(harness.rules, []);
 });
 
-test('background sync publishes an offline Chrome timer without losing its original start time', async () => {
+test('background sync publishes an offline Chrome timer without changing its start time', async () => {
   const startedAt = '2026-11-16T12:00:00.000Z';
-  const session = { id: 'offline-1', startedAt, durationMillis: 1_800_000,
-    state: 'ACTIVE', accessProfile: 'ESSENTIALS_ONLY', taskName: '' };
+  const session = { id: 'offline-1', startedAt, endsAt: '2026-11-16T12:30:00.000Z',
+    accessProfile: 'ESSENTIALS_ONLY', taskName: 'Study session' };
   const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
     desktopBlockedDomains: ['reddit.com'], blocks: [] };
   const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token',
-    studyPending: true, lastStudySession: session });
+    pendingSessionStart: session, lastValidSnapshot: { ...snapshot, activeStudySession: session } });
   let published;
-  const fetchImpl = async (url, options) => {
-    if (url.endsWith('/v1/snapshot')) return new Response(JSON.stringify({ revision: 1, updatedAt: startedAt, snapshot }));
+  const fetchImpl = async (_url, options = {}) => {
     if (options.method === 'PUT') {
-      published = JSON.parse(options.body).session;
-      return new Response(JSON.stringify({ revision: 1, session: published }));
+      published = JSON.parse(options.body).snapshot;
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: null, snapshot: published }) };
     }
-    return new Response(JSON.stringify({ revision: 0, session: null }));
+    return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot }) };
   };
   await refreshRemoteSnapshot(harness.chromeApi, fetchImpl, new Date('2026-11-16T12:05:00.000Z'));
-  assert.equal(published.startedAt, startedAt);
-  assert.equal(harness.storage.studyPending, false);
-  assert.equal(harness.storage.lastStudySession.id, 'offline-1');
+  assert.equal(published.activeStudySession.startedAt, startedAt);
+  assert.equal(harness.storage.pendingSessionStart, null);
   assert.deepEqual(harness.rules.map(rule => rule.condition.requestDomains[0]), ['reddit.com']);
 });
 
-test('background sync keeps an offline timer when Android started a different one', async () => {
-  const local = { id: 'chrome-session', startedAt: '2026-11-16T12:00:00.000Z', durationMillis: 1_800_000,
-    state: 'ACTIVE', accessProfile: 'ESSENTIALS_ONLY', taskName: '' };
+test('background sync preserves both conflicting offline timers', async () => {
+  const local = { id: 'chrome-session', startedAt: '2026-11-16T12:00:00.000Z',
+    endsAt: '2026-11-16T12:30:00.000Z', accessProfile: 'ESSENTIALS_ONLY', taskName: 'Study session' };
   const remote = { ...local, id: 'android-session' };
   const snapshot = { version: 1, settings: { requiredBlockCount: 3, eveningCutoff: '21:00' },
-    desktopBlockedDomains: ['reddit.com'], blocks: [] };
-  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token',
-    studyPending: true, lastStudySession: local });
-  let writes = 0;
-  const fetchImpl = async (url, options) => {
-    if (url.endsWith('/v1/snapshot')) return new Response(JSON.stringify({ revision: 1, updatedAt: local.startedAt, snapshot }));
-    if (options.method === 'PUT') writes += 1;
-    return new Response(JSON.stringify({ revision: 2, session: remote }));
+    desktopBlockedDomains: ['reddit.com'], blocks: [], activeStudySession: remote };
+  const harness = createHarness({ apiUrl: 'https://sync.example', apiToken: 'token', pendingSessionStart: local });
+  let published;
+  const fetchImpl = async (_url, options = {}) => {
+    if (options.method === 'PUT') {
+      published = JSON.parse(options.body).snapshot;
+      return { ok: true, json: async () => ({ revision: 2, updatedAt: null, snapshot: published }) };
+    }
+    return { ok: true, json: async () => ({ revision: 1, updatedAt: null, snapshot }) };
   };
   await refreshRemoteSnapshot(harness.chromeApi, fetchImpl, new Date('2026-11-16T12:05:00.000Z'));
-  assert.equal(writes, 0);
-  assert.equal(harness.storage.studyPending, true);
-  assert.equal(harness.storage.studyConflict, true);
-  assert.equal(harness.storage.lastStudySession.id, 'chrome-session');
+  assert.equal(published.activeStudySession.id, 'android-session');
+  assert.deepEqual(published.sessionStartCandidates.map(session => session.id), ['android-session', 'chrome-session']);
+  assert.equal(harness.storage.pendingSessionStart, null);
 });
 
 test('overlapping background refreshes share one request and cannot replace a newer cached revision', async () => {

@@ -80,13 +80,38 @@ export function refreshFocusState(chromeApi = globalThis.chrome, now = new Date(
 export async function refreshRemoteSnapshot(chromeApi = globalThis.chrome, fetchImpl = globalThis.fetch, now = new Date()) {
   if (remoteRefreshInFlight) return remoteRefreshInFlight;
   remoteRefreshInFlight = (async () => {
-    const { apiUrl, apiToken, lastSnapshotRevision = -1 } = await chromeApi.storage.local.get([
-      'apiUrl', 'apiToken', 'lastSnapshotRevision',
+    const { apiUrl, apiToken, lastSnapshotRevision = -1, pendingSessionStart } = await chromeApi.storage.local.get([
+      'apiUrl', 'apiToken', 'lastSnapshotRevision', 'pendingSessionStart',
     ]);
     if (!apiUrl || !apiToken) return false;
     try {
       let payload = await readSnapshot(apiUrl, apiToken, fetchImpl);
       if (payload.revision < lastSnapshotRevision) return false;
+      if (pendingSessionStart) {
+        const remoteSession = payload.snapshot.activeStudySession;
+        if (remoteSession?.id === pendingSessionStart.id) {
+          await chromeApi.storage.local.set({ pendingSessionStart: null });
+        } else if (!payload.snapshot.pendingStudyReviewSessionId) {
+          const candidates = remoteSession
+            ? [...(payload.snapshot.sessionStartCandidates ?? []), remoteSession, pendingSessionStart]
+              .filter((candidate, index, all) => all.findIndex(value => value.id === candidate.id) === index).slice(0, 2)
+            : [];
+          const proposed = remoteSession
+            ? { ...payload.snapshot, sessionStartCandidates: candidates, phoneReceivedStudySessionId: null }
+            : { ...payload.snapshot, activeStudySession: pendingSessionStart, phoneReceivedStudySessionId: null };
+          const response = await fetchImpl(snapshotEndpoint(apiUrl), {
+            method: 'PUT',
+            headers: { Accept: 'application/json', Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expectedRevision: payload.revision, snapshot: proposed }),
+            cache: 'no-store', credentials: 'omit', redirect: 'error',
+          });
+          if (!response.ok) throw new Error(`Could not publish pending study session (HTTP ${response.status}).`);
+          const updated = await response.json();
+          if (!validSnapshotResponse(updated)) throw new Error('The sync API returned an unsupported or incomplete plan.');
+          payload = updated;
+          await chromeApi.storage.local.set({ pendingSessionStart: null });
+        }
+      }
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const expiredSession = payload.snapshot.activeStudySession;
         if (!expiredSession || Date.parse(expiredSession.endsAt) > now.getTime()) break;
