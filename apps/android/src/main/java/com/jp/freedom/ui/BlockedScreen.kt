@@ -71,7 +71,7 @@ fun BlockedScreen(
                 text = when {
                     isEveningRestriction -> "Complete the required blocks for tomorrow in your planner to unlock your phone."
                     isSiteFilterSetup -> "Turn on the website filter in Settings to use Chrome during a study session."
-                    else -> "This app isn't included in the access profile for this study session."
+                    else -> "This app isn't included in the allowed apps list for this study session."
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
@@ -90,7 +90,7 @@ fun BlockedScreen(
                     ButtonDefaults.buttonColors()
                 },
             ) {
-                Text("Open planner")
+                Text("Open home")
             }
             if (isSiteFilterSetup) {
                 Spacer(Modifier.height(8.dp))

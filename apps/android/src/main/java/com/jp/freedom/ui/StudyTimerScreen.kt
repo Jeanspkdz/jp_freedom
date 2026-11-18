@@ -168,7 +168,7 @@ fun StudyTimerScreen(
                     TimerReadout("${remainingTime.toMinutes().toString().padStart(2, '0')}:${(remainingTime.seconds % 60).toString().padStart(2, '0')}", "Break remaining")
                     OutlinedTextField(nextTask, { nextTask = it }, label = { Text("What will you work on next?") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     Button(onClick = { onEndBreak(nextTask.trim()) }, enabled = nextTask.isNotBlank(), modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("End break") }
-                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Back to plan") }
+                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Back to home") }
                 }
 
                 session != null -> {
@@ -206,13 +206,13 @@ fun StudyTimerScreen(
                         }
                     }
                     Button(onClick = onStop, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("End and review") }
-                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Back to plan") }
+                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Back to home") }
                 }
 
                 else -> {
                     RitmyMascot(modifier = Modifier.align(Alignment.CenterHorizontally), size = 116.dp)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("A block for you", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("Focus session", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Text("Choose how much time you want to spend and start when you're ready.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Surface(
@@ -314,7 +314,7 @@ fun StudyTimerScreen(
                         Spacer(Modifier.size(10.dp))
                         Text("Start session")
                     }
-                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Back to plan") }
+                    OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Back to home") }
                 }
             }
             Spacer(Modifier.height(8.dp))
