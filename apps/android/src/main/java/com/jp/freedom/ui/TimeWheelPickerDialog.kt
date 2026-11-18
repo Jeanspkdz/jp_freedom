@@ -85,6 +85,6 @@ fun TimeWheelPickerDialog(
                 Text("Confirmar")
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

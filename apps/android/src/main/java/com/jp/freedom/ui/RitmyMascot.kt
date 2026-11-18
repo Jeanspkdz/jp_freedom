@@ -74,7 +74,7 @@ fun RitmyMascot(
     ) {
         Image(
             painter = painterResource(if (smiling) R.drawable.ritmy_happy else R.drawable.ritmy),
-            contentDescription = "Ritmy, tu compañero de enfoque",
+            contentDescription = "Ritmy, your focus companion",
             modifier = Modifier
                 .size(size)
                 .graphicsLayer {

@@ -187,7 +187,7 @@ fun PlannerScreen(
 
             StudyHoursLedger(actualMinutes, targetMinutes, blocks)
 
-            TextButton(onClick = onOpenDailyReview, modifier = Modifier.align(Alignment.End).padding(end = 16.dp)) { Text("Revisar día") }
+            TextButton(onClick = onOpenDailyReview, modifier = Modifier.align(Alignment.End).padding(end = 16.dp)) { Text("Review day") }
 
             if (!accessibilityEnabled || !exactAlarmsAllowed) {
                 Surface(
@@ -204,9 +204,9 @@ fun PlannerScreen(
                     ) {
                         Text(
                             when {
-                                !accessibilityEnabled && !exactAlarmsAllowed -> "Activa el bloqueo y las alarmas para aplicar tus sesiones a tiempo."
-                                !accessibilityEnabled -> "Activa accesibilidad para bloquear distracciones."
-                                else -> "Activa las alarmas exactas para iniciar los bloques a tiempo."
+                                !accessibilityEnabled && !exactAlarmsAllowed -> "Enable blocking and alarms to start your sessions on time."
+                                !accessibilityEnabled -> "Enable accessibility to block distractions."
+                                else -> "Enable exact alarms to start sessions on time."
                             },
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodySmall,
@@ -215,7 +215,7 @@ fun PlannerScreen(
                         TextButton(
                             onClick = onOpenSettings,
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSecondary),
-                        ) { Text("Configurar") }
+                        ) { Text("Set up") }
                     }
                 }
             }
@@ -238,8 +238,8 @@ fun PlannerScreen(
             } else {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (isTodaySelected) "Plan de hoy" else "Plan de mañana", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                        IconButton(onClick = onAddBlock) { Icon(Icons.Outlined.Add, contentDescription = "Añadir actividad") }
+                        Text(if (isTodaySelected) "Today’s plan" else "Tomorrow’s plan", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                        IconButton(onClick = onAddBlock) { Icon(Icons.Outlined.Add, contentDescription = "Add activity") }
                     }
                     blocks.forEachIndexed { index, block ->
                         val isCurrent = block.id == activeBlock?.id
@@ -277,14 +277,14 @@ private fun DaySelector(
             onClick = onSelectToday,
             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
         ) {
-            Text("Hoy", style = MaterialTheme.typography.titleMedium)
+            Text("Today", style = MaterialTheme.typography.titleMedium)
         }
         SegmentedButton(
             selected = !isTodaySelected,
             onClick = onSelectTomorrow,
             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
         ) {
-            Text("Mañana", style = MaterialTheme.typography.titleMedium)
+            Text("Tomorrow", style = MaterialTheme.typography.titleMedium)
         }
     }
 }
@@ -327,20 +327,20 @@ private fun StudyHoursLedger(actualMinutes: Int, targetMinutes: Int, blocks: Lis
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("${actualMinutes / 60}:${(actualMinutes % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.displaySmall, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, color = colors.onSurface)
-                Text("ESTUDIADO", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                Text("STUDIED", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text("${targetMinutes / 60}:${(targetMinutes % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.headlineMedium, fontFamily = FontFamily.Monospace, color = colors.onSurface)
-                Text("META DIARIA", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                Text("DAILY GOAL", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             }
         }
         Spacer(Modifier.height(12.dp))
-        Text("Estudiado", style = MaterialTheme.typography.labelMedium)
+        Text("Studied", style = MaterialTheme.typography.labelMedium)
         LinearProgressIndicator(progress = { (actualMinutes.toFloat() / maxOf(targetMinutes, planned, actualMinutes, 1)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(10.dp), color = colors.primary, trackColor = colors.surfaceVariant)
         Spacer(Modifier.height(10.dp))
-        Text("Planificado · ${planned / 60} h ${planned % 60} min", style = MaterialTheme.typography.labelMedium)
+        Text("Planned · ${planned / 60} h ${planned % 60} min", style = MaterialTheme.typography.labelMedium)
         LinearProgressIndicator(progress = { (planned.toFloat() / maxOf(targetMinutes, planned, actualMinutes, 1)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(10.dp), color = colors.secondary, trackColor = colors.surfaceVariant)
-        Text("Meta: ${targetMinutes / 60} h ${targetMinutes % 60} min", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        Text("Goal: ${targetMinutes / 60} h ${targetMinutes % 60} min", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
     }
 }
 
@@ -386,9 +386,9 @@ private fun EditorialBlock(
                     isCurrent -> StateLabel("In progress", emphasized = true)
                     isNext -> StateLabel("Next", emphasized = false)
                     block.completionStatus == CompletionStatus.NOT_STARTED -> StateLabel("Upcoming", emphasized = false)
-                    block.completionStatus == CompletionStatus.FINISHED -> StateLabel("Finalizado", emphasized = true, amber = true)
-                    block.completionStatus == CompletionStatus.PARTLY_DONE -> StateLabel("Parcial", emphasized = false)
-                    block.completionStatus == CompletionStatus.NOT_DONE -> StateLabel("No realizado", emphasized = false)
+                    block.completionStatus == CompletionStatus.FINISHED -> StateLabel("Finished", emphasized = true, amber = true)
+                    block.completionStatus == CompletionStatus.PARTLY_DONE -> StateLabel("Partly done", emphasized = false)
+                    block.completionStatus == CompletionStatus.NOT_DONE -> StateLabel("Not done", emphasized = false)
                 }
             }
             if (isCurrent) {
@@ -448,14 +448,14 @@ private fun EmptyAgenda(
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            text = if (isTodaySelected) "Hoy no hay bloques" else "Mañana no hay bloques",
+            text = if (isTodaySelected) "No blocks today" else "No blocks tomorrow",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Añade una actividad para organizar tu tiempo.",
+            text = "Add an activity to organize your time.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -463,7 +463,7 @@ private fun EmptyAgenda(
         OutlinedButton(onClick = onAddBlock, modifier = Modifier.height(56.dp)) {
             Icon(Icons.Outlined.Add, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Añadir bloque")
+            Text("Add block")
         }
     }
 }
@@ -492,13 +492,13 @@ private fun RestrictionBanner(
             )
             Column(Modifier.weight(1f)) {
                 Text(
-                    "Plan de mañana incompleto",
+                    "Tomorrow’s plan is incomplete",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.onSecondaryContainer,
                 )
                 Text(
-                    "Faltan ${remainingMinutes / 60} h ${remainingMinutes % 60} min para tu meta",
+                    "${remainingMinutes / 60} h ${remainingMinutes % 60} min left to reach your goal",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onSecondaryContainer,
                 )
@@ -506,7 +506,7 @@ private fun RestrictionBanner(
             TextButton(
                 onClick = onOpenPlan,
                 colors = ButtonDefaults.textButtonColors(contentColor = colors.onSecondaryContainer),
-            ) { Text("Abrir") }
+            ) { Text("Open") }
         }
     }
 }
@@ -531,9 +531,9 @@ private fun PlannerBottomBar(
         Spacer(Modifier.width(10.dp))
         Text(
             when {
-                pendingSessionReview != null -> "Revisar sesión"
-                activeStudySession != null -> "Ver sesión en curso"
-                else -> "Iniciar sesión"
+                pendingSessionReview != null -> "Review session"
+                activeStudySession != null -> "View active session"
+                else -> "Start session"
             },
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
@@ -542,8 +542,8 @@ private fun PlannerBottomBar(
 }
 
 private fun dateLabel(date: LocalDate, isTodaySelected: Boolean): String {
-    val prefix = if (isTodaySelected) "Hoy" else "Mañana"
-    val formatted = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("es-PE")))
+    val prefix = if (isTodaySelected) "Today" else "Tomorrow"
+    val formatted = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("en-US")))
     return "$prefix · $formatted"
 }
 
