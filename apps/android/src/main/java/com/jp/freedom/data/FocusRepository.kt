@@ -1091,6 +1091,7 @@ class FocusRepository(context: Context) : StudySessionStore {
 
         private fun createAccessProfileTable(db: SQLiteDatabase) {
             db.execSQL("CREATE TABLE IF NOT EXISTS access_profiles (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, packages TEXT NOT NULL)")
+        }
 
         private fun createFocusAreaTable(db: SQLiteDatabase) {
             db.execSQL("""CREATE TABLE IF NOT EXISTS focus_areas (

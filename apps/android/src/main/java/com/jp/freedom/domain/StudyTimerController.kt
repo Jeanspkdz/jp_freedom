@@ -84,6 +84,16 @@ class StudyTimerController(
             ).also(store::saveStudySession)
         }
 
+    fun review(taskName: String, status: CompletionStatus, note: String, remaining: String, breakDuration: Duration): StudyTimerSession? =
+        store.pendingStudyReview()?.let {
+            StudyTimerPolicy.review(it, taskName, status, note, remaining).copy(
+                outcome = if (status == CompletionStatus.FINISHED) SessionOutcome.FINISHED else SessionOutcome.NOT_FINISHED,
+                state = StudySessionState.BREAKING,
+                breakStartedAt = Instant.now(clock),
+                breakDurationMillis = breakDuration.toMillis(),
+            ).also(store::saveStudySession)
+        }
+
     fun finishBreakIfDue(): StudyTimerSession? = store.activeStudySession()?.let {
         StudyTimerPolicy.finishBreakIfDue(it, Instant.now(clock))
     }?.also(store::saveStudySession)
