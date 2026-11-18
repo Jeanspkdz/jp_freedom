@@ -35,6 +35,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -101,6 +102,7 @@ fun SettingsScreen(
     var newFocusArea by rememberSaveable { mutableStateOf("") }
     var showReminderTimePicker by rememberSaveable { mutableStateOf(false) }
     var formError by remember { mutableStateOf<String?>(null) }
+    var domainError by remember { mutableStateOf<String?>(null) }
     var confirmHistoryClear by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
@@ -280,43 +282,26 @@ fun SettingsScreen(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Daily review reminder", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Surface(
+                    onClick = { showReminderTimePicker = true },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Choose when the phone reminds you to review today's timer sessions. Default: 9:00 PM.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Surface(
-                            onClick = { showReminderTimePicker = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 56.dp)
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(
-                                        "Reminder time (24-hour)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                    Text(reminderDraft, style = MaterialTheme.typography.bodyLarge)
-                                }
-                                Icon(
-                                    Icons.Outlined.Alarm,
-                                    contentDescription = "Choose reminder time",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                            Icon(Icons.Outlined.Alarm, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                            Column(Modifier.weight(1f)) {
+                                Text("Reminder time", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(reminderDraft, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
                             }
+                            Text("Change", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
                         }
+                        Text("Review today's study sessions each evening. Default: 9:00 PM.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 if (!notificationsAllowed) {
@@ -505,33 +490,58 @@ fun SettingsScreen(
                     }
                 }
 
-                Text("Blocked websites in Chrome", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("You can also add websites during a session. Selected websites stay blocked until it ends.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                desktopBlockedDomains.forEach { domain ->
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(domain, modifier = Modifier.weight(1f))
-                        OutlinedButton(onClick = { onDesktopDomainsChange(desktopBlockedDomains - domain) }, enabled = !activeFocusBlock) { Text("Remove") }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Blocked websites in Chrome", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("You can add websites during a session. Selected websites stay blocked until it ends.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        desktopBlockedDomains.forEachIndexed { index, domain ->
+                            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(domain, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                                TextButton(
+                                    onClick = { onDesktopDomainsChange(desktopBlockedDomains - domain) },
+                                    enabled = !activeFocusBlock,
+                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+                                ) { Text("Remove") }
+                            }
+                        }
+                        if (desktopBlockedDomains.isNotEmpty()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Add a website", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            OutlinedTextField(
+                                value = newDomain,
+                                onValueChange = { newDomain = it; domainError = null },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { Text("Domain") },
+                                placeholder = { Text("example.com") },
+                                isError = domainError != null,
+                                supportingText = domainError?.let { error -> { Text(error) } },
+                            )
+                            OutlinedButton(onClick = {
+                                val domain = DesktopSiteBlocklist.normalize(newDomain)
+                                when (DesktopSiteBlocklist.validate(desktopBlockedDomains + domain)) {
+                                    BlocklistValidation.Valid -> { onDesktopDomainsChange(desktopBlockedDomains + domain); newDomain = ""; domainError = null }
+                                    BlocklistValidation.ActiveBlockLocked -> domainError = "Selected websites can't be removed during a session."
+                                    BlocklistValidation.DuplicateDomain -> domainError = "That domain is already selected."
+                                    BlocklistValidation.TooManyDomains -> domainError = "The list supports up to 100 domains."
+                                    is BlocklistValidation.InvalidDomain -> domainError = "Enter a domain only, such as example.com."
+                                }
+                            }, modifier = Modifier.fillMaxWidth(), enabled = newDomain.isNotBlank()) { Text("Add website") }
+                        }
                     }
                 }
-                OutlinedTextField(
-                    value = newDomain,
-                    onValueChange = { newDomain = it; formError = null },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("Add domain") },
-                    placeholder = { Text("example.com") },
-                )
-                OutlinedButton(onClick = {
-                    val domain = DesktopSiteBlocklist.normalize(newDomain)
-                    when (DesktopSiteBlocklist.validate(desktopBlockedDomains + domain)) {
-                        BlocklistValidation.Valid -> { onDesktopDomainsChange(desktopBlockedDomains + domain); newDomain = "" }
-                        BlocklistValidation.ActiveBlockLocked -> formError = "Selected websites can't be removed during a session."
-                        BlocklistValidation.DuplicateDomain -> formError = "That domain is already selected."
-                        BlocklistValidation.TooManyDomains -> formError = "The list supports up to 100 domains."
-                        is BlocklistValidation.InvalidDomain -> formError = "Enter a domain only, such as example.com."
-                    }
-                }, modifier = Modifier.fillMaxWidth()) { Text("Add website") }
-                formError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
         }
     }

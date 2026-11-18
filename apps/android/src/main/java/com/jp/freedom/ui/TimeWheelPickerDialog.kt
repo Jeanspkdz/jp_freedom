@@ -36,7 +36,7 @@ fun TimeWheelPickerDialog(
             value = time.hour
             wrapSelectorWheel = true
             setFormatter { String.format("%02d", it) }
-            contentDescription = "Horas"
+            contentDescription = "Hours"
         }
     }
     val minutePicker = remember(time, maxHour) {
@@ -46,7 +46,7 @@ fun TimeWheelPickerDialog(
             value = time.minute.coerceAtMost(maxValue)
             wrapSelectorWheel = true
             setFormatter { String.format("%02d", it) }
-            contentDescription = "Minutos"
+            contentDescription = "Minutes"
         }
     }
     hourPicker.setOnValueChangedListener { _, _, hour ->
@@ -64,7 +64,7 @@ fun TimeWheelPickerDialog(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Horas", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Hours", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     AndroidView(
                         factory = { hourPicker },
                         modifier = Modifier.padding(horizontal = 4.dp).testTag("daily-review-hour-picker"),
@@ -72,7 +72,7 @@ fun TimeWheelPickerDialog(
                 }
                 Text(":", style = MaterialTheme.typography.headlineMedium)
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Minutos", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Minutes", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     AndroidView(
                         factory = { minutePicker },
                         modifier = Modifier.padding(horizontal = 4.dp).testTag("daily-review-minute-picker"),
