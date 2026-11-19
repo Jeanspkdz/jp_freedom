@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
-import android.content.pm.PackageManager
 import com.jp.freedom.domain.InstalledApp
 import com.jp.freedom.enforcement.FocusAccessibilityService
 import java.util.Locale
@@ -19,7 +18,7 @@ object AllowedAppsCatalog {
             )?.packageName?.let(::add)
         }
         val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        return packageManager.queryIntentActivities(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        return packageManager.queryIntentActivities(launcherIntent, 0)
             .asSequence()
             .mapNotNull { resolveInfo ->
                 val appInfo = resolveInfo.activityInfo?.applicationInfo ?: return@mapNotNull null

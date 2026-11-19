@@ -13,12 +13,15 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.ui.platform.LocalDensity
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.jp.freedom.data.AllowedAppsCatalog
 import com.jp.freedom.domain.InstalledApp
 import com.jp.freedom.domain.AllowedAppsList
 import com.jp.freedom.domain.AllowedAppsListPolicy
 import com.jp.freedom.domain.AllowedAppsListValidation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,6 +29,30 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AllowedAppsListsFlowTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun installedAnkiAppearsInNewList() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val ankiPackage = "com.ichi2.anki"
+        assumeTrue("Anki is installed on this device", context.packageManager.getLaunchIntentForPackage(ankiPackage) != null)
+        val installedApps = AllowedAppsCatalog.installedLaunchableApps(context)
+        compose.setContent {
+            FocusTheme {
+                AllowedAppsListEditorScreen(
+                    existingList = null,
+                    lists = emptyList(),
+                    installedApps = installedApps,
+                    locked = false,
+                    onBack = {},
+                    onSave = { AllowedAppsListValidation.Valid },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Search apps").performTextInput(ankiPackage)
+        compose.onNodeWithText("No installed apps found.").assertDoesNotExist()
+    }
 
     @Test
     fun createListButtonStaysAboveSystemNavigation() {
