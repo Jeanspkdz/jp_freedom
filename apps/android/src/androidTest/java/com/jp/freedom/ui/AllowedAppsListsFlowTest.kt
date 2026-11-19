@@ -1,8 +1,10 @@
 package com.jp.freedom.ui
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -29,6 +31,51 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AllowedAppsListsFlowTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test
+    fun appNameMatchesTakePriorityOverPackageNameMatches() {
+        compose.setContent {
+            FocusTheme {
+                AllowedAppsListEditorScreen(
+                    existingList = null,
+                    lists = emptyList(),
+                    installedApps = listOf(
+                        InstalledApp("com.google.android.googlequicksearchbox", "Google"),
+                        InstalledApp("com.google.android.calendar", "Calendar"),
+                    ),
+                    locked = false,
+                    onBack = {},
+                    onSave = { AllowedAppsListValidation.Valid },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Search apps").performTextInput("Google")
+
+        compose.onNodeWithText("com.google.android.googlequicksearchbox").assertIsDisplayed()
+        compose.onAllNodesWithText("com.google.android.calendar").assertCountEquals(0)
+    }
+
+    @Test
+    fun genericSearchDoesNotMatchOnlyThePackageNamespace() {
+        compose.setContent {
+            FocusTheme {
+                AllowedAppsListEditorScreen(
+                    existingList = null,
+                    lists = emptyList(),
+                    installedApps = listOf(InstalledApp("com.google.android.calendar", "Calendar")),
+                    locked = false,
+                    onBack = {},
+                    onSave = { AllowedAppsListValidation.Valid },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Search apps").performTextInput("Google")
+
+        compose.onNodeWithText("Calendar").assertDoesNotExist()
+        compose.onNodeWithText("No installed apps found.").assertIsDisplayed()
+    }
 
     @Test
     fun installedAnkiAppearsInNewList() {

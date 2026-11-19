@@ -239,8 +239,15 @@ fun AllowedAppsListEditorScreen(
     var isSaving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val filteredApps = remember(installedApps, search) {
-        installedApps.filter { app ->
-            search.isBlank() || app.label.contains(search, ignoreCase = true) || app.packageName.contains(search, ignoreCase = true)
+        if (search.isBlank()) {
+            installedApps
+        } else {
+            val nameMatches = installedApps.filter { it.label.contains(search, ignoreCase = true) }
+            when {
+                nameMatches.isNotEmpty() -> nameMatches
+                '.' in search -> installedApps.filter { it.packageName.contains(search, ignoreCase = true) }
+                else -> emptyList()
+            }
         }
     }
     val nameValidation = AllowedAppsListPolicy.validate(name, lists, existingList?.id)
