@@ -490,17 +490,21 @@ fun SettingsScreen(
                     }
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Blocked websites in Chrome", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("You can add websites during a session. Selected websites stay blocked until it ends.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(22.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
-                    Column(Modifier.padding(16.dp)) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text("Blocked websites in Chrome", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "You can add websites during a session. Selected websites stay blocked until it ends.",
+                            modifier = Modifier.padding(top = 12.dp, bottom = 12.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (desktopBlockedDomains.isNotEmpty()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         desktopBlockedDomains.forEachIndexed { index, domain ->
                             if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             Row(
